@@ -1,0 +1,337 @@
+import "reflect-metadata";
+import { randomUUID } from "crypto";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { z } from "zod";
+import { AppDataSource } from "../data-source";
+import { TicketRepository } from "../repository/TicketRepository";
+import { PhaseRepository } from "../repository/PhaseRepository";
+import { TicketPhase } from "../enum/TicketPhase";
+
+const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
+
+function createServer(): McpServer {
+  const server = new McpServer({
+    name: "tribe",
+    version: "1.0.0",
+  });
+
+  // ── Ticket Tools ──────────────────────────────────────────────────
+
+  server.tool(
+    "list_tickets",
+    "List all tickets, optionally filtered by phase",
+    { phase: z.enum(PHASE_VALUES).optional().describe("Filter by current phase") },
+    async ({ phase }) => {
+      const repo = new TicketRepository();
+      const tickets = phase
+        ? await repo.findByPhase(phase as TicketPhase)
+        : await repo.findAll();
+      return {
+        content: [{ type: "text", text: JSON.stringify(tickets, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "get_ticket",
+    "Get a single ticket by ID (includes phase history)",
+    { id: z.number().describe("Ticket ID") },
+    async ({ id }) => {
+      const repo = new TicketRepository();
+      const ticket = await repo.findById(id);
+      if (!ticket) {
+        return {
+          content: [{ type: "text", text: `Ticket ${id} not found` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(ticket, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "create_ticket",
+    "Create a new ticket",
+    {
+      title: z.string().describe("Short summary of the work"),
+      description: z.string().optional().describe("Detailed description"),
+    },
+    async ({ title, description }) => {
+      const ticketRepo = new TicketRepository();
+      const phaseRepo = new PhaseRepository();
+
+      const ticket = await ticketRepo.create({ title, description });
+
+      // Auto-create the initial CREATED phase record
+      await phaseRepo.create({
+        ticketId: ticket.id,
+        phaseName: TicketPhase.CREATED,
+      });
+
+      const full = await ticketRepo.findById(ticket.id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "update_ticket",
+    "Update a ticket's title, description, or current phase",
+    {
+      id: z.number().describe("Ticket ID"),
+      title: z.string().optional().describe("New title"),
+      description: z.string().optional().describe("New description"),
+      currentPhase: z.enum(PHASE_VALUES).optional().describe("Move ticket to this phase"),
+    },
+    async ({ id, title, description, currentPhase }) => {
+      const ticketRepo = new TicketRepository();
+      const phaseRepo = new PhaseRepository();
+
+      const existing = await ticketRepo.findById(id);
+      if (!existing) {
+        return {
+          content: [{ type: "text", text: `Ticket ${id} not found` }],
+          isError: true,
+        };
+      }
+
+      // If phase is changing, close the current phase record and open a new one
+      if (currentPhase && currentPhase !== existing.currentPhase) {
+        const activePhase = await phaseRepo.findActiveByTicketId(id);
+        if (activePhase) {
+          await phaseRepo.update(activePhase.id, { completedAt: new Date() });
+        }
+        await phaseRepo.create({
+          ticketId: id,
+          phaseName: currentPhase as TicketPhase,
+        });
+      }
+
+      const updated = await ticketRepo.update(id, {
+        title,
+        description,
+        currentPhase: currentPhase as TicketPhase | undefined,
+      });
+      const full = await ticketRepo.findById(id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_ticket",
+    "Delete a ticket and all its phase records",
+    { id: z.number().describe("Ticket ID") },
+    async ({ id }) => {
+      const repo = new TicketRepository();
+      const deleted = await repo.delete(id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: deleted
+              ? `Ticket ${id} deleted successfully`
+              : `Ticket ${id} not found`,
+          },
+        ],
+        isError: !deleted,
+      };
+    }
+  );
+
+  // ── Phase Tools ───────────────────────────────────────────────────
+
+  server.tool(
+    "list_phases",
+    "List all phase records for a ticket",
+    { ticketId: z.number().describe("Ticket ID") },
+    async ({ ticketId }) => {
+      const repo = new PhaseRepository();
+      const phases = await repo.findByTicketId(ticketId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(phases, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "get_phase",
+    "Get a single phase record by ID",
+    { id: z.number().describe("Phase ID") },
+    async ({ id }) => {
+      const repo = new PhaseRepository();
+      const phase = await repo.findById(id);
+      if (!phase) {
+        return {
+          content: [{ type: "text", text: `Phase ${id} not found` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(phase, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "create_phase",
+    "Create a new phase record for a ticket",
+    {
+      ticketId: z.number().describe("Ticket ID"),
+      phaseName: z.enum(PHASE_VALUES).describe("Phase name"),
+      startedAt: z.string().optional().describe("ISO datetime string for when the phase started (defaults to now)"),
+    },
+    async ({ ticketId, phaseName, startedAt }) => {
+      const repo = new PhaseRepository();
+      const phase = await repo.create({
+        ticketId,
+        phaseName: phaseName as TicketPhase,
+        startedAt: startedAt ? new Date(startedAt) : undefined,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(phase, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "update_phase",
+    "Update a phase record (e.g. mark it completed)",
+    {
+      id: z.number().describe("Phase ID"),
+      phaseName: z.enum(PHASE_VALUES).optional().describe("Change phase name"),
+      startedAt: z.string().optional().describe("ISO datetime for start"),
+      completedAt: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("ISO datetime for completion, or null to re-open"),
+    },
+    async ({ id, phaseName, startedAt, completedAt }) => {
+      const repo = new PhaseRepository();
+      const existing = await repo.findById(id);
+      if (!existing) {
+        return {
+          content: [{ type: "text", text: `Phase ${id} not found` }],
+          isError: true,
+        };
+      }
+
+      const updated = await repo.update(id, {
+        phaseName: phaseName as TicketPhase | undefined,
+        startedAt: startedAt ? new Date(startedAt) : undefined,
+        completedAt:
+          completedAt === null
+            ? null
+            : completedAt
+              ? new Date(completedAt)
+              : undefined,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(updated, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_phase",
+    "Delete a phase record",
+    { id: z.number().describe("Phase ID") },
+    async ({ id }) => {
+      const repo = new PhaseRepository();
+      const deleted = await repo.delete(id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: deleted
+              ? `Phase ${id} deleted successfully`
+              : `Phase ${id} not found`,
+          },
+        ],
+        isError: !deleted,
+      };
+    }
+  );
+
+  return server;
+}
+
+// ── HTTP Server Bootstrap ─────────────────────────────────────────────
+
+async function main() {
+  await AppDataSource.initialize();
+  console.log("Tribe: Database connected.");
+
+  const mcpServer = createServer();
+  const app = createMcpExpressApp();
+
+  // Map of active transports by session ID
+  const transports = new Map<string, StreamableHTTPServerTransport>();
+
+  app.post("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    if (sessionId && transports.has(sessionId)) {
+      // Existing session — reuse transport
+      const transport = transports.get(sessionId)!;
+      await transport.handleRequest(req, res, req.body);
+      return;
+    }
+
+    // New session — create transport and connect
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        transports.delete(transport.sessionId);
+      }
+    };
+
+    await mcpServer.connect(transport);
+
+    if (transport.sessionId) {
+      transports.set(transport.sessionId, transport);
+    }
+
+    await transport.handleRequest(req, res, req.body);
+  });
+
+  app.get("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId || !transports.has(sessionId)) {
+      res.status(400).json({ error: "Invalid or missing session ID" });
+      return;
+    }
+    const transport = transports.get(sessionId)!;
+    await transport.handleRequest(req, res);
+  });
+
+  app.delete("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId || !transports.has(sessionId)) {
+      res.status(400).json({ error: "Invalid or missing session ID" });
+      return;
+    }
+    const transport = transports.get(sessionId)!;
+    await transport.handleRequest(req, res);
+  });
+
+  const PORT = parseInt(process.env.MCP_PORT || "3100");
+  app.listen(PORT, () => {
+    console.log(`Tribe MCP server running at http://localhost:${PORT}/mcp`);
+  });
+}
+
+main().catch((err) => {
+  console.error("Failed to start MCP server:", err);
+  process.exit(1);
+});

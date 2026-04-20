@@ -7,6 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
+    "mcp:dev": "ts-node src/mcp/server.ts",
+    "mcp:start": "node dist/mcp/server.js",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:generate": "npm run typeorm -- migration:generate -d src/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/data-source.ts"
@@ -15,13 +17,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "mysql2": "^3.22.1",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.28",
     "typescript": "^6.0.3"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
     "ts-node": "^10.9.2"
   }
