@@ -31,7 +31,7 @@ router.get("/", async (req: Request, res: Response) => {
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const repo = new TicketRepository();
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid ticket ID" });
       return;
@@ -80,7 +80,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const ticketRepo = new TicketRepository();
     const phaseRepo = new PhaseRepository();
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid ticket ID" });
       return;
@@ -128,7 +128,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const repo = new TicketRepository();
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid ticket ID" });
       return;
@@ -150,7 +150,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
 router.get("/:ticketId/phases", async (req: Request, res: Response) => {
   try {
     const phaseRepo = new PhaseRepository();
-    const ticketId = parseInt(req.params.ticketId, 10);
+    const ticketId = parseInt(req.params.ticketId as string, 10);
     if (isNaN(ticketId)) {
       res.status(400).json({ error: "Invalid ticket ID" });
       return;

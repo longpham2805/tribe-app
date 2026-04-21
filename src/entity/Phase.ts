@@ -19,7 +19,7 @@ export class Phase {
   @JoinColumn({ name: "ticket_id" })
   ticket!: Ticket;
 
-  @Column({ type: "int" })
+  @Column({ name: "ticket_id", type: "int" })
   ticketId!: number;
 
   @Column({ type: "enum", enum: TicketPhase })
