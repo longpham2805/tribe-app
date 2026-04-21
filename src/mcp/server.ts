@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "crypto";
+import path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
@@ -454,6 +455,13 @@ async function main() {
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/phases", phaseRoutes);
   app.use("/api/monday", mondayRoutes);
+
+  // ── SPA Static Files ─────────────────────────────────────────────
+  const publicDir = path.join(__dirname, "../../public");
+  app.use(express.static(publicDir));
+  app.get(/^(?!\/api|\/mcp).*$/, (_req, res) => {
+    res.sendFile(path.join(publicDir, "index.html"));
+  });
 
   const PORT = parseInt(process.env.MCP_PORT || "3100");
   app.listen(PORT, () => {

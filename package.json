@@ -5,10 +5,14 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "build:all": "npm run build && npm run client:build",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "dev": "concurrently -n backend,frontend -c cyan,magenta \"ts-node src/mcp/server.ts\" \"cd client && npm run dev\"",
     "mcp:dev": "ts-node src/mcp/server.ts",
     "mcp:start": "node dist/mcp/server.js",
+    "client:dev": "cd client && npm run dev",
+    "client:build": "cd client && npm run build",
+    "client:install": "cd client && npm install",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:generate": "npm run typeorm -- migration:generate -d src/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/data-source.ts"
@@ -28,6 +32,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
+    "concurrently": "^9.2.1",
     "ts-node": "^10.9.2"
   }
 }
