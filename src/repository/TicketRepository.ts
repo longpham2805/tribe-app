@@ -26,10 +26,24 @@ export class TicketRepository {
     });
   }
 
-  async create(data: { title: string; description?: string }): Promise<Ticket> {
+  async findByMondayItemId(mondayItemId: string): Promise<Ticket | null> {
+    return this.repo.findOne({
+      where: { mondayItemId },
+      relations: ["phases"],
+    });
+  }
+
+  async create(data: {
+    title: string;
+    description?: string;
+    mondayItemId?: string;
+    mondayMarkdown?: string;
+  }): Promise<Ticket> {
     const ticket = this.repo.create({
       title: data.title,
       description: data.description ?? null,
+      mondayItemId: data.mondayItemId ?? null,
+      mondayMarkdown: data.mondayMarkdown ?? null,
       currentPhase: TicketPhase.CREATED,
     });
     return this.repo.save(ticket);
@@ -37,7 +51,13 @@ export class TicketRepository {
 
   async update(
     id: number,
-    data: { title?: string; description?: string; currentPhase?: TicketPhase }
+    data: {
+      title?: string;
+      description?: string;
+      currentPhase?: TicketPhase;
+      mondayItemId?: string;
+      mondayMarkdown?: string;
+    }
   ): Promise<Ticket | null> {
     const ticket = await this.findById(id);
     if (!ticket) return null;
@@ -45,6 +65,8 @@ export class TicketRepository {
     if (data.title !== undefined) ticket.title = data.title;
     if (data.description !== undefined) ticket.description = data.description;
     if (data.currentPhase !== undefined) ticket.currentPhase = data.currentPhase;
+    if (data.mondayItemId !== undefined) ticket.mondayItemId = data.mondayItemId;
+    if (data.mondayMarkdown !== undefined) ticket.mondayMarkdown = data.mondayMarkdown;
 
     return this.repo.save(ticket);
   }

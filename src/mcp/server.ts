@@ -3,11 +3,17 @@ import { randomUUID } from "crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import express from "express";
 import { z } from "zod";
 import { AppDataSource } from "../data-source";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { TicketPhase } from "../enum/TicketPhase";
+import { MondayHelper } from "../monday/MondayHelper";
+import { formatItemMarkdown } from "../monday/formatItemMarkdown";
+import ticketRoutes from "../routes/tickets";
+import phaseRoutes from "../routes/phases";
+import mondayRoutes from "../routes/monday";
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
 
@@ -260,6 +266,124 @@ function createServer(): McpServer {
     }
   );
 
+  // ── Monday Integration Tools ─────────────────────────────────────
+
+  server.tool(
+    "monday_not_started_tickets",
+    "Fetch all not-started tickets from Monday.com (groups: Dev Bugs, Prod Bugs Next, Next)",
+    {
+      boardIds: z
+        .array(z.number())
+        .optional()
+        .describe("Override default board IDs"),
+      people: z
+        .array(z.string())
+        .optional()
+        .describe("Filter by people names/IDs"),
+    },
+    async ({ boardIds, people }) => {
+      try {
+        const monday = MondayHelper.fromEnv();
+        const { items } = await monday.getNotStartedItems({
+          boardIds,
+          peopleOverride: people,
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  count: items.length,
+                  items,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: `Monday API error: ${err.message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "monday_import_ticket",
+    "Fetch a Monday.com ticket by ID, convert to structured markdown, and store/update in the database",
+    {
+      mondayItemId: z
+        .string()
+        .describe("Monday item ID or Monday item URL"),
+    },
+    async ({ mondayItemId }) => {
+      try {
+        // 1. Fetch from Monday
+        const monday = MondayHelper.fromEnv();
+        const { item } = await monday.getItemDetails(mondayItemId);
+
+        // 2. Convert to structured markdown
+        const markdown = formatItemMarkdown(item);
+
+        // 3. Upsert into DB
+        const ticketRepo = new TicketRepository();
+        const phaseRepo = new PhaseRepository();
+        const existing = await ticketRepo.findByMondayItemId(item.id);
+
+        let ticket;
+        if (existing) {
+          // Update existing ticket
+          ticket = await ticketRepo.update(existing.id, {
+            title: item.name,
+            mondayMarkdown: markdown,
+          });
+        } else {
+          // Create new ticket linked to Monday
+          ticket = await ticketRepo.create({
+            title: item.name,
+            mondayItemId: item.id,
+            mondayMarkdown: markdown,
+          });
+
+          // Auto-create the initial CREATED phase record
+          await phaseRepo.create({
+            ticketId: ticket.id,
+            phaseName: TicketPhase.CREATED,
+          });
+
+          // Re-fetch with relations
+          ticket = await ticketRepo.findById(ticket.id);
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  action: existing ? "updated" : "created",
+                  ticket,
+                  mondayMarkdown: markdown,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: `Import error: ${err.message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
   return server;
 }
 
@@ -325,9 +449,16 @@ async function main() {
     await transport.handleRequest(req, res);
   });
 
+  // ── REST API Routes ──────────────────────────────────────────────
+  app.use("/api", express.json());
+  app.use("/api/tickets", ticketRoutes);
+  app.use("/api/phases", phaseRoutes);
+  app.use("/api/monday", mondayRoutes);
+
   const PORT = parseInt(process.env.MCP_PORT || "3100");
   app.listen(PORT, () => {
     console.log(`Tribe MCP server running at http://localhost:${PORT}/mcp`);
+    console.log(`Tribe REST API running at http://localhost:${PORT}/api`);
   });
 }
 

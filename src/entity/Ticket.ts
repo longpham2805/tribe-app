@@ -20,8 +20,14 @@ export class Ticket {
   @Column({ type: "text", nullable: true })
   description!: string | null;
 
+  @Column({ type: "varchar", length: 50, nullable: true, unique: true })
+  mondayItemId!: string | null;
+
   @Column({ type: "enum", enum: TicketPhase, default: TicketPhase.CREATED })
   currentPhase!: TicketPhase;
+
+  @Column({ type: "mediumtext", nullable: true })
+  mondayMarkdown!: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;
