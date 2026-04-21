@@ -261,3 +261,71 @@
   font-size: 0.75rem;
   color: #334155;
 }
+
+/* Phase pipeline */
+.phase-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 0.375rem 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.phase-pipeline::-webkit-scrollbar {
+  display: none;
+}
+
+.phase-pipeline-item {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.phase-connector {
+  width: 20px;
+  height: 1px;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.phase-node {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 20px;
+  border: 1px solid #1e2a3a;
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s;
+  cursor: default;
+}
+
+.phase-node--pending {
+  color: #334155;
+  border-color: #1e2a3a;
+}
+
+.phase-node--active {
+  background: var(--phase-color, transparent);
+  font-weight: 600;
+}
+
+.phase-node--active .phase-node-icon {
+  font-size: 0.55rem;
+}
+
+.phase-node--completed {
+  opacity: 0.55;
+}
+
+.phase-node-icon {
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.phase-node-label {
+  line-height: 1;
+}

@@ -170,6 +170,42 @@ export default function App() {
                 <h3 className="ticket-title">{ticket.title}</h3>
                 {ticket.description && <p className="ticket-desc">{ticket.description}</p>}
 
+                {ticket.phases.length > 0 && (
+                  <div className="phase-pipeline">
+                    {PHASES.map((p, i) => {
+                      const phaseRecord = ticket.phases.find((ph) => ph.phaseName === p);
+                      const isCompleted = !!phaseRecord?.completedAt;
+                      const isActive = !!phaseRecord?.startedAt && !phaseRecord?.completedAt;
+                      const isPending = !phaseRecord?.startedAt;
+                      const color = PHASE_COLORS[p];
+                      return (
+                        <div key={p} className="phase-pipeline-item">
+                          {i > 0 && (
+                            <div
+                              className="phase-connector"
+                              style={{ background: isCompleted || isActive ? color + "55" : "#1e2a3a" }}
+                            />
+                          )}
+                          <div
+                            className={`phase-node ${isActive ? "phase-node--active" : ""} ${isCompleted ? "phase-node--completed" : ""} ${isPending ? "phase-node--pending" : ""}`}
+                            style={isActive || isCompleted ? { borderColor: color, color } : {}}
+                            title={isCompleted && phaseRecord?.completedAt
+                              ? `Completed ${new Date(phaseRecord.completedAt).toLocaleDateString()}`
+                              : isActive && phaseRecord?.startedAt
+                              ? `Started ${new Date(phaseRecord.startedAt).toLocaleDateString()}`
+                              : "Pending"}
+                          >
+                            <span className="phase-node-icon">
+                              {isCompleted ? "✓" : isActive ? "●" : "○"}
+                            </span>
+                            <span className="phase-node-label">{PHASE_LABELS[p]}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className="ticket-footer">
                   <select
                     className="phase-select"

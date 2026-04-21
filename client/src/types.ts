@@ -3,7 +3,7 @@ export type TicketPhase = "CREATED" | "BRAINSTORM" | "PLANNING" | "IMPLEMENTATIO
 export interface Phase {
   id: number;
   phaseName: TicketPhase;
-  startedAt: string;
+  startedAt: string | null;
   completedAt: string | null;
 }
 
