@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { TicketPhase } from "../enum/TicketPhase";
+import { PhaseHandler } from "../handler/PhaseHandler";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const router = Router();
@@ -153,6 +154,30 @@ router.get("/:ticketId/phases", async (req: Request, res: Response) => {
     res.json(phases);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:ticketId/trigger-phase  { phaseName }
+router.post("/:ticketId/trigger-phase", async (req: Request, res: Response) => {
+  try {
+    const ticketId = parseInt(req.params.ticketId as string, 10);
+    if (isNaN(ticketId)) {
+      res.status(400).json({ error: "Invalid ticket ID" });
+      return;
+    }
+
+    const { phaseName } = req.body;
+    if (!phaseName || !PHASE_VALUES.includes(phaseName)) {
+      res.status(400).json({ error: `phaseName is required and must be one of: ${PHASE_VALUES.join(", ")}` });
+      return;
+    }
+
+    const handler = new PhaseHandler();
+    const result = await handler.trigger(ticketId, phaseName as TicketPhase);
+    res.json(result);
+  } catch (err: any) {
+    const status = err.message.includes("not found") ? 404 : 500;
+    res.status(status).json({ error: err.message });
   }
 });
 

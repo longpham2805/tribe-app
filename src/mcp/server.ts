@@ -10,6 +10,7 @@ import { AppDataSource } from "../data-source";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { TicketPhase } from "../enum/TicketPhase";
+import { PhaseHandler } from "../handler/PhaseHandler";
 import { MondayHelper } from "../monday/MondayHelper";
 import { formatItemMarkdown } from "../monday/formatItemMarkdown";
 import ticketRoutes from "../routes/tickets";
@@ -256,6 +257,29 @@ function createServer(): McpServer {
         ],
         isError: !deleted,
       };
+    }
+  );
+
+  server.tool(
+    "trigger_phase",
+    "Transition a ticket to the given phase and run its phase handler. Completes the active phase, activates the pending target phase, and dispatches phase-specific logic.",
+    {
+      ticketId: z.number().describe("Ticket ID"),
+      phaseName: z.enum(PHASE_VALUES).describe("Phase to trigger"),
+    },
+    async ({ ticketId, phaseName }) => {
+      try {
+        const handler = new PhaseHandler();
+        const result = await handler.trigger(ticketId, phaseName as TicketPhase);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: err.message }],
+          isError: true,
+        };
+      }
     }
   );
 
