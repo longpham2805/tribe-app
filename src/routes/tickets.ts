@@ -59,15 +59,8 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const ticketRepo = new TicketRepository();
-    const phaseRepo = new PhaseRepository();
 
     const ticket = await ticketRepo.create({ title, description });
-
-    await phaseRepo.create({
-      ticketId: ticket.id,
-      phaseName: TicketPhase.CREATED,
-    });
-
     const full = await ticketRepo.findById(ticket.id);
     res.status(201).json(full);
   } catch (err: any) {
@@ -99,16 +92,16 @@ router.patch("/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    // If phase is changing, close current phase record and open new one
+    // If phase is changing, complete the active phase and activate the pending one
     if (currentPhase && currentPhase !== existing.currentPhase) {
       const activePhase = await phaseRepo.findActiveByTicketId(id);
       if (activePhase) {
         await phaseRepo.update(activePhase.id, { completedAt: new Date() });
       }
-      await phaseRepo.create({
-        ticketId: id,
-        phaseName: currentPhase as TicketPhase,
-      });
+      const pending = await phaseRepo.findPendingByTicketIdAndName(id, currentPhase as TicketPhase);
+      if (pending) {
+        await phaseRepo.activate(pending.id);
+      }
     }
 
     await ticketRepo.update(id, {

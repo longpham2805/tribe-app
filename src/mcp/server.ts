@@ -69,16 +69,8 @@ function createServer(): McpServer {
     },
     async ({ title, description }) => {
       const ticketRepo = new TicketRepository();
-      const phaseRepo = new PhaseRepository();
 
       const ticket = await ticketRepo.create({ title, description });
-
-      // Auto-create the initial CREATED phase record
-      await phaseRepo.create({
-        ticketId: ticket.id,
-        phaseName: TicketPhase.CREATED,
-      });
-
       const full = await ticketRepo.findById(ticket.id);
       return {
         content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
@@ -107,16 +99,16 @@ function createServer(): McpServer {
         };
       }
 
-      // If phase is changing, close the current phase record and open a new one
+      // If phase is changing, complete the active phase and activate the pending one
       if (currentPhase && currentPhase !== existing.currentPhase) {
         const activePhase = await phaseRepo.findActiveByTicketId(id);
         if (activePhase) {
           await phaseRepo.update(activePhase.id, { completedAt: new Date() });
         }
-        await phaseRepo.create({
-          ticketId: id,
-          phaseName: currentPhase as TicketPhase,
-        });
+        const pending = await phaseRepo.findPendingByTicketIdAndName(id, currentPhase as TicketPhase);
+        if (pending) {
+          await phaseRepo.activate(pending.id);
+        }
       }
 
       const updated = await ticketRepo.update(id, {

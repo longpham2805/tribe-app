@@ -1,7 +1,5 @@
 import { Router, type Request, type Response } from "express";
 import { TicketRepository } from "../repository/TicketRepository";
-import { PhaseRepository } from "../repository/PhaseRepository";
-import { TicketPhase } from "../enum/TicketPhase";
 import { MondayHelper } from "../monday/MondayHelper";
 import { formatItemMarkdown } from "../monday/formatItemMarkdown";
 
@@ -55,7 +53,6 @@ router.post("/import", async (req: Request, res: Response) => {
 
     // 3. Upsert into DB
     const ticketRepo = new TicketRepository();
-    const phaseRepo = new PhaseRepository();
     const existing = await ticketRepo.findByMondayItemId(item.id);
 
     let ticket;
@@ -72,11 +69,6 @@ router.post("/import", async (req: Request, res: Response) => {
         title: item.name,
         mondayItemId: item.id,
         mondayMarkdown: markdown,
-      });
-
-      await phaseRepo.create({
-        ticketId: ticket.id,
-        phaseName: TicketPhase.CREATED,
       });
 
       ticket = await ticketRepo.findById(ticket.id);

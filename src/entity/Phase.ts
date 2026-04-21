@@ -25,8 +25,8 @@ export class Phase {
   @Column({ type: "enum", enum: TicketPhase })
   phaseName!: TicketPhase;
 
-  @Column({ type: "datetime" })
-  startedAt!: Date;
+  @Column({ type: "datetime", nullable: true })
+  startedAt!: Date | null;
 
   @Column({ type: "datetime", nullable: true })
   completedAt!: Date | null;

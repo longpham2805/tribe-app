@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { Ticket } from "./entity/Ticket";
 import { Phase } from "./entity/Phase";
+import { TicketSubscriber } from "./subscriber/TicketSubscriber";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -17,4 +18,5 @@ export const AppDataSource = new DataSource({
   logging: true,
   entities: [Ticket, Phase],
   migrations: ["src/migration/*.ts"],
+  subscribers: [TicketSubscriber],
 });
