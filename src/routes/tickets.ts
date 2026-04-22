@@ -197,4 +197,37 @@ router.post("/:ticketId/trigger-phase", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/tickets/:ticketId/respond-phase  { message }
+router.post("/:ticketId/respond-phase", async (req: Request, res: Response) => {
+  try {
+    const ticketId = parseInt(req.params.ticketId as string, 10);
+    if (isNaN(ticketId)) {
+      res.status(400).json({ error: "Invalid ticket ID" });
+      return;
+    }
+
+    const { message } = req.body;
+    if (!message || typeof message !== "string") {
+      res.status(400).json({ error: "message is required" });
+      return;
+    }
+
+    const handler = new PhaseHandler();
+    const result = await handler.respond(ticketId, message);
+    res.json(result);
+  } catch (err: any) {
+    const msg = err.message ?? "";
+    let status = 500;
+    if (msg.includes("not found")) status = 404;
+    else if (
+      msg.includes("has no active phase") ||
+      msg.includes("not awaiting a response") ||
+      msg.includes("has no Claude session UUID")
+    ) {
+      status = 400;
+    }
+    res.status(status).json({ error: msg });
+  }
+});
+
 export default router;

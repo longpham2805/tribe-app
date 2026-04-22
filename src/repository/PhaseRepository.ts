@@ -2,6 +2,7 @@ import { IsNull, Not, Repository } from "typeorm";
 import { AppDataSource } from "../data-source";
 import { Phase } from "../entity/Phase";
 import { TicketPhase } from "../enum/TicketPhase";
+import { PhaseStatus } from "../enum/PhaseStatus";
 
 export class PhaseRepository {
   private repo: Repository<Phase>;
@@ -61,7 +62,14 @@ export class PhaseRepository {
 
   async update(
     id: number,
-    data: { phaseName?: TicketPhase; startedAt?: Date | null; completedAt?: Date | null }
+    data: {
+      phaseName?: TicketPhase;
+      startedAt?: Date | null;
+      completedAt?: Date | null;
+      status?: PhaseStatus;
+      lastMessage?: string | null;
+      claudeSessionUuid?: string | null;
+    }
   ): Promise<Phase | null> {
     const phase = await this.findById(id);
     if (!phase) return null;
@@ -69,6 +77,9 @@ export class PhaseRepository {
     if (data.phaseName !== undefined) phase.phaseName = data.phaseName;
     if (data.startedAt !== undefined) phase.startedAt = data.startedAt;
     if (data.completedAt !== undefined) phase.completedAt = data.completedAt;
+    if (data.status !== undefined) phase.status = data.status;
+    if (data.lastMessage !== undefined) phase.lastMessage = data.lastMessage;
+    if (data.claudeSessionUuid !== undefined) phase.claudeSessionUuid = data.claudeSessionUuid;
 
     return this.repo.save(phase);
   }

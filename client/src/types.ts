@@ -1,10 +1,20 @@
 export type TicketPhase = "CREATED" | "BRAINSTORM" | "PLANNING" | "IMPLEMENTATION" | "SHIP";
 
+export type PhaseStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "REQUIRES_ACTION"
+  | "QUESTION"
+  | "ERROR";
+
 export interface Phase {
   id: number;
   phaseName: TicketPhase;
   startedAt: string | null;
   completedAt: string | null;
+  status: PhaseStatus;
+  lastMessage: string | null;
 }
 
 export interface Ticket {

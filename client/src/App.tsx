@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  fetchTickets, createTicket, updateTicket, deleteTicket, triggerPhase,
+  fetchTickets, createTicket, updateTicket, deleteTicket, triggerPhase, respondPhase,
   fetchSlots, createSlot, updateSlot, deleteSlot,
 } from "./api";
-import type { Ticket, TicketPhase, Slot } from "./types";
+import type { Ticket, TicketPhase, PhaseStatus, Slot } from "./types";
 import "./App.css";
 
 const PHASES: TicketPhase[] = ["CREATED", "BRAINSTORM", "PLANNING", "IMPLEMENTATION", "SHIP"];
@@ -22,6 +22,26 @@ const PHASE_COLORS: Record<TicketPhase, string> = {
   PLANNING: "#3b82f6",
   IMPLEMENTATION: "#f59e0b",
   SHIP: "#10b981",
+};
+
+const PAUSED_STATUSES: PhaseStatus[] = ["REQUIRES_ACTION", "QUESTION", "ERROR"];
+
+const STATUS_LABELS: Record<PhaseStatus, string> = {
+  PENDING: "Pending",
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  REQUIRES_ACTION: "Needs input",
+  QUESTION: "Question",
+  ERROR: "Error",
+};
+
+const STATUS_COLORS: Record<PhaseStatus, string | null> = {
+  PENDING: null,
+  RUNNING: null,
+  COMPLETED: null,
+  REQUIRES_ACTION: "#f59e0b",
+  QUESTION: "#f59e0b",
+  ERROR: "#ef4444",
 };
 
 type View = "tickets" | "slots";
@@ -191,6 +211,8 @@ function TicketsPage() {
   const [newDesc, setNewDesc] = useState("");
   const [creating, setCreating] = useState(false);
   const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
+  const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
+  const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
 
   const load = async () => {
     try {
@@ -209,6 +231,14 @@ function TicketsPage() {
   };
 
   useEffect(() => { setLoading(true); load(); }, [filterPhase]);
+
+  // Poll while any phase is RUNNING so background Claude work surfaces without a manual refresh.
+  useEffect(() => {
+    const hasRunning = tickets.some((t) => t.phases.some((p) => p.status === "RUNNING"));
+    if (!hasRunning) return;
+    const timer = setInterval(load, 3000);
+    return () => clearInterval(timer);
+  }, [tickets]);
 
   const slotById = (id: number | null) => slots.find((s) => s.id === id) ?? null;
 
@@ -241,6 +271,18 @@ function TicketsPage() {
     if (!confirm("Delete this ticket?")) return;
     try { await deleteTicket(id); await load(); }
     catch (e: any) { setError(e.message); }
+  };
+
+  const handleRespond = async (ticketId: number) => {
+    const message = (responseDraft[ticketId] ?? "").trim();
+    if (!message) return;
+    setRespondingTicket(ticketId);
+    try {
+      await respondPhase(ticketId, message);
+      setResponseDraft((prev) => { const next = { ...prev }; delete next[ticketId]; return next; });
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setRespondingTicket(null); }
   };
 
   return (
@@ -318,20 +360,38 @@ function TicketsPage() {
                       const isCompleted = !!phaseRecord?.completedAt;
                       const isActive = !!phaseRecord?.startedAt && !phaseRecord?.completedAt;
                       const isPending = !phaseRecord?.startedAt;
-                      const color = PHASE_COLORS[p];
+                      const phaseColor = PHASE_COLORS[p];
                       const isBusy = triggeringPhase === `${ticket.id}:${p}`;
-                      const stateLabel = isCompleted ? "Completed" : isActive ? "Active" : "Pending";
+                      const status = phaseRecord?.status ?? "PENDING";
+                      const statusColor = STATUS_COLORS[status];
+                      const accent = statusColor ?? phaseColor;
+                      const stateLabel = isCompleted
+                        ? "Completed"
+                        : isPending
+                          ? "Pending"
+                          : STATUS_LABELS[status] ?? "Active";
+                      const icon = isCompleted
+                        ? "✓"
+                        : status === "ERROR"
+                          ? "!"
+                          : status === "REQUIRES_ACTION" || status === "QUESTION"
+                            ? "?"
+                            : isActive
+                              ? "●"
+                              : "○";
                       return (
                         <div key={p}
                           className={`phase-card ${isActive ? "phase-card--active" : ""} ${isCompleted ? "phase-card--completed" : ""} ${isPending ? "phase-card--pending" : ""}`}
-                          style={isActive ? { borderColor: color } : isCompleted ? { borderColor: color + "55" } : {}}>
-                          <div className="phase-card-header" style={isActive || isCompleted ? { color } : {}}>
-                            <span className="phase-card-icon">{isCompleted ? "✓" : isActive ? "●" : "○"}</span>
+                          style={isActive ? { borderColor: accent } : isCompleted ? { borderColor: phaseColor + "55" } : {}}>
+                          <div className="phase-card-header" style={isActive ? { color: accent } : isCompleted ? { color: phaseColor } : {}}>
+                            <span className="phase-card-icon">{icon}</span>
                             <span className="phase-card-name">{PHASE_LABELS[p]}</span>
                           </div>
-                          <div className="phase-card-status">{stateLabel}</div>
+                          <div className="phase-card-status" style={isActive && statusColor ? { color: statusColor } : {}}>
+                            {stateLabel}
+                          </div>
                           <button className="phase-card-trigger"
-                            style={isActive ? { borderColor: color + "66", color } : {}}
+                            style={isActive ? { borderColor: accent + "66", color: accent } : {}}
                             disabled={isBusy} onClick={() => handleTriggerPhase(ticket.id, p)}
                             title={`Trigger ${PHASE_LABELS[p]}`}>
                             {isBusy ? "…" : "Trigger"}
@@ -341,6 +401,43 @@ function TicketsPage() {
                     })}
                   </div>
                 )}
+
+                {(() => {
+                  const paused = ticket.phases.find(
+                    (ph) => !!ph.startedAt && !ph.completedAt && PAUSED_STATUSES.includes(ph.status),
+                  );
+                  if (!paused) return null;
+                  const color = STATUS_COLORS[paused.status] ?? "#f59e0b";
+                  const isBusy = respondingTicket === ticket.id;
+                  return (
+                    <div className="phase-paused" style={{ borderColor: color + "66" }}>
+                      <div className="phase-paused-header" style={{ color }}>
+                        {PHASE_LABELS[paused.phaseName]} — {STATUS_LABELS[paused.status]}
+                      </div>
+                      {paused.lastMessage && (
+                        <div className="phase-paused-message">{paused.lastMessage}</div>
+                      )}
+                      <textarea
+                        className="input textarea"
+                        rows={3}
+                        placeholder="Reply to the agent…"
+                        value={responseDraft[ticket.id] ?? ""}
+                        onChange={(e) =>
+                          setResponseDraft((prev) => ({ ...prev, [ticket.id]: e.target.value }))
+                        }
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <button
+                          className="btn btn-primary"
+                          disabled={isBusy || !(responseDraft[ticket.id] ?? "").trim()}
+                          onClick={() => handleRespond(ticket.id)}
+                        >
+                          {isBusy ? "Sending…" : "Send reply"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="ticket-footer">
                   <select className="phase-select" value={ticket.currentPhase}

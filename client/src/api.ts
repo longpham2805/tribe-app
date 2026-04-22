@@ -46,6 +46,18 @@ export async function triggerPhase(ticketId: number, phaseName: TicketPhase): Pr
   if (!res.ok) throw new Error("Failed to trigger phase");
 }
 
+export async function respondPhase(ticketId: number, message: string): Promise<void> {
+  const res = await fetch(`${BASE}/tickets/${ticketId}/respond-phase`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to respond to phase");
+  }
+}
+
 // ── Slots ─────────────────────────────────────────────────────────
 
 export async function fetchSlots(): Promise<Slot[]> {
