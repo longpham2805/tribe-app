@@ -13,7 +13,18 @@ export interface Ticket {
   description: string | null;
   currentPhase: TicketPhase;
   mondayItemId: string | null;
+  slotId: number | null;
+  waitingForSlot: boolean;
   createdAt: string;
   updatedAt: string;
   phases: Phase[];
+}
+
+export interface Slot {
+  id: number;
+  name: string;
+  rootPath: string;
+  currentTicketId: number | null;
+  createdAt: string;
+  updatedAt: string;
 }

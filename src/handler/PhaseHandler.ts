@@ -3,6 +3,8 @@ import { Ticket } from "../entity/Ticket";
 import { Phase } from "../entity/Phase";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
+import { SlotRepository } from "../repository/SlotRepository";
+import { SlotService } from "../service/SlotService";
 
 export interface TriggerResult {
   ticket: Ticket;
@@ -84,6 +86,13 @@ export class PhaseHandler {
   }
 
   protected async handleShip(ticket: Ticket): Promise<void> {
-    // TODO: handle SHIP phase logic
+    if (ticket.slotId == null) return;
+
+    const slotRepo = new SlotRepository();
+    const slot = await slotRepo.findById(ticket.slotId);
+    if (!slot) return;
+
+    const slotService = new SlotService();
+    await slotService.releaseAndPromoteQueue(slot);
   }
 }

@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { Ticket } from "./entity/Ticket";
 import { Phase } from "./entity/Phase";
+import { Slot } from "./entity/Slot";
 import { TicketSubscriber } from "./subscriber/TicketSubscriber";
 import * as dotenv from "dotenv";
 
@@ -16,7 +17,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_DATABASE || process.env.DATABASE_NAME || "tribe",
   synchronize: false,
   logging: true,
-  entities: [Ticket, Phase],
+  entities: [Ticket, Phase, Slot],
   migrations: ["src/migration/*.ts"],
   subscribers: [TicketSubscriber],
 });

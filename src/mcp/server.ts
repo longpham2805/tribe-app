@@ -16,6 +16,8 @@ import { formatItemMarkdown } from "../monday/formatItemMarkdown";
 import ticketRoutes from "../routes/tickets";
 import phaseRoutes from "../routes/phases";
 import mondayRoutes from "../routes/monday";
+import slotRoutes from "../routes/slots";
+import { SlotRepository } from "../repository/SlotRepository";
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
 
@@ -401,6 +403,28 @@ function createServer(): McpServer {
     },
   );
 
+  // ── Slot Tools ────────────────────────────────────────────────────
+
+  server.tool(
+    "list_slots",
+    "List all workspace slots with their current ticket assignment and free/occupied status",
+    {},
+    async () => {
+      const repo = new SlotRepository();
+      const slots = await repo.findAll();
+      const result = slots.map((s) => ({
+        id: s.id,
+        name: s.name,
+        rootPath: s.rootPath,
+        status: s.currentTicketId ? "occupied" : "free",
+        currentTicketId: s.currentTicketId,
+      }));
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
   return server;
 }
 
@@ -471,6 +495,7 @@ async function main() {
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/phases", phaseRoutes);
   app.use("/api/monday", mondayRoutes);
+  app.use("/api/slots", slotRoutes);
 
   // ── SPA Static Files ─────────────────────────────────────────────
   const publicDir = path.join(__dirname, "../../public");

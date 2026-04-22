@@ -71,6 +71,25 @@ export class TicketRepository {
     return this.repo.save(ticket);
   }
 
+  /** Update slot assignment fields directly (avoids loading relations). */
+  async updateSlotFields(
+    id: number,
+    data: { slotId: number | null; waitingForSlot: boolean }
+  ): Promise<void> {
+    await this.repo.update(id, {
+      slotId: data.slotId,
+      waitingForSlot: data.waitingForSlot,
+    });
+  }
+
+  /** Find the oldest ticket currently waiting for a slot (FIFO). */
+  async findOldestWaiting(): Promise<Ticket | null> {
+    return this.repo.findOne({
+      where: { waitingForSlot: true },
+      order: { createdAt: "ASC" },
+    });
+  }
+
   async delete(id: number): Promise<boolean> {
     const result = await this.repo.delete(id);
     return (result.affected ?? 0) > 0;

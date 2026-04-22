@@ -5,9 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from "typeorm";
 import { TicketPhase } from "../enum/TicketPhase";
 import { Phase } from "./Phase";
+import { Slot } from "./Slot";
 
 @Entity()
 export class Ticket {
@@ -37,4 +40,16 @@ export class Ticket {
 
   @OneToMany(() => Phase, (phase) => phase.ticket, { cascade: true })
   phases!: Phase[];
+
+  /** The workspace slot assigned to this ticket (null = no slot yet) */
+  @Column({ type: "int", nullable: true })
+  slotId!: number | null;
+
+  @ManyToOne(() => Slot, { nullable: true, onDelete: "SET NULL", eager: false })
+  @JoinColumn({ name: "slotId" })
+  slot!: Slot | null;
+
+  /** True when the ticket is queued waiting for a free slot */
+  @Column({ type: "boolean", default: false })
+  waitingForSlot!: boolean;
 }
