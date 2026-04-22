@@ -60,8 +60,13 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const ticketRepo = new TicketRepository();
-
     const ticket = await ticketRepo.create({ title, description });
+
+    // Run CREATED phase handler now that the insert transaction is committed,
+    // so the ticket row is no longer locked and slot assignment can succeed.
+    const handler = new PhaseHandler();
+    await handler.initCreated(ticket);
+
     const full = await ticketRepo.findById(ticket.id);
     res.status(201).json(full);
   } catch (err: any) {

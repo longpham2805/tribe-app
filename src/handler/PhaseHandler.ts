@@ -85,19 +85,28 @@ export class PhaseHandler {
   }
 
   protected async handleCreated(ticket: Ticket): Promise<void> {
-    log(`handleCreated → ticket #${ticket.id} (uid=${ticket.uid ?? "none"})`);
+    log(`handleCreated → ticket #${ticket.id} (uid=${ticket.uid ?? "none"}, slotId=${ticket.slotId ?? "none"})`);
 
+    // Assign a slot if not already assigned
+    if (ticket.slotId == null) {
+      log(`ticket #${ticket.id} has no slot — attempting assignment`);
+      const slotService = new SlotService();
+      const assigned = await slotService.tryAssign(ticket);
+      if (!assigned) {
+        log(`ticket #${ticket.id} queued — no free slots available`);
+        return;
+      }
+      ticket.slotId = assigned.id;
+      log(`slot ${assigned.id} (${assigned.name}) assigned to ticket #${ticket.id}`);
+    }
+
+    // Generate uid if not already set
     let uid = ticket.uid;
     if (!uid) {
       uid = randomUUID();
       await this.ticketRepo.update(ticket.id, { uid });
       ticket.uid = uid;
       log(`generated uid ${uid} for ticket #${ticket.id}`);
-    }
-
-    if (ticket.slotId == null) {
-      log(`ticket #${ticket.id} has no slot yet — skipping workspace creation`);
-      return;
     }
 
     const slotRepo = new SlotRepository();
