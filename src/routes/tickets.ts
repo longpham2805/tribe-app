@@ -128,12 +128,23 @@ router.delete("/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const deleted = await repo.delete(id);
-    if (!deleted) {
+    const ticket = await repo.findById(id);
+    if (!ticket) {
       res.status(404).json({ error: `Ticket ${id} not found` });
       return;
     }
 
+    if (ticket.slotId != null) {
+      const { SlotRepository } = await import("../repository/SlotRepository");
+      const { SlotService } = await import("../service/SlotService");
+      const slotRepo = new SlotRepository();
+      const slot = await slotRepo.findById(ticket.slotId);
+      if (slot) {
+        await new SlotService().releaseAndPromoteQueue(slot);
+      }
+    }
+
+    await repo.delete(id);
     res.json({ message: `Ticket ${id} deleted successfully` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

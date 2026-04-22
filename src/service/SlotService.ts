@@ -5,6 +5,7 @@ import { Slot } from "../entity/Slot";
 import { Ticket } from "../entity/Ticket";
 import { SlotRepository } from "../repository/SlotRepository";
 import { TicketRepository } from "../repository/TicketRepository";
+import { PhaseHandler } from "../handler/PhaseHandler";
 
 export class SlotService {
   private slotRepo: SlotRepository;
@@ -106,5 +107,16 @@ export class SlotService {
     console.log(
       `[SlotService] Slot ${slot.id} promoted to waiting ticket #${nextTicket.id}`
     );
+
+    // Now that the slot is assigned, set up the workspace for the promoted ticket
+    try {
+      const promotedTicket = await this.ticketRepo.findById(nextTicket.id);
+      if (promotedTicket) {
+        const handler = new PhaseHandler();
+        await handler.initCreated(promotedTicket);
+      }
+    } catch (err) {
+      console.error("[SlotService] handleCreated failed for promoted ticket:", err);
+    }
   }
 }

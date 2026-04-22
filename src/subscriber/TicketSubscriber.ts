@@ -7,6 +7,7 @@ import { Ticket } from "../entity/Ticket";
 import { Phase } from "../entity/Phase";
 import { TicketPhase } from "../enum/TicketPhase";
 import { SlotService } from "../service/SlotService";
+import { PhaseHandler } from "../handler/PhaseHandler";
 
 const ALL_PHASES: TicketPhase[] = [
   TicketPhase.CREATED,
@@ -38,11 +39,27 @@ export class TicketSubscriber implements EntitySubscriberInterface<Ticket> {
     await event.manager.save(Phase, phases);
 
     // Auto-assign a free workspace slot (or queue the ticket if none available)
+    let assignedSlot = null;
     try {
       const slotService = new SlotService();
-      await slotService.tryAssign(event.entity);
+      assignedSlot = await slotService.tryAssign(event.entity);
     } catch (err) {
       console.error("[TicketSubscriber] Slot assignment failed:", err);
+    }
+
+    // Set up workspace folder now that we have a slot
+    if (assignedSlot) {
+      try {
+        const ticket = await event.manager.findOne(Ticket, {
+          where: { id: ticketId },
+        });
+        if (ticket) {
+          const handler = new PhaseHandler();
+          await handler.initCreated(ticket);
+        }
+      } catch (err) {
+        console.error("[TicketSubscriber] handleCreated failed:", err);
+      }
     }
   }
 }

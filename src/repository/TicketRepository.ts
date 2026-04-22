@@ -57,6 +57,7 @@ export class TicketRepository {
       currentPhase?: TicketPhase;
       mondayItemId?: string;
       mondayMarkdown?: string;
+      uid?: string;
     }
   ): Promise<Ticket | null> {
     const ticket = await this.findById(id);
@@ -67,6 +68,7 @@ export class TicketRepository {
     if (data.currentPhase !== undefined) ticket.currentPhase = data.currentPhase;
     if (data.mondayItemId !== undefined) ticket.mondayItemId = data.mondayItemId;
     if (data.mondayMarkdown !== undefined) ticket.mondayMarkdown = data.mondayMarkdown;
+    if (data.uid !== undefined) ticket.uid = data.uid;
 
     return this.repo.save(ticket);
   }

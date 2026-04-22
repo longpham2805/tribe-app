@@ -52,4 +52,8 @@ export class Ticket {
   /** True when the ticket is queued waiting for a free slot */
   @Column({ type: "boolean", default: false })
   waitingForSlot!: boolean;
+
+  /** Stable UUID assigned when the ticket's workspace is first set up */
+  @Column({ type: "varchar", length: 36, nullable: true, unique: true })
+  uid!: string | null;
 }
