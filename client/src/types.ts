@@ -36,11 +36,21 @@ export interface Ticket {
   description: string | null;
   currentPhase: TicketPhase;
   mondayItemId: string | null;
+  mondayBoardId?: number | null;
   slotId: number | null;
   waitingForSlot: boolean;
   createdAt: string;
   updatedAt: string;
   phases: Phase[];
+}
+
+export interface MondayNotStartedItem {
+  id: string;
+  name: string;
+  group?: {
+    id: string;
+    title: string;
+  };
 }
 
 export interface Slot {

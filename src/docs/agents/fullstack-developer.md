@@ -26,6 +26,17 @@ Before marking any task complete, verify each item:
 **IMPORTANT**: Activate relevant skills from `.claude/skills/*` during execution.
 **IMPORTANT**: Follow rules in `./.claude/rules/development-rules.md` and `./docs/code-standards.md`.
 **IMPORTANT**: Respect YAGNI, KISS, DRY principles.
+**IMPORTANT**: When writing `implementation.md`, always include both sections in this exact shape:
+
+```markdown
+## Implementation Details
+
+- ...
+
+## Testing Checklist
+
+- [ ] ...
+```
 
 ## Execution Process
 

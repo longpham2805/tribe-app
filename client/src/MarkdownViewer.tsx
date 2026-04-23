@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchTicketFile, fetchPhaseLog } from "./api";
+import { extractAssistantText } from "./phaseEvents";
 import type { TicketPhase } from "./types";
 
 type Tab = "markdown" | "assistant" | "raw";
@@ -20,18 +21,6 @@ function fileToPhase(fileName: string): TicketPhase | null {
   if (base === "implementation") return "IMPLEMENTATION";
   if (base === "ticket") return "CREATED";
   return null;
-}
-
-function extractAssistantText(evt: any): string {
-  if (!evt) return "";
-  if (evt.type === "assistant" && evt.message?.content) {
-    return evt.message.content
-      .filter((b: any) => b?.type === "text" && typeof b.text === "string")
-      .map((b: any) => b.text)
-      .join("");
-  }
-  if (evt.type === "result" && typeof evt.result === "string") return evt.result;
-  return "";
 }
 
 export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Props) {
@@ -67,7 +56,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Pr
   );
 
   const assistantText = useMemo(
-    () => allEvents.map(extractAssistantText).filter(Boolean).join(""),
+    () => allEvents.map(extractAssistantText).filter(Boolean).join("\n\n"),
     [allEvents],
   );
 
@@ -104,7 +93,34 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Pr
 
       {tab === "assistant" && (
         <div className="log-body">
-          {assistantText ? <pre>{assistantText}</pre> : <div className="empty">No assistant output yet.</div>}
+          {assistantText ? (
+            <div style={{ lineHeight: 1.6 }}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <p style={{ margin: "0 0 10px" }}>{children}</p>,
+                  ul: ({ children }) => <ul style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ul>,
+                  ol: ({ children }) => <ol style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ol>,
+                  li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
+                  table: ({ children }) => (
+                    <div style={{ overflowX: "auto", margin: "0 0 10px" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>{children}</table>
+                    </div>
+                  ),
+                  th: ({ children }) => (
+                    <th style={{ textAlign: "left", border: "1px solid #334155", padding: "6px 8px" }}>{children}</th>
+                  ),
+                  td: ({ children }) => (
+                    <td style={{ border: "1px solid #334155", padding: "6px 8px", verticalAlign: "top" }}>{children}</td>
+                  ),
+                }}
+              >
+                {assistantText}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <div className="empty">No assistant output yet.</div>
+          )}
           <div ref={logEnd} />
         </div>
       )}

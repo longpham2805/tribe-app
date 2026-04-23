@@ -13,6 +13,7 @@ import { SlotService } from "../service/SlotService";
 import { getTicketDir, getLogDir, getLogFile, getStderrFile } from "../lib/paths";
 import { emit } from "../lib/events";
 import { getAgent, MARKER_TRAILER, MARKER_REGEX } from "../agent";
+import { runPhaseCompletedHooks, runPhaseEnteredHooks } from "../hooks/registry";
 
 const log = (msg: string) => console.log(`[PhaseHandler] ${msg}`);
 
@@ -58,6 +59,7 @@ export class PhaseHandler {
 
     const ticket = await this.ticketRepo.findById(ticketId);
     if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+    let phaseEntered = false;
 
     if (ticket.currentPhase !== phaseName) {
       const activePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
@@ -72,6 +74,7 @@ export class PhaseHandler {
         await this.phaseRepo.activate(pending.id);
         const fresh = await this.phaseRepo.findById(pending.id);
         if (fresh) emit({ type: "phase.updated", ticketId, phase: fresh });
+        phaseEntered = true;
       } else {
         log(`WARN: no pending phase ${phaseName} found for ticket #${ticketId}`);
       }
@@ -85,6 +88,9 @@ export class PhaseHandler {
 
     const updatedTicket = (await this.ticketRepo.findById(ticketId))!;
     const activePhase = (await this.phaseRepo.findActiveByTicketId(ticketId))!;
+    if (phaseEntered) {
+      await runPhaseEnteredHooks(updatedTicket, phaseName);
+    }
 
     // Run phase handler in the background — Claude spawns can take many minutes
     // and must not block the HTTP response. WS pushes updates to the client.
@@ -180,6 +186,9 @@ export class PhaseHandler {
     }
 
     await this.applyResultToPhase(activePhase, result);
+    if (result.status === PhaseStatus.COMPLETED) {
+      await runPhaseCompletedHooks(ticket, activePhase.phaseName);
+    }
 
     if (result.status === PhaseStatus.COMPLETED) {
       const next = this.nextPhase(activePhase.phaseName);
@@ -355,6 +364,9 @@ export class PhaseHandler {
         status: PhaseStatus.COMPLETED,
         completedAt: new Date(),
       });
+      if (activePhase.phaseName === TicketPhase.SHIP) {
+        await runPhaseCompletedHooks(ticket, TicketPhase.SHIP);
+      }
     }
     await this.emitTicket(ticket.id);
   }
@@ -387,6 +399,9 @@ export class PhaseHandler {
     log(`${phaseName.toLowerCase()} output → ${join(tmpDir, outputFile)} (status=${result.status})`);
 
     await this.applyResultToPhase(activePhase, result);
+    if (result.status === PhaseStatus.COMPLETED) {
+      await runPhaseCompletedHooks(ticket, phaseName);
+    }
 
     if (result.status === PhaseStatus.COMPLETED) {
       const next = this.nextPhase(phaseName);

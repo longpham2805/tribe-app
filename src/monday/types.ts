@@ -61,6 +61,9 @@ export type MondayUpdate = {
 export type MondayItemDetail = {
   id: string;
   name: string;
+  board?: {
+    id: string;
+  };
   column_values: ColumnValue[];
   updates?: MondayUpdate[];
 };

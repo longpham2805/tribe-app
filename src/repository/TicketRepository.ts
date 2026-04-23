@@ -37,12 +37,14 @@ export class TicketRepository {
     title: string;
     description?: string;
     mondayItemId?: string;
+    mondayBoardId?: number;
     mondayMarkdown?: string;
   }): Promise<Ticket> {
     const ticket = this.repo.create({
       title: data.title,
       description: data.description ?? null,
       mondayItemId: data.mondayItemId ?? null,
+      mondayBoardId: data.mondayBoardId ?? null,
       mondayMarkdown: data.mondayMarkdown ?? null,
       currentPhase: TicketPhase.CREATED,
     });
@@ -56,6 +58,7 @@ export class TicketRepository {
       description?: string;
       currentPhase?: TicketPhase;
       mondayItemId?: string;
+      mondayBoardId?: number;
       mondayMarkdown?: string;
       uid?: string;
     }
@@ -67,6 +70,7 @@ export class TicketRepository {
     if (data.description !== undefined) ticket.description = data.description;
     if (data.currentPhase !== undefined) ticket.currentPhase = data.currentPhase;
     if (data.mondayItemId !== undefined) ticket.mondayItemId = data.mondayItemId;
+    if (data.mondayBoardId !== undefined) ticket.mondayBoardId = data.mondayBoardId;
     if (data.mondayMarkdown !== undefined) ticket.mondayMarkdown = data.mondayMarkdown;
     if (data.uid !== undefined) ticket.uid = data.uid;
 

@@ -2,8 +2,15 @@ import { Router, type Request, type Response } from "express";
 import { TicketRepository } from "../repository/TicketRepository";
 import { MondayHelper } from "../monday/MondayHelper";
 import { formatItemMarkdown } from "../monday/formatItemMarkdown";
+import { runTicketImportedHooks } from "../hooks/registry";
 
 const router = Router();
+
+function parseBoardId(boardId: string | undefined): number | undefined {
+  if (!boardId) return undefined;
+  const parsed = Number(boardId);
+  return Number.isInteger(parsed) ? parsed : undefined;
+}
 
 // GET /api/monday/not-started?boardIds=1,2&people=alice,bob
 router.get("/not-started", async (req: Request, res: Response) => {
@@ -50,6 +57,7 @@ router.post("/import", async (req: Request, res: Response) => {
 
     // 2. Convert to structured markdown
     const markdown = formatItemMarkdown(item);
+    const mondayBoardId = parseBoardId(item.board?.id);
 
     // 3. Upsert into DB
     const ticketRepo = new TicketRepository();
@@ -61,6 +69,8 @@ router.post("/import", async (req: Request, res: Response) => {
     if (existing) {
       ticket = await ticketRepo.update(existing.id, {
         title: item.name,
+        mondayItemId: item.id,
+        mondayBoardId,
         mondayMarkdown: markdown,
       });
       action = "updated";
@@ -68,11 +78,16 @@ router.post("/import", async (req: Request, res: Response) => {
       ticket = await ticketRepo.create({
         title: item.name,
         mondayItemId: item.id,
+        mondayBoardId,
         mondayMarkdown: markdown,
       });
 
       ticket = await ticketRepo.findById(ticket.id);
       action = "created";
+    }
+
+    if (ticket) {
+      await runTicketImportedHooks(ticket, item);
     }
 
     res.status(action === "created" ? 201 : 200).json({

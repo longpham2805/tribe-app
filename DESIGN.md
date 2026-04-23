@@ -70,3 +70,20 @@ SHIP
 - **Phase history table**: Rather than just storing the current phase on the ticket, we also log each phase transition in the `phase` table. This gives us duration tracking per phase and a full audit trail with no extra work.
 - **Minimal to start**: No sub-tasks, no comments, no user/team management. We can layer those on later once the core loop is solid.
 - **Enum for phases**: Phases are a fixed set defined in code, not a user-configurable table. This keeps the workflow rigid and predictable, which is the point.
+
+## Project Hooks (ewebinar)
+
+Tribe supports lifecycle hooks so project-specific automation can run without hardcoding behavior directly into phase logic.
+
+- Hook entry points:
+  - ticket import (`onTicketImported`)
+  - phase entered (`onPhaseEntered`)
+  - phase completed (`onPhaseCompleted`)
+- Current implementation registers one hook: `EwebinarHook`.
+- Ewebinar behavior:
+  - On Monday import: assign configured person and move item status to `Coding`
+  - On `IMPLEMENTATION` completion: read `implementation.md` and upsert checklist back to Monday
+  - On `SHIP` completion: move item status to `PR Review`
+- Hook failures are logged and swallowed, so phase execution in Tribe still proceeds if Monday is unavailable.
+
+Configuration remains env-driven for now (`MONDAY_ACCESS_TOKEN`, board/person-related envs). Per-project settings are intentionally deferred; the hook interface is designed to let future projects register their own hook implementations without changing the phase engine.

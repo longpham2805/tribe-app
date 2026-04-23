@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   fetchTickets, createTicket, updateTicket, deleteTicket, triggerPhase, respondPhase,
   fetchSlots, createSlot, updateSlot, deleteSlot,
@@ -8,6 +8,8 @@ import type { Ticket, TicketPhase, PhaseStatus, Phase, Slot, TicketFile, WsMessa
 import { useWebSocket } from "./ws";
 import { Modal } from "./Modal";
 import { MarkdownViewer } from "./MarkdownViewer";
+import { MondayPicker } from "./MondayPicker";
+import { PhaseLiveFeed } from "./PhaseLiveFeed";
 import "./App.css";
 
 const PHASES: TicketPhase[] = ["CREATED", "BRAINSTORM", "PLANNING", "IMPLEMENTATION", "SHIP"];
@@ -211,6 +213,7 @@ function TicketsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterPhase, setFilterPhase] = useState<TicketPhase | "">("");
   const [showForm, setShowForm] = useState(false);
+  const [showMondayPicker, setShowMondayPicker] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [creating, setCreating] = useState(false);
@@ -224,6 +227,7 @@ function TicketsPage() {
   const [viewer, setViewer] = useState<{ ticketId: number; fileName: string } | null>(null);
   // Live streaming phase.log events keyed by "ticketId:phaseName"
   const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
+  const ticketFileRefreshTimers = useRef<Record<number, number>>({});
 
   const load = async () => {
     try {
@@ -243,6 +247,26 @@ function TicketsPage() {
 
   useEffect(() => { setLoading(true); load(); }, [filterPhase]);
 
+  const scheduleTicketFilesRefresh = (ticketId: number) => {
+    const existing = ticketFileRefreshTimers.current[ticketId];
+    if (existing) window.clearTimeout(existing);
+    ticketFileRefreshTimers.current[ticketId] = window.setTimeout(() => {
+      fetchTicketFiles(ticketId)
+        .then((files) => setFilesByTicket((cur) => ({ ...cur, [ticketId]: files })))
+        .catch(() => { /* ignore */ })
+        .finally(() => {
+          delete ticketFileRefreshTimers.current[ticketId];
+        });
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(ticketFileRefreshTimers.current).forEach((timerId) => window.clearTimeout(timerId));
+      ticketFileRefreshTimers.current = {};
+    };
+  }, []);
+
   // Realtime: WebSocket replaces polling.
   useWebSocket((msg: WsMessage) => {
     if (msg.type === "phase.updated") {
@@ -257,6 +281,7 @@ function TicketsPage() {
               },
         ),
       );
+      scheduleTicketFilesRefresh(msg.ticketId);
     } else if (msg.type === "ticket.updated") {
       const t = msg.ticket as Ticket;
       setTickets((prev) => {
@@ -267,15 +292,7 @@ function TicketsPage() {
     } else if (msg.type === "phase.log") {
       const key = `${msg.ticketId}:${msg.phaseName}`;
       setLiveLogs((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), msg.event] }));
-      // Refresh file list when a phase is streaming — file sizes change.
-      setFilesByTicket((prev) => {
-        if (!prev[msg.ticketId]) return prev;
-        // Trigger async refetch; keep the existing list until it returns.
-        fetchTicketFiles(msg.ticketId).then((files) =>
-          setFilesByTicket((cur) => ({ ...cur, [msg.ticketId]: files })),
-        ).catch(() => { /* ignore */ });
-        return prev;
-      });
+      scheduleTicketFilesRefresh(msg.ticketId);
     }
   });
 
@@ -358,10 +375,17 @@ function TicketsPage() {
         </form>
       )}
 
+      {showMondayPicker && <MondayPicker onImported={load} />}
+
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "+ New Ticket"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "+ New Ticket"}
+          </button>
+          <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
+            {showMondayPicker ? "Hide Monday Picker" : "Import from Monday"}
+          </button>
+        </div>
         <div className="filter-tabs">
           <button className={`tab ${filterPhase === "" ? "active" : ""}`} onClick={() => setFilterPhase("")}>All</button>
           {PHASES.map((p) => (
@@ -385,6 +409,7 @@ function TicketsPage() {
         <div className="ticket-list">
           {tickets.map((ticket) => {
             const assignedSlot = slotById(ticket.slotId);
+            const activeOrPausedPhase = ticket.phases.find((ph) => !!ph.startedAt && !ph.completedAt);
             return (
               <div key={ticket.id} className="ticket-card">
                 <div className="ticket-header">
@@ -463,6 +488,15 @@ function TicketsPage() {
                   </div>
                   );
                 })()}
+
+                {activeOrPausedPhase && (
+                  <PhaseLiveFeed
+                    ticketId={ticket.id}
+                    phaseName={activeOrPausedPhase.phaseName}
+                    status={activeOrPausedPhase.status}
+                    liveEvents={liveLogs[`${ticket.id}:${activeOrPausedPhase.phaseName}`] ?? []}
+                  />
+                )}
 
                 {(() => {
                   const files = filesByTicket[ticket.id] ?? [];

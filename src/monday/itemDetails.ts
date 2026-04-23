@@ -19,6 +19,9 @@ export async function fetchItemDetails(
   items(ids: $itemId) {
     id
     name
+    board {
+      id
+    }
     column_values {
       id
       text

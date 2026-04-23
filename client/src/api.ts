@@ -1,4 +1,4 @@
-import type { Ticket, TicketPhase, Slot, TicketFile } from "./types";
+import type { Ticket, TicketPhase, Slot, TicketFile, MondayNotStartedItem } from "./types";
 
 const BASE = "/api";
 
@@ -119,4 +119,30 @@ export async function fetchPhaseLog(ticketId: number, phaseName: string): Promis
   if (!res.ok) throw new Error("Failed to fetch phase log");
   const body = await res.json();
   return body.events ?? [];
+}
+
+// ── Monday import ─────────────────────────────────────────────────
+
+export async function fetchMondayNotStarted(): Promise<MondayNotStartedItem[]> {
+  const res = await fetch(`${BASE}/monday/not-started`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to fetch Monday tickets");
+  }
+  const body = await res.json();
+  return body.items ?? [];
+}
+
+export async function importMondayItem(mondayItemId: string): Promise<Ticket> {
+  const res = await fetch(`${BASE}/monday/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mondayItemId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to import Monday item");
+  }
+  const body = await res.json();
+  return body.ticket as Ticket;
 }

@@ -26,6 +26,9 @@ export class Ticket {
   @Column({ type: "varchar", length: 50, nullable: true, unique: true })
   mondayItemId!: string | null;
 
+  @Column({ type: "int", nullable: true })
+  mondayBoardId!: number | null;
+
   @Column({ type: "enum", enum: TicketPhase, default: TicketPhase.CREATED })
   currentPhase!: TicketPhase;
 
