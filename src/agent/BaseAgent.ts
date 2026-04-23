@@ -5,6 +5,7 @@ import { TicketPhase } from "../enum/TicketPhase";
 const log = (msg: string) => console.log(`[BaseAgent] ${msg}`);
 
 const SKILLS_ROOT = join(__dirname, "..", "docs", "skills");
+const AGENTS_ROOT = join(__dirname, "..", "docs", "agents");
 
 export const MARKER_TRAILER = `
 
@@ -29,17 +30,15 @@ export interface PromptContext {
 export abstract class BaseAgent {
   abstract readonly phase: TicketPhase;
   protected readonly skills: string[] = [];
-
-  protected abstract roleIntro(): string;
-  protected abstract taskInstructions(): string;
+  protected abstract readonly instructionFile: string;
 
   buildPrompt(ctx: PromptContext): string {
-    const sections: string[] = [this.roleIntro()];
+    const sections: string[] = [this.inlineInstructions()];
 
     const skillsBlock = this.inlineSkills();
     if (skillsBlock) sections.push(skillsBlock);
 
-    sections.push(this.renderInputs(ctx), this.taskInstructions());
+    sections.push(this.renderInputs(ctx));
     return `${sections.join("\n\n")}${MARKER_TRAILER}`;
   }
 
@@ -77,5 +76,21 @@ export abstract class BaseAgent {
 
     if (!skillChunks.length) return "";
     return `## Injected Skills\n\n${skillChunks.join("\n\n")}`;
+  }
+
+  protected inlineInstructions(): string {
+    const path = join(AGENTS_ROOT, this.instructionFile);
+    if (!existsSync(path)) {
+      log(`WARN: missing agent instruction file ${path}`);
+      return "";
+    }
+
+    const content = readFileSync(path, "utf-8").trim();
+    if (!content) return "";
+
+    const withoutFrontmatter = content.replace(/^---[\s\S]*?---\s*/m, "").trim();
+    if (!withoutFrontmatter) return "";
+
+    return `## Agent Role & Instructions\n\n${withoutFrontmatter}`;
   }
 }
