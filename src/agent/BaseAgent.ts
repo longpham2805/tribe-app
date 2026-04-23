@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { TicketPhase } from "../enum/TicketPhase";
 
@@ -6,6 +6,9 @@ const log = (msg: string) => console.log(`[BaseAgent] ${msg}`);
 
 const SKILLS_ROOT = join(__dirname, "..", "docs", "skills");
 const AGENTS_ROOT = join(__dirname, "..", "docs", "agents");
+const OUTPUT_STYLES_ROOT = join(__dirname, "..", "docs", "output-styles");
+
+export const DEFAULT_OUTPUT_STYLE_LEVEL = 4;
 
 export const MARKER_TRAILER = `
 
@@ -31,15 +34,21 @@ export abstract class BaseAgent {
   abstract readonly phase: TicketPhase;
   protected readonly skills: string[] = [];
   protected abstract readonly instructionFile: string;
+  protected readonly outputStyleLevel: number = DEFAULT_OUTPUT_STYLE_LEVEL;
 
   buildPrompt(ctx: PromptContext): string {
-    const sections: string[] = [this.inlineInstructions()];
+    const sections: string[] = [];
+
+    const outputStyle = this.inlineOutputStyle();
+    if (outputStyle) sections.push(outputStyle);
+
+    sections.push(this.inlineInstructions());
 
     const skillsBlock = this.inlineSkills();
     if (skillsBlock) sections.push(skillsBlock);
 
     sections.push(this.renderInputs(ctx));
-    return `${sections.join("\n\n")}${MARKER_TRAILER}`;
+    return `${sections.filter(Boolean).join("\n\n")}${MARKER_TRAILER}`;
   }
 
   buildFollowupPrompt(message: string): string {
@@ -76,6 +85,27 @@ export abstract class BaseAgent {
 
     if (!skillChunks.length) return "";
     return `## Injected Skills\n\n${skillChunks.join("\n\n")}`;
+  }
+
+  protected inlineOutputStyle(): string {
+    if (!existsSync(OUTPUT_STYLES_ROOT)) return "";
+
+    const prefix = `coding-level-${this.outputStyleLevel}-`;
+    const match = readdirSync(OUTPUT_STYLES_ROOT).find(
+      (f) => f.startsWith(prefix) && f.endsWith(".md"),
+    );
+    if (!match) {
+      log(`WARN: no output style file for level ${this.outputStyleLevel}`);
+      return "";
+    }
+
+    const content = readFileSync(join(OUTPUT_STYLES_ROOT, match), "utf-8").trim();
+    if (!content) return "";
+
+    const withoutFrontmatter = content.replace(/^---[\s\S]*?---\s*/m, "").trim();
+    if (!withoutFrontmatter) return "";
+
+    return `## Output Style\n\n${withoutFrontmatter}`;
   }
 
   protected inlineInstructions(): string {
