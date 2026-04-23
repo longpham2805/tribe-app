@@ -70,11 +70,11 @@ export class SlotService {
       try {
         execSync(
           `git -C "${repoPath}" fetch origin && ` +
-          `git -C "${repoPath}" checkout main && ` +
-          `git -C "${repoPath}" reset --hard origin/main`,
+          `git -C "${repoPath}" checkout dev && ` +
+          `git -C "${repoPath}" reset --hard origin/dev`,
           { stdio: "inherit" }
         );
-        console.log(`[SlotService] Reset "${repoPath}" to origin/main`);
+        console.log(`[SlotService] Reset "${repoPath}" to origin/dev`);
       } catch (err) {
         console.error(`[SlotService] git reset failed for "${repoPath}":`, err);
       }

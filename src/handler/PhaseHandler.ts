@@ -10,6 +10,8 @@ import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { SlotRepository } from "../repository/SlotRepository";
 import { SlotService } from "../service/SlotService";
+import { getTicketDir, getLogDir, getLogFile, getStderrFile } from "../lib/paths";
+import { emit } from "../lib/events";
 
 const log = (msg: string) => console.log(`[PhaseHandler] ${msg}`);
 
@@ -50,6 +52,20 @@ export class PhaseHandler {
     this.phaseRepo = new PhaseRepository();
   }
 
+  private async updatePhase(phaseId: number, data: Partial<Phase>): Promise<Phase | null> {
+    await this.phaseRepo.update(phaseId, data);
+    const fresh = await this.phaseRepo.findById(phaseId);
+    if (fresh) {
+      emit({ type: "phase.updated", ticketId: fresh.ticketId, phase: fresh });
+    }
+    return fresh;
+  }
+
+  private async emitTicket(ticketId: number): Promise<void> {
+    const ticket = await this.ticketRepo.findById(ticketId);
+    if (ticket) emit({ type: "ticket.updated", ticket });
+  }
+
   async trigger(ticketId: number, phaseName: TicketPhase): Promise<TriggerResult> {
     log(`trigger → ticket #${ticketId} phase=${phaseName}`);
 
@@ -60,19 +76,22 @@ export class PhaseHandler {
       const activePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
       if (activePhase) {
         log(`completing active phase ${activePhase.phaseName} for ticket #${ticketId}`);
-        await this.phaseRepo.update(activePhase.id, { completedAt: new Date() });
+        await this.updatePhase(activePhase.id, { completedAt: new Date() });
       }
 
       const pending = await this.phaseRepo.findPendingByTicketIdAndName(ticketId, phaseName);
       if (pending) {
         log(`activating phase ${phaseName} for ticket #${ticketId}`);
         await this.phaseRepo.activate(pending.id);
+        const fresh = await this.phaseRepo.findById(pending.id);
+        if (fresh) emit({ type: "phase.updated", ticketId, phase: fresh });
       } else {
         log(`WARN: no pending phase ${phaseName} found for ticket #${ticketId}`);
       }
 
       await this.ticketRepo.update(ticketId, { currentPhase: phaseName });
       log(`ticket #${ticketId} currentPhase → ${phaseName}`);
+      await this.emitTicket(ticketId);
     } else {
       log(`ticket #${ticketId} is already in phase ${phaseName}, re-running handler`);
     }
@@ -81,12 +100,12 @@ export class PhaseHandler {
     const activePhase = (await this.phaseRepo.findActiveByTicketId(ticketId))!;
 
     // Run phase handler in the background — Claude spawns can take many minutes
-    // and must not block the HTTP response. The client polls for updated state.
+    // and must not block the HTTP response. WS pushes updates to the client.
     this.dispatch(phaseName, updatedTicket).catch(async (err) => {
       log(`dispatch error for ticket #${updatedTicket.id} phase=${phaseName}: ${err?.message ?? err}`);
       const current = await this.phaseRepo.findActiveByTicketId(updatedTicket.id);
       if (current && current.phaseName === phaseName) {
-        await this.phaseRepo.update(current.id, {
+        await this.updatePhase(current.id, {
           status: PhaseStatus.ERROR,
           lastMessage: String(err?.message ?? err).slice(-2000),
         });
@@ -131,12 +150,12 @@ export class PhaseHandler {
     }
 
     const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
-    await this.phaseRepo.update(activePhase.id, { status: PhaseStatus.RUNNING, lastMessage: null });
+    await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING, lastMessage: null });
 
-    // Run the Claude resume in the background; UI polls for updated state.
+    // Run the Claude resume in the background; WS pushes updates to the client.
     this.runRespond(activePhase, ticket, message, slotRoot, tmpDir).catch(async (err) => {
       log(`respond error for ticket #${ticket.id}: ${err?.message ?? err}`);
-      await this.phaseRepo.update(activePhase.id, {
+      await this.updatePhase(activePhase.id, {
         status: PhaseStatus.ERROR,
         lastMessage: String(err?.message ?? err).slice(-2000),
       });
@@ -155,7 +174,11 @@ export class PhaseHandler {
     tmpDir: string,
   ): Promise<void> {
     const prompt = `${message}${MARKER_TRAILER}`;
-    const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid);
+    const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid, {
+      ticketId: ticket.id,
+      uid: ticket.uid!,
+      phaseName: activePhase.phaseName,
+    });
 
     const mdFile = this.phaseOutputFile(activePhase.phaseName);
     if (mdFile) {
@@ -216,7 +239,7 @@ export class PhaseHandler {
       return;
     }
 
-    const tmpDir = join(slot.rootPath, ".tribe", uid);
+    const tmpDir = getTicketDir(uid);
     mkdirSync(tmpDir, { recursive: true });
 
     const lines: string[] = [`# Ticket #${ticket.id}: ${ticket.title}`, ""];
@@ -232,7 +255,7 @@ export class PhaseHandler {
 
     const activePhase = await this.phaseRepo.findActiveByTicketId(ticket.id);
     if (activePhase && activePhase.phaseName === TicketPhase.CREATED) {
-      await this.phaseRepo.update(activePhase.id, {
+      await this.updatePhase(activePhase.id, {
         status: PhaseStatus.COMPLETED,
         completedAt: new Date(),
       });
@@ -348,11 +371,12 @@ export class PhaseHandler {
     // Mark the SHIP phase completed once the slot is released.
     const activePhase = await this.phaseRepo.findActiveByTicketId(ticket.id);
     if (activePhase) {
-      await this.phaseRepo.update(activePhase.id, {
+      await this.updatePhase(activePhase.id, {
         status: PhaseStatus.COMPLETED,
         completedAt: new Date(),
       });
     }
+    await this.emitTicket(ticket.id);
   }
 
   // ── Shared phase runner ───────────────────────────────────────────
@@ -370,10 +394,14 @@ export class PhaseHandler {
       throw new Error(`No active ${phaseName} phase for ticket #${ticket.id}`);
     }
 
-    await this.phaseRepo.update(activePhase.id, { status: PhaseStatus.RUNNING });
+    await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING });
 
     log(`spawning claude for ${phaseName.toLowerCase()} (resume=${activePhase.claudeSessionUuid ?? "none"})`);
-    const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid);
+    const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid, {
+      ticketId: ticket.id,
+      uid: ticket.uid!,
+      phaseName,
+    });
 
     writeFileSync(join(tmpDir, outputFile), result.output);
     log(`${phaseName.toLowerCase()} output → ${join(tmpDir, outputFile)} (status=${result.status})`);
@@ -392,7 +420,7 @@ export class PhaseHandler {
   }
 
   private async applyResultToPhase(activePhase: Phase, result: SpawnResult): Promise<void> {
-    await this.phaseRepo.update(activePhase.id, {
+    await this.updatePhase(activePhase.id, {
       status: result.status,
       lastMessage: result.message,
       claudeSessionUuid: result.sessionUuid ?? activePhase.claudeSessionUuid ?? null,
@@ -440,7 +468,7 @@ export class PhaseHandler {
     const slot = await slotRepo.findById(ticket.slotId);
     if (!slot) throw new Error(`Slot ${ticket.slotId} not found`);
 
-    const tmpDir = join(slot.rootPath, ".tribe", ticket.uid);
+    const tmpDir = getTicketDir(ticket.uid);
     log(`workspace → slotRoot=${slot.rootPath} tmpDir=${tmpDir}`);
     return { slotRoot: slot.rootPath, tmpDir };
   }
@@ -449,6 +477,7 @@ export class PhaseHandler {
     prompt: string,
     cwd: string,
     resumeUuid?: string | null,
+    logContext?: { ticketId: number; uid: string; phaseName: TicketPhase },
   ): Promise<SpawnResult> {
     return new Promise((resolve, reject) => {
       const resuming = !!resumeUuid;
@@ -457,6 +486,39 @@ export class PhaseHandler {
         : ["-p", prompt, "--output-format", "stream-json", "--verbose"];
 
       log(`claude spawn: ${resuming ? `--resume ${resumeUuid}` : "new session"} cwd=${cwd}`);
+
+      let logFile: string | null = null;
+      let stderrFile: string | null = null;
+      if (logContext) {
+        const logDir = getLogDir(logContext.uid);
+        mkdirSync(logDir, { recursive: true });
+        logFile = getLogFile(logContext.uid, logContext.phaseName);
+        stderrFile = getStderrFile(logContext.uid, logContext.phaseName);
+        // Mark the start of a new run so readers can distinguish resumptions.
+        appendFileSync(
+          logFile,
+          JSON.stringify({
+            type: "_tribe.run_start",
+            at: new Date().toISOString(),
+            resumeUuid: resumeUuid ?? null,
+          }) + "\n",
+        );
+      }
+
+      const persistEvent = (evt: unknown) => {
+        if (!logContext || !logFile) return;
+        try {
+          appendFileSync(logFile, JSON.stringify(evt) + "\n");
+          emit({
+            type: "phase.log",
+            ticketId: logContext.ticketId,
+            phaseName: logContext.phaseName,
+            event: evt,
+          });
+        } catch (err) {
+          console.error("[PhaseHandler] failed to persist log event:", err);
+        }
+      };
 
       const proc = spawn("claude", args, {
         cwd,
@@ -488,9 +550,11 @@ export class PhaseHandler {
             // Final consolidated text — prefer it if we haven't already captured content.
             if (!output) output = evt.result;
           }
+          persistEvent(evt);
         } catch {
           // Not JSON — treat as plain text chunk (fallback for CLI that ignored the flag).
           output += line + "\n";
+          persistEvent({ type: "raw", text: line });
         }
       };
 
@@ -508,6 +572,13 @@ export class PhaseHandler {
         const text = chunk.toString();
         stderr += text;
         process.stderr.write(text);
+        if (stderrFile) {
+          try {
+            appendFileSync(stderrFile, text);
+          } catch (err) {
+            console.error("[PhaseHandler] failed to persist stderr:", err);
+          }
+        }
       });
 
       const timeout = setTimeout(() => {

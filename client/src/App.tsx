@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import {
   fetchTickets, createTicket, updateTicket, deleteTicket, triggerPhase, respondPhase,
   fetchSlots, createSlot, updateSlot, deleteSlot,
+  fetchTicketFiles,
 } from "./api";
-import type { Ticket, TicketPhase, PhaseStatus, Slot } from "./types";
+import type { Ticket, TicketPhase, PhaseStatus, Phase, Slot, TicketFile, WsMessage } from "./types";
+import { useWebSocket } from "./ws";
+import { Modal } from "./Modal";
+import { MarkdownViewer } from "./MarkdownViewer";
 import "./App.css";
 
 const PHASES: TicketPhase[] = ["CREATED", "BRAINSTORM", "PLANNING", "IMPLEMENTATION", "SHIP"];
@@ -214,6 +218,13 @@ function TicketsPage() {
   const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
   const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
 
+  // Per-ticket file list cache
+  const [filesByTicket, setFilesByTicket] = useState<Record<number, TicketFile[]>>({});
+  // Open modal state
+  const [viewer, setViewer] = useState<{ ticketId: number; fileName: string } | null>(null);
+  // Live streaming phase.log events keyed by "ticketId:phaseName"
+  const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
+
   const load = async () => {
     try {
       setError(null);
@@ -232,13 +243,60 @@ function TicketsPage() {
 
   useEffect(() => { setLoading(true); load(); }, [filterPhase]);
 
-  // Poll while any phase is RUNNING so background Claude work surfaces without a manual refresh.
+  // Realtime: WebSocket replaces polling.
+  useWebSocket((msg: WsMessage) => {
+    if (msg.type === "phase.updated") {
+      const updated = msg.phase as Phase;
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id !== msg.ticketId
+            ? t
+            : {
+                ...t,
+                phases: t.phases.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
+              },
+        ),
+      );
+    } else if (msg.type === "ticket.updated") {
+      const t = msg.ticket as Ticket;
+      setTickets((prev) => {
+        const found = prev.some((x) => x.id === t.id);
+        if (found) return prev.map((x) => (x.id === t.id ? { ...x, ...t } : x));
+        return [t, ...prev];
+      });
+    } else if (msg.type === "phase.log") {
+      const key = `${msg.ticketId}:${msg.phaseName}`;
+      setLiveLogs((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), msg.event] }));
+      // Refresh file list when a phase is streaming — file sizes change.
+      setFilesByTicket((prev) => {
+        if (!prev[msg.ticketId]) return prev;
+        // Trigger async refetch; keep the existing list until it returns.
+        fetchTicketFiles(msg.ticketId).then((files) =>
+          setFilesByTicket((cur) => ({ ...cur, [msg.ticketId]: files })),
+        ).catch(() => { /* ignore */ });
+        return prev;
+      });
+    }
+  });
+
+  // Load files for each visible ticket once.
   useEffect(() => {
-    const hasRunning = tickets.some((t) => t.phases.some((p) => p.status === "RUNNING"));
-    if (!hasRunning) return;
-    const timer = setInterval(load, 3000);
-    return () => clearInterval(timer);
-  }, [tickets]);
+    const missing = tickets.filter((t) => !(t.id in filesByTicket));
+    if (missing.length === 0) return;
+    Promise.all(
+      missing.map((t) =>
+        fetchTicketFiles(t.id)
+          .then((files) => [t.id, files] as [number, TicketFile[]])
+          .catch(() => [t.id, [] as TicketFile[]] as [number, TicketFile[]]),
+      ),
+    ).then((pairs) => {
+      setFilesByTicket((prev) => {
+        const next = { ...prev };
+        for (const [id, files] of pairs) next[id] = files;
+        return next;
+      });
+    });
+  }, [tickets, filesByTicket]);
 
   const slotById = (id: number | null) => slots.find((s) => s.id === id) ?? null;
 
@@ -353,7 +411,9 @@ function TicketsPage() {
                 <h3 className="ticket-title">{ticket.title}</h3>
                 {ticket.description && <p className="ticket-desc">{ticket.description}</p>}
 
-                {ticket.phases.length > 0 && (
+                {ticket.phases.length > 0 && (() => {
+                  const ticketRunning = ticket.phases.some((ph) => ph.status === "RUNNING");
+                  return (
                   <div className="phase-pipeline">
                     {PHASES.map((p) => {
                       const phaseRecord = ticket.phases.find((ph) => ph.phaseName === p);
@@ -392,15 +452,37 @@ function TicketsPage() {
                           </div>
                           <button className="phase-card-trigger"
                             style={isActive ? { borderColor: accent + "66", color: accent } : {}}
-                            disabled={isBusy} onClick={() => handleTriggerPhase(ticket.id, p)}
-                            title={`Trigger ${PHASE_LABELS[p]}`}>
+                            disabled={isBusy || ticketRunning}
+                            onClick={() => handleTriggerPhase(ticket.id, p)}
+                            title={ticketRunning ? "A phase is already running" : `Trigger ${PHASE_LABELS[p]}`}>
                             {isBusy ? "…" : "Trigger"}
                           </button>
                         </div>
                       );
                     })}
                   </div>
-                )}
+                  );
+                })()}
+
+                {(() => {
+                  const files = filesByTicket[ticket.id] ?? [];
+                  if (files.length === 0) return null;
+                  return (
+                    <div className="file-chips">
+                      {files.map((f) => (
+                        <button
+                          key={f.name}
+                          className="file-chip"
+                          onClick={() => setViewer({ ticketId: ticket.id, fileName: f.name })}
+                          title={`${f.size} bytes · ${new Date(f.mtime).toLocaleString()}`}
+                        >
+                          <span className="file-chip-icon">📄</span>
+                          {f.name}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {(() => {
                   const paused = ticket.phases.find(
@@ -451,6 +533,33 @@ function TicketsPage() {
           })}
         </div>
       )}
+
+      {viewer && (() => {
+        const fileToPhase = (n: string): TicketPhase | null => {
+          const base = n.replace(/\.md$/, "").toLowerCase();
+          if (base === "brainstorm") return "BRAINSTORM";
+          if (base === "planning") return "PLANNING";
+          if (base === "implementation") return "IMPLEMENTATION";
+          if (base === "ticket") return "CREATED";
+          return null;
+        };
+        const phaseName = fileToPhase(viewer.fileName);
+        const live = phaseName ? (liveLogs[`${viewer.ticketId}:${phaseName}`] ?? []) : [];
+        return (
+          <Modal
+            open
+            onClose={() => setViewer(null)}
+            title={`Ticket #${viewer.ticketId} · ${viewer.fileName}`}
+          >
+            <MarkdownViewer
+              ticketId={viewer.ticketId}
+              fileName={viewer.fileName}
+              phaseName={phaseName}
+              liveEvents={live}
+            />
+          </Modal>
+        );
+      })()}
     </>
   );
 }

@@ -11,6 +11,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:3100",
       "/mcp": "http://localhost:3100",
+      "/ws": { target: "ws://localhost:3100", ws: true },
     },
   },
 });

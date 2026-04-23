@@ -374,3 +374,141 @@
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+/* ── File chips ──────────────────────────────────────────────────── */
+
+.file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.5rem;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #0f1117;
+  border: 1px solid #1e2a3a;
+  border-radius: 999px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.file-chip:hover {
+  border-color: #3b82f6;
+  color: #e2e8f0;
+}
+
+.file-chip-icon {
+  font-size: 13px;
+}
+
+/* ── Modal ───────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 15, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.modal-panel {
+  background: #0a0d14;
+  border: 1px solid #1e2a3a;
+  border-radius: 12px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #1e2a3a;
+}
+
+.modal-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+
+.tabs-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #1e2a3a;
+  padding-bottom: 8px;
+}
+
+.markdown-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #cbd5e1;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  color: #e2e8f0;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-body code {
+  background: #0f1117;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+.markdown-body pre {
+  background: #0f1117;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12.5px;
+}
+
+.markdown-body a {
+  color: #3b82f6;
+}
+
+.markdown-body ul, .markdown-body ol {
+  padding-left: 1.5em;
+}
+
+.log-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #0f1117;
+  border: 1px solid #1e2a3a;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.log-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #cbd5e1;
+}

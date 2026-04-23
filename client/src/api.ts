@@ -1,4 +1,4 @@
-import type { Ticket, TicketPhase, Slot } from "./types";
+import type { Ticket, TicketPhase, Slot, TicketFile } from "./types";
 
 const BASE = "/api";
 
@@ -98,4 +98,25 @@ export async function deleteSlot(id: number): Promise<void> {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "Failed to delete slot");
   }
+}
+
+// ── Ticket files ──────────────────────────────────────────────────
+
+export async function fetchTicketFiles(ticketId: number): Promise<TicketFile[]> {
+  const res = await fetch(`${BASE}/tickets/${ticketId}/files`);
+  if (!res.ok) throw new Error("Failed to fetch ticket files");
+  return res.json();
+}
+
+export async function fetchTicketFile(ticketId: number, name: string): Promise<string> {
+  const res = await fetch(`${BASE}/tickets/${ticketId}/files/${encodeURIComponent(name)}`);
+  if (!res.ok) throw new Error("Failed to fetch ticket file");
+  return res.text();
+}
+
+export async function fetchPhaseLog(ticketId: number, phaseName: string): Promise<any[]> {
+  const res = await fetch(`${BASE}/tickets/${ticketId}/files/_logs/${encodeURIComponent(phaseName)}`);
+  if (!res.ok) throw new Error("Failed to fetch phase log");
+  const body = await res.json();
+  return body.events ?? [];
 }

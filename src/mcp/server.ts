@@ -17,7 +17,9 @@ import ticketRoutes from "../routes/tickets";
 import phaseRoutes from "../routes/phases";
 import mondayRoutes from "../routes/monday";
 import slotRoutes from "../routes/slots";
+import filesRoutes from "../routes/files";
 import { SlotRepository } from "../repository/SlotRepository";
+import { attachWebSocket } from "../ws/server";
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
 
@@ -492,6 +494,7 @@ async function main() {
 
   // ── REST API Routes ──────────────────────────────────────────────
   app.use("/api", express.json());
+  app.use("/api/tickets/:ticketId/files", filesRoutes);
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/phases", phaseRoutes);
   app.use("/api/monday", mondayRoutes);
@@ -505,10 +508,11 @@ async function main() {
   });
 
   const PORT = parseInt(process.env.MCP_PORT || "3100");
-  app.listen(PORT, () => {
+  const httpServer = app.listen(PORT, () => {
     console.log(`Tribe MCP server running at http://localhost:${PORT}/mcp`);
     console.log(`Tribe REST API running at http://localhost:${PORT}/api`);
   });
+  attachWebSocket(httpServer);
 }
 
 main().catch((err) => {
