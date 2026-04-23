@@ -28,6 +28,7 @@ export interface PromptContext {
   ticketContent: string;
   brainstormContent?: string;
   planningContent?: string;
+  checklistOutputPath?: string;
 }
 
 export abstract class BaseAgent {
@@ -62,6 +63,14 @@ export abstract class BaseAgent {
     }
     if (ctx.planningContent) {
       sections.push(`## Implementation Plan\n\n${ctx.planningContent}`);
+    }
+    if (ctx.checklistOutputPath) {
+      sections.push(
+        `## Output Artifacts\n\n` +
+        `In addition to the main implementation report (printed to stdout as \`implementation.md\`), ` +
+        `write the following file directly using your file-write tool:\n\n` +
+        `- \`implementation-testing-checklist.md\` → write to path: \`${ctx.checklistOutputPath}\``,
+      );
     }
     return sections.join("\n\n");
   }

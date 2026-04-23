@@ -333,6 +333,7 @@ export class PhaseHandler {
       ticketContent,
       brainstormContent,
       planningContent,
+      checklistOutputPath: join(tmpDir, "implementation-testing-checklist.md"),
     });
 
     await this.runPhase(ticket, TicketPhase.IMPLEMENTATION, slotRoot, tmpDir, prompt, "implementation.md");
@@ -430,7 +431,7 @@ export class PhaseHandler {
       case TicketPhase.PLANNING:
         return TicketPhase.IMPLEMENTATION;
       case TicketPhase.IMPLEMENTATION:
-        return TicketPhase.SHIP;
+        return null;
       default:
         return null;
     }

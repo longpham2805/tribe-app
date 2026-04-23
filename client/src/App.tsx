@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  fetchTickets, createTicket, updateTicket, deleteTicket, triggerPhase, respondPhase,
+  fetchTickets, createTicket, deleteTicket, triggerPhase, respondPhase,
   fetchSlots, createSlot, updateSlot, deleteSlot,
   fetchTicketFiles,
 } from "./api";
@@ -227,6 +227,8 @@ function TicketsPage() {
   const [viewer, setViewer] = useState<{ ticketId: number; fileName: string } | null>(null);
   // Live streaming phase.log events keyed by "ticketId:phaseName"
   const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
+  // Selected phase for activity feed per ticket; auto-follows the active phase
+  const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
   const ticketFileRefreshTimers = useRef<Record<number, number>>({});
 
   const load = async () => {
@@ -296,6 +298,18 @@ function TicketsPage() {
     }
   });
 
+  // Auto-select the active/paused phase whenever tickets change.
+  useEffect(() => {
+    setSelectedPhaseByTicket((prev) => {
+      const next = { ...prev };
+      for (const ticket of tickets) {
+        const active = ticket.phases.find((ph) => !!ph.startedAt && !ph.completedAt);
+        if (active) next[ticket.id] = active.phaseName;
+      }
+      return next;
+    });
+  }, [tickets]);
+
   // Load files for each visible ticket once.
   useEffect(() => {
     const missing = tickets.filter((t) => !(t.id in filesByTicket));
@@ -329,11 +343,6 @@ function TicketsPage() {
     finally { setCreating(false); }
   };
 
-  const handlePhaseChange = async (ticket: Ticket, phase: TicketPhase) => {
-    try { await updateTicket(ticket.id, { currentPhase: phase }); await load(); }
-    catch (e: any) { setError(e.message); }
-  };
-
   const handleTriggerPhase = async (ticketId: number, phase: TicketPhase) => {
     const key = `${ticketId}:${phase}`;
     setTriggeringPhase(key);
@@ -351,6 +360,19 @@ function TicketsPage() {
   const handleRespond = async (ticketId: number) => {
     const message = (responseDraft[ticketId] ?? "").trim();
     if (!message) return;
+
+    const ticket = tickets.find((t) => t.id === ticketId);
+    const pausedPhase = ticket?.phases.find(
+      (ph) => !!ph.startedAt && !ph.completedAt && PAUSED_STATUSES.includes(ph.status),
+    );
+    if (pausedPhase) {
+      const key = `${ticketId}:${pausedPhase.phaseName}`;
+      setLiveLogs((prev) => ({
+        ...prev,
+        [key]: [...(prev[key] ?? []), { type: "user_message", text: message }],
+      }));
+    }
+
     setRespondingTicket(ticketId);
     try {
       await respondPhase(ticketId, message);
@@ -375,7 +397,9 @@ function TicketsPage() {
         </form>
       )}
 
-      {showMondayPicker && <MondayPicker onImported={load} />}
+      <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
+        <MondayPicker onImported={load} />
+      </Modal>
 
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
         <div style={{ display: "flex", gap: 8 }}>
@@ -383,7 +407,7 @@ function TicketsPage() {
             {showForm ? "Cancel" : "+ New Ticket"}
           </button>
           <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
-            {showMondayPicker ? "Hide Monday Picker" : "Import from Monday"}
+            Import from Monday
           </button>
         </div>
         <div className="filter-tabs">
@@ -409,7 +433,6 @@ function TicketsPage() {
         <div className="ticket-list">
           {tickets.map((ticket) => {
             const assignedSlot = slotById(ticket.slotId);
-            const activeOrPausedPhase = ticket.phases.find((ph) => !!ph.startedAt && !ph.completedAt);
             return (
               <div key={ticket.id} className="ticket-card">
                 <div className="ticket-header">
@@ -434,6 +457,7 @@ function TicketsPage() {
                 </div>
 
                 <h3 className="ticket-title">{ticket.title}</h3>
+                <span className="ticket-date" style={{ display: "block", marginBottom: 4 }}>{new Date(ticket.createdAt).toLocaleDateString()}</span>
                 {ticket.description && <p className="ticket-desc">{ticket.description}</p>}
 
                 {ticket.phases.length > 0 && (() => {
@@ -455,6 +479,7 @@ function TicketsPage() {
                         : isPending
                           ? "Pending"
                           : STATUS_LABELS[status] ?? "Active";
+                      const isRunning = isActive && status === "RUNNING";
                       const icon = isCompleted
                         ? "✓"
                         : status === "ERROR"
@@ -464,12 +489,19 @@ function TicketsPage() {
                             : isActive
                               ? "●"
                               : "○";
+                      const isSelected = selectedPhaseByTicket[ticket.id] === p;
                       return (
                         <div key={p}
-                          className={`phase-card ${isActive ? "phase-card--active" : ""} ${isCompleted ? "phase-card--completed" : ""} ${isPending ? "phase-card--pending" : ""}`}
-                          style={isActive ? { borderColor: accent } : isCompleted ? { borderColor: phaseColor + "55" } : {}}>
+                          className={`phase-card ${isActive ? "phase-card--active" : ""} ${isCompleted ? "phase-card--completed" : ""} ${isPending ? "phase-card--pending" : ""} ${isRunning ? "phase-card--running" : ""}`}
+                          style={{
+                            cursor: "pointer",
+                            ...(isRunning ? { "--running-accent": accent } as React.CSSProperties : isActive ? { borderColor: accent } : isCompleted ? { borderColor: phaseColor + "55" } : {}),
+                            ...(isSelected ? { outline: `2px solid ${phaseColor}`, outlineOffset: 2 } : {}),
+                          }}
+                          onClick={() => setSelectedPhaseByTicket((prev) => ({ ...prev, [ticket.id]: p }))}
+                        >
                           <div className="phase-card-header" style={isActive ? { color: accent } : isCompleted ? { color: phaseColor } : {}}>
-                            <span className="phase-card-icon">{icon}</span>
+                            <span className={`phase-card-icon${isRunning ? " phase-card-icon--running" : ""}`}>{icon}</span>
                             <span className="phase-card-name">{PHASE_LABELS[p]}</span>
                           </div>
                           <div className="phase-card-status" style={isActive && statusColor ? { color: statusColor } : {}}>
@@ -489,14 +521,19 @@ function TicketsPage() {
                   );
                 })()}
 
-                {activeOrPausedPhase && (
-                  <PhaseLiveFeed
-                    ticketId={ticket.id}
-                    phaseName={activeOrPausedPhase.phaseName}
-                    status={activeOrPausedPhase.status}
-                    liveEvents={liveLogs[`${ticket.id}:${activeOrPausedPhase.phaseName}`] ?? []}
-                  />
-                )}
+                {(() => {
+                  const selectedPhaseName = selectedPhaseByTicket[ticket.id];
+                  if (!selectedPhaseName) return null;
+                  const selectedPhaseRecord = ticket.phases.find((ph) => ph.phaseName === selectedPhaseName);
+                  return (
+                    <PhaseLiveFeed
+                      ticketId={ticket.id}
+                      phaseName={selectedPhaseName}
+                      status={selectedPhaseRecord?.status ?? "PENDING"}
+                      liveEvents={liveLogs[`${ticket.id}:${selectedPhaseName}`] ?? []}
+                    />
+                  );
+                })()}
 
                 {(() => {
                   const files = filesByTicket[ticket.id] ?? [];
@@ -555,13 +592,6 @@ function TicketsPage() {
                   );
                 })()}
 
-                <div className="ticket-footer">
-                  <select className="phase-select" value={ticket.currentPhase}
-                    onChange={(e) => handlePhaseChange(ticket, e.target.value as TicketPhase)}>
-                    {PHASES.map((p) => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
-                  </select>
-                  <span className="ticket-date">{new Date(ticket.createdAt).toLocaleDateString()}</span>
-                </div>
               </div>
             );
           })}

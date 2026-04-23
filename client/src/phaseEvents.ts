@@ -1,11 +1,53 @@
-export function extractAssistantText(evt: any): string {
+export function extractEventText(evt: any): string {
   if (!evt) return "";
+  if (evt.type === "_tribe.run_start") return "_Run started_";
+  if (evt.type === "user_message") return `**You:** ${evt.text}`;
+  if (evt.type === "raw" && typeof evt.text === "string") return evt.text;
+  if (evt.type === "result" && typeof evt.result === "string") return evt.result;
   if (evt.type === "assistant" && evt.message?.content) {
     return evt.message.content
-      .filter((block: any) => block?.type === "text" && typeof block.text === "string")
-      .map((block: any) => block.text)
-      .join("");
+      .map((block: any) => {
+        if (block?.type === "text") return block.text;
+        if (block?.type === "thinking") return `_Thinking…_`;
+        if (block?.type === "tool_use") {
+          const inp = block.input ?? {};
+          let detail = "";
+          switch (block.name) {
+            case "Read":
+              detail = inp.file_path ? ` \`${inp.file_path.replace(/.*\//, "")}\`` : "";
+              break;
+            case "Edit":
+            case "Write":
+              detail = inp.file_path ? ` \`${inp.file_path.replace(/.*\//, "")}\`` : "";
+              break;
+            case "Bash":
+              detail = inp.command ? ` \`${String(inp.command).slice(0, 60)}\`` : "";
+              break;
+            case "Grep":
+              detail = inp.pattern ? ` \`${inp.pattern}\`` + (inp.path ? ` in \`${inp.path}\`` : "") : "";
+              break;
+            case "Glob":
+              detail = inp.pattern ? ` \`${inp.pattern}\`` : "";
+              break;
+            case "Agent":
+              detail = inp.description ? ` — ${inp.description}` : "";
+              break;
+            case "WebFetch":
+            case "WebSearch":
+              detail = inp.url ? ` ${inp.url}` : inp.query ? ` \`${inp.query}\`` : "";
+              break;
+            default:
+              if (inp.file_path) detail = ` \`${inp.file_path.replace(/.*\//, "")}\``;
+              else if (inp.command) detail = ` \`${String(inp.command).slice(0, 60)}\``;
+          }
+          return `🔧 **${block.name}**${detail}`;
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n\n");
   }
-  if (evt.type === "result" && typeof evt.result === "string") return evt.result;
   return "";
 }
+
+export const extractAssistantText = extractEventText;

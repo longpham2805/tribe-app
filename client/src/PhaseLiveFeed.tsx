@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog } from "./api";
-import { extractAssistantText } from "./phaseEvents";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { extractEventText } from "./phaseEvents";
+import { SharedMarkdown } from "./SharedMarkdown";
 import type { PhaseStatus, TicketPhase } from "./types";
 
 interface Props {
@@ -43,7 +42,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Props
 
   const allEvents = useMemo(() => [...historicalEvents, ...liveEvents], [historicalEvents, liveEvents]);
   const assistantText = useMemo(
-    () => allEvents.map(extractAssistantText).filter(Boolean).join("\n\n"),
+    () => allEvents.map(extractEventText).filter(Boolean).join("\n\n"),
     [allEvents],
   );
 
@@ -80,29 +79,8 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Props
           {assistantText.trim().length === 0 ? (
             <div style={{ fontSize: 11, color: "#64748b" }}>No events yet.</div>
           ) : (
-            <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.6, wordBreak: "break-word" }}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => <p style={{ margin: "0 0 10px" }}>{children}</p>,
-                  ul: ({ children }) => <ul style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ul>,
-                  ol: ({ children }) => <ol style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ol>,
-                  li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
-                  table: ({ children }) => (
-                    <div style={{ overflowX: "auto", margin: "0 0 10px" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse" }}>{children}</table>
-                    </div>
-                  ),
-                  th: ({ children }) => (
-                    <th style={{ textAlign: "left", border: "1px solid #334155", padding: "6px 8px" }}>{children}</th>
-                  ),
-                  td: ({ children }) => (
-                    <td style={{ border: "1px solid #334155", padding: "6px 8px", verticalAlign: "top" }}>{children}</td>
-                  ),
-                }}
-              >
-                {assistantText}
-              </ReactMarkdown>
+            <div style={{ color: "#cbd5e1" }}>
+              <SharedMarkdown content={assistantText} compact />
             </div>
           )}
         </div>

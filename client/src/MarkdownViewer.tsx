@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchTicketFile, fetchPhaseLog } from "./api";
 import { extractAssistantText } from "./phaseEvents";
+import { SharedMarkdown } from "./SharedMarkdown";
 import type { TicketPhase } from "./types";
 
 type Tab = "markdown" | "assistant" | "raw";
@@ -94,30 +95,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Pr
       {tab === "assistant" && (
         <div className="log-body">
           {assistantText ? (
-            <div style={{ lineHeight: 1.6 }}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => <p style={{ margin: "0 0 10px" }}>{children}</p>,
-                  ul: ({ children }) => <ul style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ul>,
-                  ol: ({ children }) => <ol style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ol>,
-                  li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
-                  table: ({ children }) => (
-                    <div style={{ overflowX: "auto", margin: "0 0 10px" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse" }}>{children}</table>
-                    </div>
-                  ),
-                  th: ({ children }) => (
-                    <th style={{ textAlign: "left", border: "1px solid #334155", padding: "6px 8px" }}>{children}</th>
-                  ),
-                  td: ({ children }) => (
-                    <td style={{ border: "1px solid #334155", padding: "6px 8px", verticalAlign: "top" }}>{children}</td>
-                  ),
-                }}
-              >
-                {assistantText}
-              </ReactMarkdown>
-            </div>
+            <SharedMarkdown content={assistantText} />
           ) : (
             <div className="empty">No assistant output yet.</div>
           )}

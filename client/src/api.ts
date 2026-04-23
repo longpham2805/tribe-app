@@ -133,11 +133,11 @@ export async function fetchMondayNotStarted(): Promise<MondayNotStartedItem[]> {
   return body.items ?? [];
 }
 
-export async function importMondayItem(mondayItemId: string): Promise<Ticket> {
+export async function importMondayItem(mondayItemId: string, clues?: string): Promise<Ticket> {
   const res = await fetch(`${BASE}/monday/import`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mondayItemId }),
+    body: JSON.stringify({ mondayItemId, ...(clues?.trim() ? { clues } : {}) }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

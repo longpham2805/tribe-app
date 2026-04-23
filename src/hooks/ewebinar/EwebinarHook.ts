@@ -81,13 +81,13 @@ export class EwebinarHook implements ProjectHook {
       return;
     }
 
-    const implPath = `${getTicketDir(ticket.uid)}/implementation.md`;
-    if (!existsSync(implPath)) {
-      console.warn(`[hooks:ewebinar] checklist sync skipped: ${implPath} not found`);
+    const checklistPath = `${getTicketDir(ticket.uid)}/implementation-testing-checklist.md`;
+    if (!existsSync(checklistPath)) {
+      console.warn(`[hooks:ewebinar] checklist sync skipped: ${checklistPath} not found`);
       return;
     }
 
-    const content = readFileSync(implPath, "utf-8").trim();
+    const content = readFileSync(checklistPath, "utf-8").trim();
     if (!content) return;
 
     const monday = MondayHelper.fromEnv();

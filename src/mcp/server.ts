@@ -507,7 +507,7 @@ async function main() {
     res.sendFile(path.join(publicDir, "index.html"));
   });
 
-  const PORT = parseInt(process.env.MCP_PORT || "3100");
+  const PORT = parseInt(process.env.MCP_PORT || "8100");
   const httpServer = app.listen(PORT, () => {
     console.log(`Tribe MCP server running at http://localhost:${PORT}/mcp`);
     console.log(`Tribe REST API running at http://localhost:${PORT}/api`);

@@ -13,11 +13,12 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    port: 8200,
     proxy: {
-      "/api": "http://localhost:3100",
-      "/mcp": "http://localhost:3100",
+      "/api": "http://localhost:8100",
+      "/mcp": "http://localhost:8100",
       "/ws": {
-        target: "ws://localhost:3100",
+        target: "ws://localhost:8100",
         ws: true,
         configure(proxy) {
           proxy.on("error", (err) => {

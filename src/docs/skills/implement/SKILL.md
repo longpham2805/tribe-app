@@ -62,6 +62,28 @@ See `verification` skill for the evidence format. The `Verified:` block goes int
 - `## Verification` — commands and their results, copy-pasted
 - `## Follow-ups` — anything deliberately deferred (with justification)
 
+## Checklist Output (required)
+
+Before writing `[STATUS:COMPLETED]`, write `implementation-testing-checklist.md` to the path specified in `## Output Artifacts` using your file-write tool. Do NOT print it to stdout.
+
+Format (see `docs/samples/implementation-testing-checklist.md`):
+
+```
+## Implementation Details
+
+- <concise bullet: what was done> (3–5 bullets)
+
+## Testing Checklist
+
+- [x] <item you actually verified>
+- [ ] <item the developer must verify manually>
+```
+
+Rules:
+- `## Implementation Details` — 3–5 one-sentence bullets describing what changed and why.
+- `## Testing Checklist` — one item per user-visible or integration-visible behaviour. Mark `[x]` only for items you ran yourself; use `[ ]` for items requiring manual verification.
+- No build output, diffs, or stack traces. Keep it scannable in 30 seconds.
+
 ## Completion
 
 `[STATUS:COMPLETED]` only if all three are true: every phase task done, file ownership respected, verification green. Otherwise use `REQUIRES_ACTION` or `ERROR` with specifics.

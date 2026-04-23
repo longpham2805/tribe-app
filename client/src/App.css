@@ -300,6 +300,25 @@
   opacity: 0.6;
 }
 
+@keyframes pulse-border {
+  0%, 100% { border-color: var(--running-accent, #3b82f6); }
+  50%       { border-color: transparent; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+.phase-card--running {
+  animation: pulse-border 1.4s ease-in-out infinite;
+}
+
+.phase-card-icon--running {
+  display: inline-block;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
 .phase-card-header {
   display: flex;
   align-items: center;

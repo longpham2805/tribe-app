@@ -45,11 +45,12 @@ router.get("/not-started", async (req: Request, res: Response) => {
 // POST /api/monday/import  { mondayItemId: string }
 router.post("/import", async (req: Request, res: Response) => {
   try {
-    const { mondayItemId } = req.body;
+    const { mondayItemId, clues } = req.body;
     if (!mondayItemId || typeof mondayItemId !== "string") {
       res.status(400).json({ error: "mondayItemId (string) is required — numeric ID or Monday URL" });
       return;
     }
+    const description = clues && typeof clues === "string" && clues.trim() ? clues.trim() : undefined;
 
     // 1. Fetch from Monday
     const monday = MondayHelper.fromEnv();
@@ -72,6 +73,7 @@ router.post("/import", async (req: Request, res: Response) => {
         mondayItemId: item.id,
         mondayBoardId,
         mondayMarkdown: markdown,
+        ...(description !== undefined ? { description } : {}),
       });
       action = "updated";
     } else {
@@ -80,6 +82,7 @@ router.post("/import", async (req: Request, res: Response) => {
         mondayItemId: item.id,
         mondayBoardId,
         mondayMarkdown: markdown,
+        description,
       });
 
       ticket = await ticketRepo.findById(ticket.id);
