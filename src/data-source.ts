@@ -16,7 +16,7 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || "",
   database: process.env.DB_DATABASE || process.env.DATABASE_NAME || "tribe",
   synchronize: false,
-  logging: true,
+  logging: ["error", "warn"],
   entities: [Ticket, Phase, Slot],
   migrations: ["src/migration/*.ts"],
   subscribers: [TicketSubscriber],
