@@ -12,6 +12,7 @@ import { SlotRepository } from "../repository/SlotRepository";
 import { SlotService } from "../service/SlotService";
 import { getTicketDir, getLogDir, getLogFile, getStderrFile } from "../lib/paths";
 import { emit } from "../lib/events";
+import { getAgent, MARKER_TRAILER, MARKER_REGEX } from "../agent";
 
 const log = (msg: string) => console.log(`[PhaseHandler] ${msg}`);
 
@@ -28,20 +29,6 @@ interface SpawnResult {
   message: string | null;
   sessionUuid: string | null;
 }
-
-const MARKER_TRAILER = `
-
-----
-When you finish, end your reply with EXACTLY ONE of these tags on its own line as the VERY LAST non-empty line:
-
-[STATUS:COMPLETED]         — work is done, the next phase can proceed
-[STATUS:REQUIRES_ACTION]   — you need the user to do something before you can continue
-[STATUS:QUESTION]          — you have a specific question that must be answered
-[STATUS:ERROR]             — something went wrong that you could not resolve
-
-For REQUIRES_ACTION / QUESTION / ERROR, write the message on the lines immediately above the tag. Do not put any text after the tag.`;
-
-const MARKER_REGEX = /^\s*\[STATUS:(COMPLETED|REQUIRES_ACTION|QUESTION|ERROR)\]\s*$/;
 
 export class PhaseHandler {
   private ticketRepo: TicketRepository;
@@ -173,7 +160,8 @@ export class PhaseHandler {
     slotRoot: string,
     tmpDir: string,
   ): Promise<void> {
-    const prompt = `${message}${MARKER_TRAILER}`;
+    const phaseAgent = getAgent(activePhase.phaseName);
+    const prompt = phaseAgent ? phaseAgent.buildFollowupPrompt(message) : `${message}${MARKER_TRAILER}`;
     const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid, {
       ticketId: ticket.id,
       uid: ticket.uid!,
@@ -274,12 +262,9 @@ export class PhaseHandler {
     }
 
     const ticketContent = readFileSync(join(tmpDir, "ticket.md"), "utf-8");
-    const prompt =
-      `You are handling the BRAINSTORM phase for the following ticket.\n\n` +
-      `${ticketContent}\n\n` +
-      `Brainstorm a wide set of approaches, trade-offs, and open questions. ` +
-      `Output thorough markdown notes that will guide the planning phase.` +
-      MARKER_TRAILER;
+    const agent = getAgent(TicketPhase.BRAINSTORM);
+    if (!agent) throw new Error("No agent configured for BRAINSTORM");
+    const prompt = agent.buildPrompt({ ticketContent });
 
     await this.runPhase(ticket, TicketPhase.BRAINSTORM, slotRoot, tmpDir, prompt, "brainstorm.md");
   }
@@ -303,13 +288,9 @@ export class PhaseHandler {
       log(`WARN: brainstorm.md not found for ticket #${ticket.id} — planning without it`);
     }
 
-    const prompt =
-      `You are handling the PLANNING phase for the following ticket.\n\n` +
-      `## Ticket\n\n${ticketContent}\n\n` +
-      (brainstormContent ? `## Brainstorm Notes\n\n${brainstormContent}\n\n` : "") +
-      `Produce a concrete, step-by-step implementation plan in markdown. ` +
-      `Include file paths, function signatures, and acceptance criteria.` +
-      MARKER_TRAILER;
+    const agent = getAgent(TicketPhase.PLANNING);
+    if (!agent) throw new Error("No agent configured for PLANNING");
+    const prompt = agent.buildPrompt({ ticketContent, brainstormContent });
 
     await this.runPhase(ticket, TicketPhase.PLANNING, slotRoot, tmpDir, prompt, "planning.md");
   }
@@ -337,14 +318,13 @@ export class PhaseHandler {
     if (!brainstormContent) log(`WARN: brainstorm.md not found for ticket #${ticket.id}`);
     if (!planningContent) log(`WARN: planning.md not found for ticket #${ticket.id}`);
 
-    const prompt =
-      `You are handling the IMPLEMENTATION phase for the following ticket.\n\n` +
-      `## Ticket\n\n${ticketContent}\n\n` +
-      (brainstormContent ? `## Brainstorm Notes\n\n${brainstormContent}\n\n` : "") +
-      (planningContent ? `## Implementation Plan\n\n${planningContent}\n\n` : "") +
-      `Execute the implementation plan. Write the code, make commits, and document ` +
-      `what was done in a summary. Output an implementation report in markdown.` +
-      MARKER_TRAILER;
+    const agent = getAgent(TicketPhase.IMPLEMENTATION);
+    if (!agent) throw new Error("No agent configured for IMPLEMENTATION");
+    const prompt = agent.buildPrompt({
+      ticketContent,
+      brainstormContent,
+      planningContent,
+    });
 
     await this.runPhase(ticket, TicketPhase.IMPLEMENTATION, slotRoot, tmpDir, prompt, "implementation.md");
   }
