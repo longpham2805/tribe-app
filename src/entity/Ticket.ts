@@ -35,6 +35,12 @@ export class Ticket {
   @Column({ type: "mediumtext", nullable: true })
   mondayMarkdown!: string | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  branchName!: string | null;
+
+  @Column({ type: "json", nullable: true })
+  pullRequests!: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

@@ -61,6 +61,8 @@ export class TicketRepository {
       mondayBoardId?: number;
       mondayMarkdown?: string;
       uid?: string;
+      branchName?: string | null;
+      pullRequests?: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
     }
   ): Promise<Ticket | null> {
     const ticket = await this.findById(id);
@@ -73,6 +75,8 @@ export class TicketRepository {
     if (data.mondayBoardId !== undefined) ticket.mondayBoardId = data.mondayBoardId;
     if (data.mondayMarkdown !== undefined) ticket.mondayMarkdown = data.mondayMarkdown;
     if (data.uid !== undefined) ticket.uid = data.uid;
+    if (data.branchName !== undefined) ticket.branchName = data.branchName;
+    if (data.pullRequests !== undefined) ticket.pullRequests = data.pullRequests;
 
     return this.repo.save(ticket);
   }

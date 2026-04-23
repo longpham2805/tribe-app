@@ -52,6 +52,27 @@ const STATUS_COLORS: Record<PhaseStatus, string | null> = {
 
 type View = "tickets" | "slots";
 
+const extractUrl = (raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
+  if (markdownMatch?.[1]) return markdownMatch[1];
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return null;
+};
+
+const getPrLinkLabel = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/+$/, "");
+    const number = path.match(/\/pull\/(\d+)$/)?.[1];
+    if (number) return `PR #${number}`;
+  } catch {
+    // fall through
+  }
+  return "Open PR";
+};
+
 // ── Slots Page ────────────────────────────────────────────────────────────────
 
 function SlotsPage() {
@@ -459,6 +480,46 @@ function TicketsPage() {
                 <h3 className="ticket-title">{ticket.title}</h3>
                 <span className="ticket-date" style={{ display: "block", marginBottom: 4 }}>{new Date(ticket.createdAt).toLocaleDateString()}</span>
                 {ticket.description && <p className="ticket-desc">{ticket.description}</p>}
+                {(ticket.branchName || (ticket.pullRequests?.length ?? 0) > 0) && (
+                  <div className="ship-artifacts card">
+                    <div className="ship-artifacts-title">Ship Artifacts</div>
+                    {ticket.branchName && (
+                      <div className="ship-artifacts-branch">
+                        Branch: <code>{ticket.branchName}</code>
+                      </div>
+                    )}
+                    {!!ticket.pullRequests?.length && (
+                      <table className="ship-artifacts-table" aria-label={`Ticket ${ticket.id} pull requests`}>
+                        <thead>
+                          <tr>
+                            <th>Repo</th>
+                            <th>PR Link</th>
+                            <th>Commit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ticket.pullRequests.map((pr) => (
+                            <tr key={`${pr.repo}-${pr.prUrl}`}>
+                              <td>{pr.repo}</td>
+                              <td>
+                                {(() => {
+                                  const url = extractUrl(pr.prUrl);
+                                  if (!url) return <span>{pr.prUrl}</span>;
+                                  return (
+                                    <a href={url} target="_blank" rel="noreferrer">
+                                      {getPrLinkLabel(url)}
+                                    </a>
+                                  );
+                                })()}
+                              </td>
+                              <td><code>{pr.commitSha}</code></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
 
                 {ticket.phases.length > 0 && (() => {
                   const ticketRunning = ticket.phases.some((ph) => ph.status === "RUNNING");
@@ -604,6 +665,7 @@ function TicketsPage() {
           if (base === "brainstorm") return "BRAINSTORM";
           if (base === "planning") return "PLANNING";
           if (base === "implementation") return "IMPLEMENTATION";
+          if (base === "ship") return "SHIP";
           if (base === "ticket") return "CREATED";
           return null;
         };

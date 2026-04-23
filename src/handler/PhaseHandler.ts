@@ -31,6 +31,12 @@ interface SpawnResult {
   sessionUuid: string | null;
 }
 
+interface PullRequestArtifact {
+  repo: string;
+  prUrl: string;
+  commitSha: string;
+}
+
 export class PhaseHandler {
   private ticketRepo: TicketRepository;
   private phaseRepo: PhaseRepository;
@@ -52,6 +58,105 @@ export class PhaseHandler {
   private async emitTicket(ticketId: number): Promise<void> {
     const ticket = await this.ticketRepo.findById(ticketId);
     if (ticket) emit({ type: "ticket.updated", ticket });
+  }
+
+  private parseShipArtifacts(content: string): { branchName: string | null; pullRequests: PullRequestArtifact[] } {
+    const extractPrUrl = (raw: string): string | null => {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
+      if (markdownMatch?.[1]) return markdownMatch[1];
+      const directMatch = trimmed.match(/https?:\/\/\S+/i);
+      if (!directMatch?.[0]) return null;
+      return directMatch[0].replace(/[),.;]+$/, "");
+    };
+
+    const extractRepoFromPrUrl = (prUrl: string): string | null => {
+      const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/\d+/i);
+      return match?.[1] ?? null;
+    };
+
+    const branchFromHeading = content.match(/##\s*Branch[\s\S]*?`([^`]+)`/i)?.[1]?.trim() ?? null;
+    const branchFromNarrative =
+      content.match(/\bon branch\s+`([^`]+)`/i)?.[1]?.trim() ??
+      content.match(/\bon branch\s+([a-z0-9._/-]+)/i)?.[1]?.trim() ??
+      null;
+    const branchName = branchFromHeading || branchFromNarrative;
+
+    const pullRequests: PullRequestArtifact[] = [];
+    const seen = new Set<string>();
+    const prSectionMatch = content.match(/##\s*Pull Requests\s*([\s\S]*?)(?:\n##\s+|\s*$)/i);
+    if (prSectionMatch?.[1]) {
+      const lines = prSectionMatch[1]
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("|") && !line.includes("---") && !line.toLowerCase().includes("| repo |"));
+
+      for (const line of lines) {
+        const cells = line
+          .split("|")
+          .map((cell) => cell.trim())
+          .filter(Boolean);
+        if (cells.length < 3) continue;
+        const prUrl = extractPrUrl(cells[1]) ?? cells[1];
+        const repo = cells[0];
+        const commitSha = cells[2].replace(/`/g, "").trim();
+        const key = `${repo}|${prUrl}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pullRequests.push({ repo, prUrl, commitSha });
+      }
+    }
+
+    // Fallback for narrative outputs that don't follow the table schema.
+    const prUrlMatches = [...content.matchAll(/https?:\/\/github\.com\/[^\s)]+\/pull\/\d+/gi)];
+    const commitFromNarrative =
+      content.match(/\bcommit\s+`?([0-9a-f]{7,40})`?/i)?.[1]?.trim() ??
+      content.match(/\b([0-9a-f]{7,40})\b/)?.[1]?.trim() ??
+      "";
+
+    for (const match of prUrlMatches) {
+      const rawUrl = match[0];
+      const prUrl = rawUrl.replace(/[),.;]+$/, "");
+      const repo = extractRepoFromPrUrl(prUrl) ?? "unknown";
+      const key = `${repo}|${prUrl}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pullRequests.push({
+        repo,
+        prUrl,
+        commitSha: commitFromNarrative,
+      });
+    }
+
+    return { branchName, pullRequests };
+  }
+
+  private async persistShipArtifacts(ticket: Ticket, shipOutputPath: string): Promise<void> {
+    if (!existsSync(shipOutputPath)) {
+      log(`ship output missing at ${shipOutputPath} — skipping artifact persistence`);
+      return;
+    }
+
+    const shipContent = readFileSync(shipOutputPath, "utf-8");
+    const { branchName, pullRequests } = this.parseShipArtifacts(shipContent);
+    await this.ticketRepo.update(ticket.id, {
+      branchName,
+      pullRequests: pullRequests.length ? pullRequests : null,
+    });
+  }
+
+  private async finalizeShip(ticket: Ticket, shipOutputPath: string): Promise<void> {
+    await this.persistShipArtifacts(ticket, shipOutputPath);
+    if (ticket.slotId == null) {
+      log(`ticket #${ticket.id} has no slot — skipping release`);
+      return;
+    }
+    const slotRepo = new SlotRepository();
+    const slot = await slotRepo.findById(ticket.slotId);
+    if (slot) {
+      await new SlotService().releaseAndPromoteQueue(slot);
+    }
   }
 
   async trigger(ticketId: number, phaseName: TicketPhase): Promise<TriggerResult> {
@@ -166,6 +271,7 @@ export class PhaseHandler {
     slotRoot: string,
     tmpDir: string,
   ): Promise<void> {
+    const shipOutputPath = join(tmpDir, "ship.md");
     const phaseAgent = getAgent(activePhase.phaseName);
     const prompt = phaseAgent ? phaseAgent.buildFollowupPrompt(message) : `${message}${MARKER_TRAILER}`;
     const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid, {
@@ -187,6 +293,10 @@ export class PhaseHandler {
 
     await this.applyResultToPhase(activePhase, result);
     if (result.status === PhaseStatus.COMPLETED) {
+      if (activePhase.phaseName === TicketPhase.SHIP) {
+        await this.finalizeShip(ticket, shipOutputPath);
+        await this.emitTicket(ticket.id);
+      }
       await runPhaseCompletedHooks(ticket, activePhase.phaseName);
     }
 
@@ -341,33 +451,27 @@ export class PhaseHandler {
 
   protected async handleShip(ticket: Ticket): Promise<void> {
     log(`handleShip → ticket #${ticket.id}`);
+    if (ticket.slotId == null) { log(`no slot — nothing to ship`); return; }
 
-    if (ticket.slotId == null) {
-      log(`ticket #${ticket.id} has no slot — nothing to release`);
-      return;
-    }
+    const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
+    const ticketContent = readFileSync(join(tmpDir, "ticket.md"), "utf-8");
+    const implPath = join(tmpDir, "implementation.md");
+    const implementationContent = existsSync(implPath) ? readFileSync(implPath, "utf-8") : "";
 
-    const slotRepo = new SlotRepository();
-    const slot = await slotRepo.findById(ticket.slotId);
-    if (!slot) {
-      log(`WARN: slot ${ticket.slotId} not found`);
-      return;
-    }
+    const agent = getAgent(TicketPhase.SHIP);
+    if (!agent) throw new Error("No agent configured for SHIP");
+    const shipOutputPath = join(tmpDir, "ship.md");
+    const prompt = agent.buildPrompt({ ticketContent, implementationContent, shipOutputPath });
 
-    log(`releasing slot ${slot.id} (${slot.name}) for ticket #${ticket.id}`);
-    const slotService = new SlotService();
-    await slotService.releaseAndPromoteQueue(slot);
-
-    // Mark the SHIP phase completed once the slot is released.
     const activePhase = await this.phaseRepo.findActiveByTicketId(ticket.id);
-    if (activePhase) {
-      await this.updatePhase(activePhase.id, {
-        status: PhaseStatus.COMPLETED,
-        completedAt: new Date(),
-      });
-      if (activePhase.phaseName === TicketPhase.SHIP) {
-        await runPhaseCompletedHooks(ticket, TicketPhase.SHIP);
-      }
+    await this.runPhase(ticket, TicketPhase.SHIP, slotRoot, tmpDir, prompt, "ship.md");
+
+    const latest = activePhase ? await this.phaseRepo.findById(activePhase.id) : null;
+    if (latest?.status === PhaseStatus.COMPLETED) {
+      await this.finalizeShip(ticket, shipOutputPath);
+      await runPhaseCompletedHooks(ticket, TicketPhase.SHIP);
+    } else {
+      log(`SHIP status=${latest?.status} — slot retained`);
     }
     await this.emitTicket(ticket.id);
   }
@@ -400,7 +504,7 @@ export class PhaseHandler {
     log(`${phaseName.toLowerCase()} output → ${join(tmpDir, outputFile)} (status=${result.status})`);
 
     await this.applyResultToPhase(activePhase, result);
-    if (result.status === PhaseStatus.COMPLETED) {
+    if (result.status === PhaseStatus.COMPLETED && phaseName !== TicketPhase.SHIP) {
       await runPhaseCompletedHooks(ticket, phaseName);
     }
 
@@ -431,7 +535,7 @@ export class PhaseHandler {
       case TicketPhase.PLANNING:
         return TicketPhase.IMPLEMENTATION;
       case TicketPhase.IMPLEMENTATION:
-        return null;
+        return TicketPhase.SHIP;
       default:
         return null;
     }
@@ -445,6 +549,8 @@ export class PhaseHandler {
         return "planning.md";
       case TicketPhase.IMPLEMENTATION:
         return "implementation.md";
+      case TicketPhase.SHIP:
+        return "ship.md";
       default:
         return null;
     }

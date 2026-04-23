@@ -37,6 +37,8 @@ export interface Ticket {
   currentPhase: TicketPhase;
   mondayItemId: string | null;
   mondayBoardId?: number | null;
+  branchName: string | null;
+  pullRequests: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
   slotId: number | null;
   waitingForSlot: boolean;
   createdAt: string;
