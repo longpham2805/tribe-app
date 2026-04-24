@@ -1,12 +1,10 @@
 import { TicketPhase } from "../enum/TicketPhase";
 import { BaseAgent } from "./BaseAgent";
-import { BrainstormAgent } from "./BrainstormAgent";
 import { ImplementerAgent } from "./ImplementerAgent";
 import { PlannerAgent } from "./PlannerAgent";
 import { ShipAgent } from "./ShipAgent";
 
 const AGENTS: Partial<Record<TicketPhase, BaseAgent>> = {
-  [TicketPhase.BRAINSTORM]: new BrainstormAgent(),
   [TicketPhase.PLANNING]: new PlannerAgent(),
   [TicketPhase.IMPLEMENTATION]: new ImplementerAgent(),
   [TicketPhase.SHIP]: new ShipAgent(),
