@@ -2,7 +2,9 @@ import { Router, type Request, type Response } from "express";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { TicketPhase } from "../enum/TicketPhase";
+import { CliType } from "../enum/CliType";
 import { PhaseHandler } from "../handler/PhaseHandler";
+import { pickCliForNewTicket } from "../cli";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const router = Router();
@@ -53,20 +55,32 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/tickets  { title, description?, projectId? }
+const CLI_TYPE_VALUES = Object.values(CliType) as string[];
+
+// POST /api/tickets  { title, description?, projectId?, cliType? }
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { title, description, projectId } = req.body;
+    const { title, description, projectId, cliType: cliTypeRaw } = req.body;
     if (!title || typeof title !== "string") {
       res.status(400).json({ error: "title is required" });
       return;
     }
 
+    if (cliTypeRaw !== undefined && !CLI_TYPE_VALUES.includes(cliTypeRaw)) {
+      res.status(400).json({ error: `cliType must be one of: ${CLI_TYPE_VALUES.join(", ")}` });
+      return;
+    }
+
     const ticketRepo = new TicketRepository();
+    const cliType = cliTypeRaw
+      ? (cliTypeRaw as CliType)
+      : await pickCliForNewTicket(ticketRepo);
+
     const ticket = await ticketRepo.create({
       title,
       description,
       projectId: typeof projectId === "number" ? projectId : null,
+      cliType,
     });
 
     // Run CREATED phase handler now that the insert transaction is committed,
@@ -229,7 +243,7 @@ router.post("/:ticketId/respond-phase", async (req: Request, res: Response) => {
     else if (
       msg.includes("has no active phase") ||
       msg.includes("not awaiting a response") ||
-      msg.includes("has no Claude session UUID")
+      msg.includes("has no CLI session ID")
     ) {
       status = 400;
     }

@@ -68,7 +68,7 @@ export class PhaseRepository {
       completedAt?: Date | null;
       status?: PhaseStatus;
       lastMessage?: string | null;
-      claudeSessionUuid?: string | null;
+      cliSessionId?: string | null;
     }
   ): Promise<Phase | null> {
     const phase = await this.findById(id);
@@ -79,7 +79,7 @@ export class PhaseRepository {
     if (data.completedAt !== undefined) phase.completedAt = data.completedAt;
     if (data.status !== undefined) phase.status = data.status;
     if (data.lastMessage !== undefined) phase.lastMessage = data.lastMessage;
-    if (data.claudeSessionUuid !== undefined) phase.claudeSessionUuid = data.claudeSessionUuid;
+    if (data.cliSessionId !== undefined) phase.cliSessionId = data.cliSessionId;
 
     return this.repo.save(phase);
   }

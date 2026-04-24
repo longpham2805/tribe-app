@@ -1,5 +1,7 @@
 export type TicketPhase = "CREATED" | "PLANNING" | "IMPLEMENTATION" | "SHIP";
 
+export type CliType = "CLAUDE" | "CODEX";
+
 export type PhaseStatus =
   | "PENDING"
   | "RUNNING"
@@ -49,6 +51,7 @@ export interface Ticket {
   title: string;
   description: string | null;
   currentPhase: TicketPhase;
+  cliType: CliType;
   mondayItemId: string | null;
   mondayBoardId?: number | null;
   branchName: string | null;

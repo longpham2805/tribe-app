@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from "typeorm";
 import { TicketPhase } from "../enum/TicketPhase";
+import { CliType } from "../enum/CliType";
 import { Phase } from "./Phase";
 import { Slot } from "./Slot";
 import { Project } from "./Project";
@@ -32,6 +33,9 @@ export class Ticket {
 
   @Column({ type: "enum", enum: TicketPhase, default: TicketPhase.CREATED })
   currentPhase!: TicketPhase;
+
+  @Column({ type: "enum", enum: CliType, default: CliType.CLAUDE })
+  cliType!: CliType;
 
   @Column({ type: "mediumtext", nullable: true })
   mondayMarkdown!: string | null;

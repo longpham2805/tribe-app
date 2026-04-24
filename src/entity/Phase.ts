@@ -39,7 +39,7 @@ export class Phase {
   lastMessage!: string | null;
 
   @Column({ type: "varchar", length: 36, nullable: true })
-  claudeSessionUuid!: string | null;
+  cliSessionId!: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

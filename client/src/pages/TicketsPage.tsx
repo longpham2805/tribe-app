@@ -23,7 +23,7 @@ import {
   TICKET_GROUPS,
   type TicketGroup,
 } from "../constants/ticket";
-import type { Phase, Slot, Ticket, TicketFile, TicketPhase, WsMessage } from "../types";
+import type { CliType, Phase, Slot, Ticket, TicketFile, TicketPhase, WsMessage } from "../types";
 import { useWebSocket } from "../ws";
 
 type TicketsPageProps = {
@@ -81,6 +81,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [showMondayPicker, setShowMondayPicker] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [newCliType, setNewCliType] = useState<CliType | "">("");
   const [creating, setCreating] = useState(false);
   const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
   const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
@@ -257,9 +258,15 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       if (!newTitle.trim()) return;
       setCreating(true);
       try {
-        await createTicket({ title: newTitle.trim(), description: newDesc.trim() || undefined, projectId });
+        await createTicket({
+          title: newTitle.trim(),
+          description: newDesc.trim() || undefined,
+          projectId,
+          cliType: newCliType || undefined,
+        });
         setNewTitle("");
         setNewDesc("");
+        setNewCliType("");
         setShowForm(false);
         await load();
       } catch (e: any) {
@@ -268,7 +275,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         setCreating(false);
       }
     },
-    [newTitle, newDesc, projectId, load],
+    [newTitle, newDesc, newCliType, projectId, load],
   );
 
   const handleTriggerPhase = useCallback(
@@ -359,6 +366,15 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
             onChange={(e) => setNewDesc(e.target.value)}
             rows={3}
           />
+          <select
+            className="input"
+            value={newCliType}
+            onChange={(e) => setNewCliType(e.target.value as CliType | "")}
+          >
+            <option value="">Auto (round-robin)</option>
+            <option value="CLAUDE">Claude</option>
+            <option value="CODEX">Codex</option>
+          </select>
           <button className="btn btn-primary" type="submit" disabled={creating}>
             {creating ? "Creating..." : "Create Ticket"}
           </button>

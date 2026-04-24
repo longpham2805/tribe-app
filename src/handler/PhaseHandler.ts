@@ -4,6 +4,7 @@ import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 import { TicketPhase } from "../enum/TicketPhase";
 import { PhaseStatus } from "../enum/PhaseStatus";
+import { CliType } from "../enum/CliType";
 import { Ticket } from "../entity/Ticket";
 import { Phase } from "../entity/Phase";
 import { TicketRepository } from "../repository/TicketRepository";
@@ -14,6 +15,7 @@ import { getTicketDir, getLogDir, getLogFile, getStderrFile } from "../lib/paths
 import { emit } from "../lib/events";
 import { getAgent, MARKER_TRAILER, MARKER_REGEX } from "../agent";
 import { runPhaseCompletedHooks, runPhaseEnteredHooks } from "../hooks/registry";
+import { getAdapter } from "../cli";
 
 const log = (msg: string) => console.log(`[PhaseHandler] ${msg}`);
 
@@ -315,8 +317,8 @@ export class PhaseHandler {
     if (!resumable.includes(activePhase.status)) {
       throw new Error(`Phase ${activePhase.phaseName} is not awaiting a response (status=${activePhase.status})`);
     }
-    if (!activePhase.claudeSessionUuid) {
-      throw new Error(`Phase ${activePhase.phaseName} has no Claude session UUID to resume`);
+    if (!activePhase.cliSessionId) {
+      throw new Error(`Phase ${activePhase.phaseName} has no CLI session ID to resume`);
     }
 
     const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
@@ -346,7 +348,7 @@ export class PhaseHandler {
     const shipOutputPath = join(tmpDir, "ship.md");
     const phaseAgent = getAgent(activePhase.phaseName);
     const prompt = phaseAgent ? phaseAgent.buildFollowupPrompt(message) : `${message}${MARKER_TRAILER}`;
-    const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid, {
+    const result = await this.spawnCli(ticket, prompt, slotRoot, activePhase.cliSessionId, {
       ticketId: ticket.id,
       uid: ticket.uid!,
       phaseName: activePhase.phaseName,
@@ -540,8 +542,8 @@ export class PhaseHandler {
 
     await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING });
 
-    log(`spawning claude for ${phaseName.toLowerCase()} (resume=${activePhase.claudeSessionUuid ?? "none"})`);
-    const result = await this.spawnClaude(prompt, slotRoot, activePhase.claudeSessionUuid, {
+    log(`spawning ${ticket.cliType} for ${phaseName.toLowerCase()} (resume=${activePhase.cliSessionId ?? "none"})`);
+    const result = await this.spawnCli(ticket, prompt, slotRoot, activePhase.cliSessionId, {
       ticketId: ticket.id,
       uid: ticket.uid!,
       phaseName,
@@ -573,7 +575,7 @@ export class PhaseHandler {
     await this.updatePhase(activePhase.id, {
       status: result.status,
       lastMessage: result.message,
-      claudeSessionUuid: result.sessionUuid ?? activePhase.claudeSessionUuid ?? null,
+      cliSessionId: result.sessionUuid ?? activePhase.cliSessionId ?? null,
       completedAt: result.status === PhaseStatus.COMPLETED ? new Date() : null,
     });
   }
@@ -621,19 +623,19 @@ export class PhaseHandler {
     return { slotRoot: slot.rootPath, tmpDir };
   }
 
-  private spawnClaude(
+  private spawnCli(
+    ticket: Ticket,
     prompt: string,
     cwd: string,
-    resumeUuid?: string | null,
+    resumeSessionId?: string | null,
     logContext?: { ticketId: number; uid: string; phaseName: TicketPhase },
   ): Promise<SpawnResult> {
     return new Promise((resolve, reject) => {
-      const resuming = !!resumeUuid;
-      const args = resuming
-        ? ["-p", prompt, "--resume", resumeUuid!, "--output-format", "stream-json", "--verbose"]
-        : ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+      const adapter = getAdapter(ticket.cliType ?? CliType.CLAUDE);
+      const resuming = !!resumeSessionId;
+      const args = adapter.buildArgs({ prompt, resumeSessionId });
 
-      log(`claude spawn: ${resuming ? `--resume ${resumeUuid}` : "new session"} cwd=${cwd}`);
+      log(`${adapter.type} spawn: ${resuming ? `resume ${resumeSessionId}` : "new session"} cwd=${cwd}`);
 
       let stderrFile: string | null = null;
       if (logContext?.uid) {
@@ -644,7 +646,7 @@ export class PhaseHandler {
         this.persistPhaseEvent(logContext, {
           type: "_tribe.run_start",
           at: new Date().toISOString(),
-          resumeUuid: resumeUuid ?? null,
+          resumeSessionId: resumeSessionId ?? null,
         });
       }
 
@@ -653,7 +655,7 @@ export class PhaseHandler {
         this.persistPhaseEvent(logContext, evt);
       };
 
-      const proc = spawn("claude", args, {
+      const proc = spawn(adapter.binary, args, {
         cwd,
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env },
@@ -666,29 +668,12 @@ export class PhaseHandler {
 
       const consumeLine = (line: string) => {
         if (!line.trim()) return;
-        try {
-          const evt = JSON.parse(line);
-          if (typeof evt.session_id === "string" && !sessionUuid) {
-            sessionUuid = evt.session_id;
-          }
-          // Accumulate assistant text. stream-json shapes vary by CLI version;
-          // handle the common ones defensively.
-          if (evt.type === "assistant" && evt.message?.content) {
-            for (const block of evt.message.content) {
-              if (block?.type === "text" && typeof block.text === "string") {
-                output += block.text;
-              }
-            }
-          } else if (evt.type === "result" && typeof evt.result === "string") {
-            // Final consolidated text — prefer it if we haven't already captured content.
-            if (!output) output = evt.result;
-          }
-          persistEvent(evt);
-        } catch {
-          // Not JSON — treat as plain text chunk (fallback for CLI that ignored the flag).
-          output += line + "\n";
-          persistEvent({ type: "raw", text: line });
-        }
+        const parsed = adapter.parseEvent(line);
+        if (!parsed) return;
+        if (parsed.sessionId && !sessionUuid) sessionUuid = parsed.sessionId;
+        if (parsed.textChunk) output += parsed.textChunk;
+        if (parsed.finalText && !output) output = parsed.finalText;
+        persistEvent(parsed.raw);
       };
 
       proc.stdout.on("data", (chunk: Buffer) => {
@@ -715,7 +700,7 @@ export class PhaseHandler {
       });
 
       const timeout = setTimeout(() => {
-        log(`claude timeout after ${SPAWN_TIMEOUT_MS}ms — killing process`);
+        log(`${adapter.type} timeout after ${SPAWN_TIMEOUT_MS}ms — killing process`);
         proc.kill("SIGTERM");
         setTimeout(() => proc.kill("SIGKILL"), 5000);
         timedOut = true;
@@ -726,14 +711,14 @@ export class PhaseHandler {
       proc.on("close", (code) => {
         clearTimeout(timeout);
         if (stdoutBuf.trim()) consumeLine(stdoutBuf);
-        log(`claude exited with code ${code} (sessionUuid=${sessionUuid ?? "none"})`);
-        this.persistPhaseSystemEvent(logContext, "claude_exit", `Claude exited with code ${code ?? "unknown"}`, {
+        log(`${adapter.type} exited with code ${code} (sessionUuid=${sessionUuid ?? "none"})`);
+        this.persistPhaseSystemEvent(logContext, "cli_exit", `${adapter.type} exited with code ${code ?? "unknown"}`, {
           exitCode: code ?? null,
           resumed: resuming,
         });
 
         if (timedOut) {
-          this.persistPhaseSystemEvent(logContext, "claude_timeout", "Claude timed out", {
+          this.persistPhaseSystemEvent(logContext, "cli_timeout", `${adapter.type} timed out`, {
             timeoutMs: SPAWN_TIMEOUT_MS,
           });
           resolve({
@@ -755,7 +740,7 @@ export class PhaseHandler {
             message = null;
           } else {
             status = PhaseStatus.ERROR;
-            message = (stderr.trim() || `claude exited with code ${code}`).slice(-2000);
+            message = (stderr.trim() || `${adapter.type} exited with code ${code}`).slice(-2000);
           }
         }
 
@@ -769,7 +754,7 @@ export class PhaseHandler {
 
       proc.on("error", (err) => {
         clearTimeout(timeout);
-        log(`claude process error: ${err.message}`);
+        log(`${adapter.type} process error: ${err.message}`);
         reject(err);
       });
     });

@@ -1,4 +1,4 @@
-import type { Ticket, TicketPhase, Slot, TicketFile, MondayNotStartedItem, Project } from "./types";
+import type { Ticket, TicketPhase, CliType, Slot, TicketFile, MondayNotStartedItem, Project } from "./types";
 
 const BASE = "/api";
 
@@ -16,6 +16,7 @@ export async function createTicket(data: {
   title: string;
   description?: string;
   projectId?: number | null;
+  cliType?: CliType;
 }): Promise<Ticket> {
   const res = await fetch(`${BASE}/tickets`, {
     method: "POST",

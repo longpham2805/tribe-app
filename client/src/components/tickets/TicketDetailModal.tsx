@@ -139,6 +139,13 @@ export function TicketDetailModal({
           >
             {phaseLabels[ticket.currentPhase]}
           </span>
+          <span
+            className="phase-badge"
+            style={{ background: "#6366f122", color: "#6366f1" }}
+            title="CLI agent"
+          >
+            {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
+          </span>
         </div>
         <button className="btn-delete" type="button" onClick={() => onDelete(ticket.id)} title="Delete">
           ×

@@ -2,6 +2,7 @@ import { Repository } from "typeorm";
 import { AppDataSource } from "../data-source";
 import { Ticket } from "../entity/Ticket";
 import { TicketPhase } from "../enum/TicketPhase";
+import { CliType } from "../enum/CliType";
 
 export class TicketRepository {
   private repo: Repository<Ticket>;
@@ -47,6 +48,7 @@ export class TicketRepository {
     mondayBoardId?: number;
     mondayMarkdown?: string;
     projectId?: number | null;
+    cliType?: CliType;
   }): Promise<Ticket> {
     const ticket = this.repo.create({
       title: data.title,
@@ -55,9 +57,14 @@ export class TicketRepository {
       mondayBoardId: data.mondayBoardId ?? null,
       mondayMarkdown: data.mondayMarkdown ?? null,
       projectId: data.projectId ?? null,
+      cliType: data.cliType ?? CliType.CLAUDE,
       currentPhase: TicketPhase.CREATED,
     });
     return this.repo.save(ticket);
+  }
+
+  async findLastCreated(): Promise<Ticket | null> {
+    return this.repo.findOne({ order: { createdAt: "DESC" } });
   }
 
   async update(
