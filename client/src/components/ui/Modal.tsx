@@ -32,16 +32,6 @@ export function Modal({
   useEffect(() => {
     if (!open || variant !== "right-pane") return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open, variant]);
-
-  useEffect(() => {
-    if (!open || variant !== "right-pane") return;
-
     const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panelRef.current?.focus();
     return () => previousActiveElement?.focus();
@@ -54,8 +44,10 @@ export function Modal({
       ? { width: `min(100vw, ${width}px)` }
       : { width, maxWidth: "95vw" };
 
+  const isRightPane = variant === "right-pane";
+
   const handleBackdropClick = () => {
-    if (variant === "center") onClose();
+    if (!isRightPane) onClose();
   };
 
   return (
@@ -66,7 +58,7 @@ export function Modal({
         style={panelStyle}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
-        aria-modal="true"
+        aria-modal={isRightPane ? undefined : "true"}
         aria-labelledby={titleId}
         tabIndex={-1}
       >
