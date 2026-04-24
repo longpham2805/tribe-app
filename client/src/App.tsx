@@ -249,7 +249,7 @@ function SlotsPage({ projectId }: { projectId: number | null }) {
 
 // ── Tickets Page ──────────────────────────────────────────────────────────────
 
-function TicketsPage({ projectId }: { projectId: number | null }) {
+function TicketsPage({ projectId, canImportFromMonday }: { projectId: number | null; canImportFromMonday: boolean }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -263,6 +263,12 @@ function TicketsPage({ projectId }: { projectId: number | null }) {
   const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
   const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
   const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!canImportFromMonday && showMondayPicker) {
+      setShowMondayPicker(false);
+    }
+  }, [canImportFromMonday, showMondayPicker]);
 
   // Per-ticket file list cache
   const [filesByTicket, setFilesByTicket] = useState<Record<number, TicketFile[]>>({});
@@ -459,18 +465,22 @@ function TicketsPage({ projectId }: { projectId: number | null }) {
         </form>
       )}
 
-      <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
-        <MondayPicker onImported={load} projectId={projectId} />
-      </Modal>
+      {canImportFromMonday && (
+        <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
+          <MondayPicker onImported={load} projectId={projectId} />
+        </Modal>
+      )}
 
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
             {showForm ? "Cancel" : "+ New Ticket"}
           </button>
-          <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
-            Import from Monday
-          </button>
+          {canImportFromMonday && (
+            <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
+              Import from Monday
+            </button>
+          )}
         </div>
         <div className="filter-tabs">
           <button className={`tab ${filterPhase === "" ? "active" : ""}`} onClick={() => setFilterPhase("")}>All</button>
@@ -559,6 +569,10 @@ export default function App() {
   const [view, setView] = useState<View>("tickets");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const selectedProject = selectedProjectId != null
+    ? projects.find((project) => project.id === selectedProjectId) ?? null
+    : null;
+  const canImportFromMonday = !!selectedProject?.mondayBoardIds?.length;
 
   const loadProjects = async () => {
     try {
@@ -658,7 +672,7 @@ export default function App() {
       </header>
 
       <main className="main">
-        {view === "tickets" && <TicketsPage projectId={selectedProjectId} />}
+        {view === "tickets" && <TicketsPage projectId={selectedProjectId} canImportFromMonday={canImportFromMonday} />}
         {view === "slots" && <SlotsPage projectId={selectedProjectId} />}
         {view === "projects" && <ProjectsPage onProjectsChanged={loadProjects} />}
       </main>
