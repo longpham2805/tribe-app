@@ -25,6 +25,10 @@ export function TicketSummaryCard({
   const pausedPhase = ticket.phases.find(
     (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
   );
+  const runningPhase = ticket.phases.find(
+    (phase) => !!phase.startedAt && !phase.completedAt && phase.status === "RUNNING",
+  );
+  const runningAccent = runningPhase ? statusColors[runningPhase.status] ?? phaseColors[runningPhase.phaseName] : null;
 
   const createdAt = new Date(ticket.createdAt).toLocaleDateString();
   const hasPullRequests = (ticket.pullRequests?.length ?? 0) > 0;
@@ -54,8 +58,13 @@ export function TicketSummaryCard({
   return (
     <button
       type="button"
-      className="ticket-card"
-      style={clickableCardStyle}
+      className={`ticket-card${runningPhase ? " ticket-card--running" : ""}`}
+      style={{
+        ...clickableCardStyle,
+        ...(runningAccent
+          ? ({ "--ticket-running-accent": runningAccent } as CSSProperties)
+          : {}),
+      }}
       onClick={onOpen}
       aria-label={`Open ticket #${ticket.id}: ${ticket.title}`}
     >
@@ -89,6 +98,18 @@ export function TicketSummaryCard({
               }}
             >
               {statusLabels[pausedPhase.status]}
+            </span>
+          ) : null}
+          {runningPhase ? (
+            <span
+              className="phase-badge ticket-running-badge"
+              style={{
+                background: `${runningAccent ?? phaseColors[runningPhase.phaseName]}22`,
+                color: runningAccent ?? phaseColors[runningPhase.phaseName],
+              }}
+            >
+              <span className="ticket-running-dot" aria-hidden="true" />
+              <span>{phaseLabels[runningPhase.phaseName]} running</span>
             </span>
           ) : null}
         </div>
