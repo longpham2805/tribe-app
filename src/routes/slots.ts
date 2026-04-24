@@ -3,11 +3,12 @@ import { SlotRepository } from "../repository/SlotRepository";
 
 const router = Router();
 
-// GET /api/slots
-router.get("/", async (_req: Request, res: Response) => {
+// GET /api/slots?projectId=1
+router.get("/", async (req: Request, res: Response) => {
   try {
     const repo = new SlotRepository();
-    const slots = await repo.findAll();
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined;
+    const slots = await repo.findAll(projectId != null && !isNaN(projectId) ? { projectId } : undefined);
     res.json(slots);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -34,10 +35,10 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/slots  { name, rootPath }
+// POST /api/slots  { name, rootPath, projectId? }
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { name, rootPath } = req.body;
+    const { name, rootPath, projectId } = req.body;
     if (!name || typeof name !== "string") {
       res.status(400).json({ error: "name is required" });
       return;
@@ -48,7 +49,11 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const repo = new SlotRepository();
-    const slot = await repo.create({ name, rootPath });
+    const slot = await repo.create({
+      name,
+      rootPath,
+      projectId: typeof projectId === "number" ? projectId : null,
+    });
     res.status(201).json(slot);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

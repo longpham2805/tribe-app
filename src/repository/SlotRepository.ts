@@ -9,26 +9,33 @@ export class SlotRepository {
     this.repo = AppDataSource.getRepository(Slot);
   }
 
-  async findAll(): Promise<Slot[]> {
-    return this.repo.find({ order: { id: "ASC" } });
+  async findAll(opts?: { projectId?: number }): Promise<Slot[]> {
+    return this.repo.find({
+      where: opts?.projectId != null ? { projectId: opts.projectId } : {},
+      order: { id: "ASC" },
+    });
   }
 
   async findById(id: number): Promise<Slot | null> {
     return this.repo.findOne({ where: { id } });
   }
 
-  /** Returns the first free slot (no ticket assigned), ordered by id. */
-  async findFreeSlot(): Promise<Slot | null> {
+  /** Returns the first free slot for the given project, ordered by id. */
+  async findFreeSlot(projectId?: number): Promise<Slot | null> {
     return this.repo.findOne({
-      where: { currentTicketId: IsNull() },
+      where: {
+        currentTicketId: IsNull(),
+        ...(projectId != null ? { projectId } : {}),
+      },
       order: { id: "ASC" },
     });
   }
 
-  async create(data: { name: string; rootPath: string }): Promise<Slot> {
+  async create(data: { name: string; rootPath: string; projectId?: number | null }): Promise<Slot> {
     const slot = this.repo.create({
       name: data.name,
       rootPath: data.rootPath,
+      projectId: data.projectId ?? null,
       currentTicketId: null,
     });
     return this.repo.save(slot);

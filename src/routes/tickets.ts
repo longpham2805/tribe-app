@@ -7,20 +7,23 @@ import { PhaseHandler } from "../handler/PhaseHandler";
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const router = Router();
 
-// GET /api/tickets?phase=CREATED
+// GET /api/tickets?phase=CREATED&projectId=1
 router.get("/", async (req: Request, res: Response) => {
   try {
     const repo = new TicketRepository();
-    const { phase } = req.query;
+    const { phase, projectId: projectIdRaw } = req.query;
 
     if (phase && !PHASE_VALUES.includes(phase as string)) {
       res.status(400).json({ error: `Invalid phase. Must be one of: ${PHASE_VALUES.join(", ")}` });
       return;
     }
 
+    const projectId = projectIdRaw ? parseInt(projectIdRaw as string, 10) : undefined;
+    const opts = projectId != null && !isNaN(projectId) ? { projectId } : undefined;
+
     const tickets = phase
-      ? await repo.findByPhase(phase as TicketPhase)
-      : await repo.findAll();
+      ? await repo.findByPhase(phase as TicketPhase, opts)
+      : await repo.findAll(opts);
 
     res.json(tickets);
   } catch (err: any) {
@@ -50,17 +53,21 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/tickets  { title, description? }
+// POST /api/tickets  { title, description?, projectId? }
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, projectId } = req.body;
     if (!title || typeof title !== "string") {
       res.status(400).json({ error: "title is required" });
       return;
     }
 
     const ticketRepo = new TicketRepository();
-    const ticket = await ticketRepo.create({ title, description });
+    const ticket = await ticketRepo.create({
+      title,
+      description,
+      projectId: typeof projectId === "number" ? projectId : null,
+    });
 
     // Run CREATED phase handler now that the insert transaction is committed,
     // so the ticket row is no longer locked and slot assignment can succeed.

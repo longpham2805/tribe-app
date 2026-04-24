@@ -21,7 +21,7 @@ export class SlotService {
    * Returns the assigned Slot, or null if all slots are occupied (ticket is queued).
    */
   async tryAssign(ticket: Ticket): Promise<Slot | null> {
-    const freeSlot = await this.slotRepo.findFreeSlot();
+    const freeSlot = await this.slotRepo.findFreeSlot(ticket.projectId ?? undefined);
 
     if (!freeSlot) {
       // No free slot — mark ticket as waiting
@@ -94,8 +94,8 @@ export class SlotService {
     // 2. Release the slot
     await this.slotRepo.release(slot.id);
 
-    // 3. Promote the next waiting ticket (FIFO — oldest createdAt first)
-    const nextTicket = await this.ticketRepo.findOldestWaiting();
+    // 3. Promote the next waiting ticket (FIFO — oldest createdAt first, same project)
+    const nextTicket = await this.ticketRepo.findOldestWaiting(slot.projectId ?? undefined);
     if (!nextTicket) return;
 
     await this.slotRepo.assign(slot.id, nextTicket.id);

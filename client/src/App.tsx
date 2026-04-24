@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import {
   fetchTickets, createTicket, deleteTicket, triggerPhase, respondPhase,
   fetchSlots, createSlot, updateSlot, deleteSlot,
-  fetchTicketFiles,
+  fetchTicketFiles, fetchProjects,
 } from "./api";
-import type { Ticket, TicketPhase, PhaseStatus, Phase, Slot, TicketFile, WsMessage } from "./types";
+import type { Ticket, TicketPhase, PhaseStatus, Phase, Slot, TicketFile, WsMessage, Project } from "./types";
 import { useWebSocket } from "./ws";
 import { Modal } from "./Modal";
 import { MarkdownViewer } from "./MarkdownViewer";
 import { MondayPicker } from "./MondayPicker";
 import { PhaseLiveFeed } from "./PhaseLiveFeed";
+import { ProjectsPage } from "./ProjectsPage";
 import "./App.css";
 
 const PHASES: TicketPhase[] = ["CREATED", "BRAINSTORM", "PLANNING", "IMPLEMENTATION", "SHIP"];
@@ -50,7 +51,7 @@ const STATUS_COLORS: Record<PhaseStatus, string | null> = {
   ERROR: "#ef4444",
 };
 
-type View = "tickets" | "slots";
+type View = "tickets" | "slots" | "projects";
 
 const extractUrl = (raw: string): string | null => {
   const trimmed = raw.trim();
@@ -75,7 +76,7 @@ const getPrLinkLabel = (url: string): string => {
 
 // ── Slots Page ────────────────────────────────────────────────────────────────
 
-function SlotsPage() {
+function SlotsPage({ projectId }: { projectId: number | null }) {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +90,7 @@ function SlotsPage() {
   const load = async () => {
     try {
       setError(null);
-      setSlots(await fetchSlots());
+      setSlots(await fetchSlots(projectId ?? undefined));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -97,14 +98,14 @@ function SlotsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { setLoading(true); load(); }, [projectId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newRootPath.trim()) return;
     setCreating(true);
     try {
-      await createSlot({ name: newName.trim(), rootPath: newRootPath.trim() });
+      await createSlot({ name: newName.trim(), rootPath: newRootPath.trim(), projectId });
       setNewName(""); setNewRootPath("");
       setShowForm(false);
       await load();
@@ -227,7 +228,7 @@ function SlotsPage() {
 
 // ── Tickets Page ──────────────────────────────────────────────────────────────
 
-function TicketsPage() {
+function TicketsPage({ projectId }: { projectId: number | null }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,8 +257,8 @@ function TicketsPage() {
     try {
       setError(null);
       const [ticketData, slotData] = await Promise.all([
-        fetchTickets(filterPhase || undefined),
-        fetchSlots(),
+        fetchTickets(filterPhase || undefined, projectId ?? undefined),
+        fetchSlots(projectId ?? undefined),
       ]);
       setTickets(ticketData);
       setSlots(slotData);
@@ -268,7 +269,7 @@ function TicketsPage() {
     }
   };
 
-  useEffect(() => { setLoading(true); load(); }, [filterPhase]);
+  useEffect(() => { setLoading(true); load(); }, [filterPhase, projectId]);
 
   const scheduleTicketFilesRefresh = (ticketId: number) => {
     const existing = ticketFileRefreshTimers.current[ticketId];
@@ -307,6 +308,8 @@ function TicketsPage() {
       scheduleTicketFilesRefresh(msg.ticketId);
     } else if (msg.type === "ticket.updated") {
       const t = msg.ticket as Ticket;
+      // Only merge if it belongs to the current project view (or no project filter)
+      if (projectId != null && t.projectId != null && t.projectId !== projectId) return;
       setTickets((prev) => {
         const found = prev.some((x) => x.id === t.id);
         if (found) return prev.map((x) => (x.id === t.id ? { ...x, ...t } : x));
@@ -357,7 +360,7 @@ function TicketsPage() {
     if (!newTitle.trim()) return;
     setCreating(true);
     try {
-      await createTicket({ title: newTitle.trim(), description: newDesc.trim() || undefined });
+      await createTicket({ title: newTitle.trim(), description: newDesc.trim() || undefined, projectId });
       setNewTitle(""); setNewDesc(""); setShowForm(false);
       await load();
     } catch (e: any) { setError(e.message); }
@@ -419,7 +422,7 @@ function TicketsPage() {
       )}
 
       <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
-        <MondayPicker onImported={load} />
+        <MondayPicker onImported={load} projectId={projectId} />
       </Modal>
 
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
@@ -694,6 +697,22 @@ function TicketsPage() {
 
 export default function App() {
   const [view, setView] = useState<View>("tickets");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+
+  const loadProjects = async () => {
+    try {
+      const list = await fetchProjects();
+      setProjects(list);
+      if (list.length > 0 && selectedProjectId == null) {
+        setSelectedProjectId(list[0].id);
+      }
+    } catch {
+      // non-fatal
+    }
+  };
+
+  useEffect(() => { loadProjects(); }, []);
 
   return (
     <div className="app">
@@ -701,6 +720,26 @@ export default function App() {
         <div className="header-inner">
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             <h1 className="logo">Tribe</h1>
+            {projects.length > 1 && (
+              <select
+                value={selectedProjectId ?? ""}
+                onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : null)}
+                style={{
+                  background: "#1e2a3a",
+                  color: "#e2e8f0",
+                  border: "1px solid #2d3e50",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                <option value="">All projects</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
             <nav style={{ display: "flex", gap: 4 }}>
               <button
                 className={`tab ${view === "tickets" ? "active" : ""}`}
@@ -714,13 +753,21 @@ export default function App() {
               >
                 Slots
               </button>
+              <button
+                className={`tab ${view === "projects" ? "active" : ""}`}
+                onClick={() => setView("projects")}
+              >
+                Projects
+              </button>
             </nav>
           </div>
         </div>
       </header>
 
       <main className="main">
-        {view === "tickets" ? <TicketsPage /> : <SlotsPage />}
+        {view === "tickets" && <TicketsPage projectId={selectedProjectId} />}
+        {view === "slots" && <SlotsPage projectId={selectedProjectId} />}
+        {view === "projects" && <ProjectsPage onProjectsChanged={loadProjects} />}
       </main>
     </div>
   );

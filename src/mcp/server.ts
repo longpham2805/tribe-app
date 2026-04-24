@@ -17,8 +17,10 @@ import ticketRoutes from "../routes/tickets";
 import phaseRoutes from "../routes/phases";
 import mondayRoutes from "../routes/monday";
 import slotRoutes from "../routes/slots";
+import projectRoutes from "../routes/projects";
 import filesRoutes from "../routes/files";
 import { SlotRepository } from "../repository/SlotRepository";
+import { ProjectRepository } from "../repository/ProjectRepository";
 import { attachWebSocket } from "../ws/server";
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
@@ -293,18 +295,30 @@ function createServer(): McpServer {
     "monday_not_started_tickets",
     "Fetch all not-started tickets from Monday.com (groups: Dev Bugs, Prod Bugs Next, Next)",
     {
+      projectId: z.number().optional().describe("Use this project's Monday board settings"),
       boardIds: z
         .array(z.number())
         .optional()
-        .describe("Override default board IDs"),
+        .describe("Override board IDs (takes precedence over projectId)"),
       people: z
         .array(z.string())
         .optional()
         .describe("Filter by people names/IDs"),
     },
-    async ({ boardIds, people }) => {
+    async ({ projectId, boardIds, people }) => {
       try {
-        const monday = MondayHelper.fromEnv();
+        let monday: MondayHelper;
+        if (projectId != null) {
+          const project = await new ProjectRepository().findById(projectId);
+          monday = new MondayHelper({
+            accessToken: process.env.MONDAY_ACCESS_TOKEN,
+            apiUrl: process.env.MONDAY_API_URL,
+            defaultBoardIds: boardIds ?? (project?.mondayBoardIds ?? undefined),
+            ewebinarDevPeople: project?.mondayDevPeople ?? undefined,
+          });
+        } else {
+          monday = MondayHelper.fromEnv();
+        }
         const { items } = await monday.getNotStartedItems({
           boardIds,
           peopleOverride: people,
@@ -340,8 +354,9 @@ function createServer(): McpServer {
       mondayItemId: z
         .string()
         .describe("Monday item ID or Monday item URL"),
+      projectId: z.number().optional().describe("Project to import the ticket into"),
     },
-    async ({ mondayItemId }) => {
+    async ({ mondayItemId, projectId }) => {
       try {
         // 1. Fetch from Monday
         const monday = MondayHelper.fromEnv();
@@ -368,6 +383,7 @@ function createServer(): McpServer {
             title: item.name,
             mondayItemId: item.id,
             mondayMarkdown: markdown,
+            projectId: projectId ?? null,
           });
 
           // Auto-create the initial CREATED phase record
@@ -410,19 +426,37 @@ function createServer(): McpServer {
   server.tool(
     "list_slots",
     "List all workspace slots with their current ticket assignment and free/occupied status",
-    {},
-    async () => {
+    {
+      projectId: z.number().optional().describe("Filter slots by project ID"),
+    },
+    async ({ projectId }) => {
       const repo = new SlotRepository();
-      const slots = await repo.findAll();
+      const slots = await repo.findAll(projectId != null ? { projectId } : undefined);
       const result = slots.map((s) => ({
         id: s.id,
         name: s.name,
         rootPath: s.rootPath,
+        projectId: s.projectId,
         status: s.currentTicketId ? "occupied" : "free",
         currentTicketId: s.currentTicketId,
       }));
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // ── Project Tools ─────────────────────────────────────────────────
+
+  server.tool(
+    "get_projects",
+    "List all projects with their Monday board settings",
+    {},
+    async () => {
+      const repo = new ProjectRepository();
+      const projects = await repo.findAll();
+      return {
+        content: [{ type: "text", text: JSON.stringify(projects, null, 2) }],
       };
     }
   );
@@ -499,6 +533,7 @@ async function main() {
   app.use("/api/phases", phaseRoutes);
   app.use("/api/monday", mondayRoutes);
   app.use("/api/slots", slotRoutes);
+  app.use("/api/projects", projectRoutes);
 
   // ── SPA Static Files ─────────────────────────────────────────────
   const publicDir = path.join(__dirname, "../../public");

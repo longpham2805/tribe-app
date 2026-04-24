@@ -10,17 +10,24 @@ export class TicketRepository {
     this.repo = AppDataSource.getRepository(Ticket);
   }
 
-  async findAll(): Promise<Ticket[]> {
-    return this.repo.find({ relations: ["phases"], order: { createdAt: "DESC" } });
+  async findAll(opts?: { projectId?: number }): Promise<Ticket[]> {
+    return this.repo.find({
+      where: opts?.projectId != null ? { projectId: opts.projectId } : {},
+      relations: ["phases"],
+      order: { createdAt: "DESC" },
+    });
   }
 
   async findById(id: number): Promise<Ticket | null> {
     return this.repo.findOne({ where: { id }, relations: ["phases"] });
   }
 
-  async findByPhase(phase: TicketPhase): Promise<Ticket[]> {
+  async findByPhase(phase: TicketPhase, opts?: { projectId?: number }): Promise<Ticket[]> {
     return this.repo.find({
-      where: { currentPhase: phase },
+      where: {
+        currentPhase: phase,
+        ...(opts?.projectId != null ? { projectId: opts.projectId } : {}),
+      },
       relations: ["phases"],
       order: { createdAt: "DESC" },
     });
@@ -39,6 +46,7 @@ export class TicketRepository {
     mondayItemId?: string;
     mondayBoardId?: number;
     mondayMarkdown?: string;
+    projectId?: number | null;
   }): Promise<Ticket> {
     const ticket = this.repo.create({
       title: data.title,
@@ -46,6 +54,7 @@ export class TicketRepository {
       mondayItemId: data.mondayItemId ?? null,
       mondayBoardId: data.mondayBoardId ?? null,
       mondayMarkdown: data.mondayMarkdown ?? null,
+      projectId: data.projectId ?? null,
       currentPhase: TicketPhase.CREATED,
     });
     return this.repo.save(ticket);
@@ -92,10 +101,13 @@ export class TicketRepository {
     });
   }
 
-  /** Find the oldest ticket currently waiting for a slot (FIFO). */
-  async findOldestWaiting(): Promise<Ticket | null> {
+  /** Find the oldest ticket currently waiting for a slot (FIFO), scoped to a project. */
+  async findOldestWaiting(projectId?: number): Promise<Ticket | null> {
     return this.repo.findOne({
-      where: { waitingForSlot: true },
+      where: {
+        waitingForSlot: true,
+        ...(projectId != null ? { projectId } : {}),
+      },
       order: { createdAt: "ASC" },
     });
   }

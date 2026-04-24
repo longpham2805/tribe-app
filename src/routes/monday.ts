@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { TicketRepository } from "../repository/TicketRepository";
+import { ProjectRepository } from "../repository/ProjectRepository";
 import { MondayHelper } from "../monday/MondayHelper";
 import { formatItemMarkdown } from "../monday/formatItemMarkdown";
 import { runTicketImportedHooks } from "../hooks/registry";
@@ -12,12 +13,10 @@ function parseBoardId(boardId: string | undefined): number | undefined {
   return Number.isInteger(parsed) ? parsed : undefined;
 }
 
-// GET /api/monday/not-started?boardIds=1,2&people=alice,bob
+// GET /api/monday/not-started?boardIds=1,2&people=alice,bob&projectId=1
 router.get("/not-started", async (req: Request, res: Response) => {
   try {
-    const monday = MondayHelper.fromEnv();
-
-    const boardIds = req.query.boardIds
+    const boardIdsOverride = req.query.boardIds
       ? String(req.query.boardIds)
           .split(",")
           .map((s) => parseInt(s.trim(), 10))
@@ -31,8 +30,30 @@ router.get("/not-started", async (req: Request, res: Response) => {
           .filter((s) => s.length > 0)
       : undefined;
 
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined;
+    let monday: MondayHelper;
+
+    if (projectId != null && !isNaN(projectId)) {
+      const project = await new ProjectRepository().findById(projectId);
+      monday = new MondayHelper({
+        accessToken: process.env.MONDAY_ACCESS_TOKEN,
+        apiUrl: process.env.MONDAY_API_URL,
+        defaultBoardIds: boardIdsOverride ?? (project?.mondayBoardIds ?? undefined),
+        ewebinarDevPeople: project?.mondayDevPeople ?? undefined,
+      });
+    } else {
+      monday = MondayHelper.fromEnv();
+      if (boardIdsOverride) {
+        monday = new MondayHelper({
+          accessToken: process.env.MONDAY_ACCESS_TOKEN,
+          apiUrl: process.env.MONDAY_API_URL,
+          defaultBoardIds: boardIdsOverride,
+        });
+      }
+    }
+
     const { items } = await monday.getNotStartedItems({
-      boardIds,
+      boardIds: boardIdsOverride,
       peopleOverride: people,
     });
 
@@ -42,15 +63,17 @@ router.get("/not-started", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/monday/import  { mondayItemId: string }
+// POST /api/monday/import  { mondayItemId: string, projectId?: number }
 router.post("/import", async (req: Request, res: Response) => {
   try {
-    const { mondayItemId, clues } = req.body;
+    const { mondayItemId, clues, projectId } = req.body;
     if (!mondayItemId || typeof mondayItemId !== "string") {
       res.status(400).json({ error: "mondayItemId (string) is required — numeric ID or Monday URL" });
       return;
     }
     const description = clues && typeof clues === "string" && clues.trim() ? clues.trim() : undefined;
+    const resolvedProjectId: number | null =
+      typeof projectId === "number" ? projectId : null;
 
     // 1. Fetch from Monday
     const monday = MondayHelper.fromEnv();
@@ -83,6 +106,7 @@ router.post("/import", async (req: Request, res: Response) => {
         mondayBoardId,
         mondayMarkdown: markdown,
         description,
+        projectId: resolvedProjectId,
       });
 
       ticket = await ticketRepo.findById(ticket.id);

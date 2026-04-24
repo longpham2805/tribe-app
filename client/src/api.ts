@@ -1,15 +1,22 @@
-import type { Ticket, TicketPhase, Slot, TicketFile, MondayNotStartedItem } from "./types";
+import type { Ticket, TicketPhase, Slot, TicketFile, MondayNotStartedItem, Project } from "./types";
 
 const BASE = "/api";
 
-export async function fetchTickets(phase?: TicketPhase): Promise<Ticket[]> {
-  const url = phase ? `${BASE}/tickets?phase=${phase}` : `${BASE}/tickets`;
-  const res = await fetch(url);
+export async function fetchTickets(phase?: TicketPhase, projectId?: number): Promise<Ticket[]> {
+  const params = new URLSearchParams();
+  if (phase) params.set("phase", phase);
+  if (projectId != null) params.set("projectId", String(projectId));
+  const query = params.toString();
+  const res = await fetch(query ? `${BASE}/tickets?${query}` : `${BASE}/tickets`);
   if (!res.ok) throw new Error("Failed to fetch tickets");
   return res.json();
 }
 
-export async function createTicket(data: { title: string; description?: string }): Promise<Ticket> {
+export async function createTicket(data: {
+  title: string;
+  description?: string;
+  projectId?: number | null;
+}): Promise<Ticket> {
   const res = await fetch(`${BASE}/tickets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,8 +67,9 @@ export async function respondPhase(ticketId: number, message: string): Promise<v
 
 // ── Slots ─────────────────────────────────────────────────────────
 
-export async function fetchSlots(): Promise<Slot[]> {
-  const res = await fetch(`${BASE}/slots`);
+export async function fetchSlots(projectId?: number): Promise<Slot[]> {
+  const url = projectId != null ? `${BASE}/slots?projectId=${projectId}` : `${BASE}/slots`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch slots");
   return res.json();
 }
@@ -69,6 +77,7 @@ export async function fetchSlots(): Promise<Slot[]> {
 export async function createSlot(data: {
   name: string;
   rootPath: string;
+  projectId?: number | null;
 }): Promise<Slot> {
   const res = await fetch(`${BASE}/slots`, {
     method: "POST",
@@ -123,8 +132,11 @@ export async function fetchPhaseLog(ticketId: number, phaseName: string): Promis
 
 // ── Monday import ─────────────────────────────────────────────────
 
-export async function fetchMondayNotStarted(): Promise<MondayNotStartedItem[]> {
-  const res = await fetch(`${BASE}/monday/not-started`);
+export async function fetchMondayNotStarted(projectId?: number): Promise<MondayNotStartedItem[]> {
+  const url = projectId != null
+    ? `${BASE}/monday/not-started?projectId=${projectId}`
+    : `${BASE}/monday/not-started`;
+  const res = await fetch(url);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "Failed to fetch Monday tickets");
@@ -133,11 +145,19 @@ export async function fetchMondayNotStarted(): Promise<MondayNotStartedItem[]> {
   return body.items ?? [];
 }
 
-export async function importMondayItem(mondayItemId: string, clues?: string): Promise<Ticket> {
+export async function importMondayItem(
+  mondayItemId: string,
+  clues?: string,
+  projectId?: number | null,
+): Promise<Ticket> {
   const res = await fetch(`${BASE}/monday/import`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mondayItemId, ...(clues?.trim() ? { clues } : {}) }),
+    body: JSON.stringify({
+      mondayItemId,
+      ...(clues?.trim() ? { clues } : {}),
+      ...(projectId != null ? { projectId } : {}),
+    }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -145,4 +165,61 @@ export async function importMondayItem(mondayItemId: string, clues?: string): Pr
   }
   const body = await res.json();
   return body.ticket as Ticket;
+}
+
+// ── Projects ──────────────────────────────────────────────────────
+
+export async function fetchProjects(): Promise<Project[]> {
+  const res = await fetch(`${BASE}/projects`);
+  if (!res.ok) throw new Error("Failed to fetch projects");
+  return res.json();
+}
+
+export async function createProject(data: {
+  name: string;
+  slug?: string | null;
+  mondayBoardIds?: number[] | null;
+  mondayDefaultPersonId?: string | null;
+  mondayDevPeople?: string[] | null;
+}): Promise<Project> {
+  const res = await fetch(`${BASE}/projects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to create project");
+  }
+  return res.json();
+}
+
+export async function updateProject(
+  id: number,
+  data: {
+    name?: string;
+    slug?: string | null;
+    mondayBoardIds?: number[] | null;
+    mondayDefaultPersonId?: string | null;
+    mondayDevPeople?: string[] | null;
+  },
+): Promise<Project> {
+  const res = await fetch(`${BASE}/projects/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to update project");
+  }
+  return res.json();
+}
+
+export async function deleteProject(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/projects/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to delete project");
+  }
 }

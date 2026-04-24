@@ -11,6 +11,7 @@ import {
 import { TicketPhase } from "../enum/TicketPhase";
 import { Phase } from "./Phase";
 import { Slot } from "./Slot";
+import { Project } from "./Project";
 
 @Entity()
 export class Ticket {
@@ -65,4 +66,11 @@ export class Ticket {
   /** Stable UUID assigned when the ticket's workspace is first set up */
   @Column({ type: "varchar", length: 36, nullable: true, unique: true })
   uid!: string | null;
+
+  @Column({ type: "int", nullable: true })
+  projectId!: number | null;
+
+  @ManyToOne(() => Project, (p) => p.tickets, { nullable: true, onDelete: "SET NULL", eager: false })
+  @JoinColumn({ name: "projectId" })
+  project!: Project | null;
 }

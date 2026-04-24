@@ -4,9 +4,10 @@ import type { MondayNotStartedItem } from "./types";
 
 type Props = {
   onImported: () => Promise<void> | void;
+  projectId?: number | null;
 };
 
-export function MondayPicker({ onImported }: Props) {
+export function MondayPicker({ onImported, projectId }: Props) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MondayNotStartedItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +19,7 @@ export function MondayPicker({ onImported }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const next = await fetchMondayNotStarted();
+      const next = await fetchMondayNotStarted(projectId ?? undefined);
       setItems(next);
     } catch (err: any) {
       setError(err.message ?? "Failed to load Monday items");
@@ -29,7 +30,7 @@ export function MondayPicker({ onImported }: Props) {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [projectId]);
 
   const handleSelect = (item: MondayNotStartedItem) => {
     setSelectedItem(item);
@@ -42,7 +43,7 @@ export function MondayPicker({ onImported }: Props) {
     setImportingId(selectedItem.id);
     setError(null);
     try {
-      await importMondayItem(selectedItem.id, clues);
+      await importMondayItem(selectedItem.id, clues, projectId);
       setSelectedItem(null);
       setClues("");
       await onImported();

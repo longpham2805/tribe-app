@@ -30,6 +30,17 @@ export type WsMessage =
   | { type: "phase.log"; ticketId: number; phaseName: TicketPhase; event: any }
   | { type: "ticket.updated"; ticket: Ticket };
 
+export interface Project {
+  id: number;
+  name: string;
+  slug: string | null;
+  mondayBoardIds: number[] | null;
+  mondayDefaultPersonId: string | null;
+  mondayDevPeople: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Ticket {
   id: number;
   title: string;
@@ -41,6 +52,7 @@ export interface Ticket {
   pullRequests: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
   slotId: number | null;
   waitingForSlot: boolean;
+  projectId: number | null;
   createdAt: string;
   updatedAt: string;
   phases: Phase[];
@@ -60,6 +72,7 @@ export interface Slot {
   name: string;
   rootPath: string;
   currentTicketId: number | null;
+  projectId: number | null;
   createdAt: string;
   updatedAt: string;
 }

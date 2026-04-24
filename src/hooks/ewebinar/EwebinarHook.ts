@@ -4,17 +4,7 @@ import { TicketPhase } from "../../enum/TicketPhase";
 import { getTicketDir } from "../../lib/paths";
 import { MondayHelper } from "../../monday/MondayHelper";
 import type { MondayItemDetail } from "../../monday/types";
-import type { ProjectHook } from "../ProjectHook";
-
-function getConfiguredPersonId(): string | null {
-  const fromDefault = process.env.EWEBINAR_DEFAULT_PERSON_ID?.trim();
-  if (fromDefault) return fromDefault;
-
-  const firstDevPerson = process.env.EWEBINAR_DEV_PEOPLE?.split(",")
-    .map((value) => value.trim())
-    .find(Boolean);
-  return firstDevPerson ?? null;
-}
+import type { ProjectHook, ProjectSettings } from "../ProjectHook";
 
 function parseBoardId(ticket: Ticket, item?: MondayItemDetail): number | null {
   if (ticket.mondayBoardId != null) return ticket.mondayBoardId;
@@ -24,6 +14,15 @@ function parseBoardId(ticket: Ticket, item?: MondayItemDetail): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+function mondayFromSettings(settings: ProjectSettings): MondayHelper {
+  return new MondayHelper({
+    accessToken: process.env.MONDAY_ACCESS_TOKEN,
+    apiUrl: process.env.MONDAY_API_URL,
+    defaultBoardIds: settings.mondayBoardIds,
+    ewebinarDevPeople: settings.mondayDevPeople,
+  });
+}
+
 export class EwebinarHook implements ProjectHook {
   readonly name = "ewebinar";
 
@@ -31,12 +30,12 @@ export class EwebinarHook implements ProjectHook {
     return !!ticket.mondayItemId;
   }
 
-  async onTicketImported(ticket: Ticket, item: MondayItemDetail): Promise<void> {
+  async onTicketImported(ticket: Ticket, item: MondayItemDetail, settings: ProjectSettings): Promise<void> {
     if (!ticket.mondayItemId) return;
 
-    const monday = MondayHelper.fromEnv();
+    const monday = mondayFromSettings(settings);
     const boardId = parseBoardId(ticket, item);
-    const personId = getConfiguredPersonId();
+    const personId = settings.mondayDefaultPersonId ?? settings.mondayDevPeople[0] ?? null;
 
     if (boardId == null) {
       console.warn(`[hooks:ewebinar] skipping import sync for ticket ${ticket.id}: missing mondayBoardId`);
@@ -50,7 +49,7 @@ export class EwebinarHook implements ProjectHook {
         personIds: [personId],
       });
     } else {
-      console.warn("[hooks:ewebinar] missing EWEBINAR_DEFAULT_PERSON_ID/EWEBINAR_DEV_PEOPLE; people sync skipped");
+      console.warn("[hooks:ewebinar] missing mondayDefaultPersonId/mondayDevPeople; people sync skipped");
     }
 
     await monday.updateItemStatus({
@@ -60,22 +59,22 @@ export class EwebinarHook implements ProjectHook {
     });
   }
 
-  async onPhaseCompleted(ticket: Ticket, phaseName: TicketPhase): Promise<void> {
+  async onPhaseCompleted(ticket: Ticket, phaseName: TicketPhase, settings: ProjectSettings): Promise<void> {
     if (!ticket.mondayItemId) return;
 
     if (phaseName === TicketPhase.IMPLEMENTATION) {
-      await this.syncImplementationChecklist(ticket);
+      await this.syncImplementationChecklist(ticket, settings);
       return;
     }
 
     if (phaseName === TicketPhase.SHIP) {
-      await this.moveToPrReview(ticket);
+      await this.moveToPrReview(ticket, settings);
     }
   }
 
-  private async syncImplementationChecklist(ticket: Ticket): Promise<void> {
+  private async syncImplementationChecklist(ticket: Ticket, settings: ProjectSettings): Promise<void> {
     if (!ticket.uid) return;
-    const personId = getConfiguredPersonId();
+    const personId = settings.mondayDefaultPersonId ?? settings.mondayDevPeople[0] ?? null;
     if (!personId) {
       console.warn("[hooks:ewebinar] checklist sync skipped: missing default person configuration");
       return;
@@ -90,7 +89,7 @@ export class EwebinarHook implements ProjectHook {
     const content = readFileSync(checklistPath, "utf-8").trim();
     if (!content) return;
 
-    const monday = MondayHelper.fromEnv();
+    const monday = mondayFromSettings(settings);
     await monday.upsertImplementationChecklist({
       itemIdOrLink: ticket.mondayItemId!,
       person: personId,
@@ -98,14 +97,14 @@ export class EwebinarHook implements ProjectHook {
     });
   }
 
-  private async moveToPrReview(ticket: Ticket): Promise<void> {
+  private async moveToPrReview(ticket: Ticket, settings: ProjectSettings): Promise<void> {
     const boardId = parseBoardId(ticket);
     if (boardId == null) {
       console.warn(`[hooks:ewebinar] PR Review sync skipped for ticket ${ticket.id}: missing mondayBoardId`);
       return;
     }
 
-    const monday = MondayHelper.fromEnv();
+    const monday = mondayFromSettings(settings);
     await monday.updateItemStatus({
       itemIdOrLink: ticket.mondayItemId!,
       boardId,

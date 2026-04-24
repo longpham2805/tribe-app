@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from "typeorm";
+import { Project } from "./Project";
 
 @Entity()
 export class Slot {
@@ -21,6 +24,13 @@ export class Slot {
   /** The ticket currently occupying this slot (null = free) */
   @Column({ type: "int", nullable: true })
   currentTicketId!: number | null;
+
+  @Column({ type: "int", nullable: true })
+  projectId!: number | null;
+
+  @ManyToOne(() => Project, (p) => p.slots, { nullable: true, onDelete: "SET NULL", eager: false })
+  @JoinColumn({ name: "projectId" })
+  project!: Project | null;
 
   @CreateDateColumn()
   createdAt!: Date;
