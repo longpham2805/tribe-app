@@ -53,6 +53,48 @@ const STATUS_COLORS: Record<PhaseStatus, string | null> = {
 
 type View = "tickets" | "slots" | "projects";
 
+type StoredProjectSelection =
+  | { kind: "missing" }
+  | { kind: "all" }
+  | { kind: "id"; id: number }
+  | { kind: "invalid" };
+
+const PROJECT_SELECTION_STORAGE_KEY = "tribe.selectedProjectId";
+const ALL_PROJECTS_STORAGE_VALUE = "all";
+
+const readStoredProjectSelection = (): StoredProjectSelection => {
+  try {
+    const raw = window.localStorage.getItem(PROJECT_SELECTION_STORAGE_KEY);
+    if (raw == null) return { kind: "missing" };
+    if (raw === ALL_PROJECTS_STORAGE_VALUE) return { kind: "all" };
+    const id = Number(raw);
+    if (Number.isInteger(id) && id > 0) return { kind: "id", id };
+  } catch {
+    return { kind: "missing" };
+  }
+  return { kind: "invalid" };
+};
+
+const writeStoredProjectSelection = (projectId: number | null) => {
+  try {
+    if (projectId == null) {
+      window.localStorage.setItem(PROJECT_SELECTION_STORAGE_KEY, ALL_PROJECTS_STORAGE_VALUE);
+      return;
+    }
+    window.localStorage.setItem(PROJECT_SELECTION_STORAGE_KEY, String(projectId));
+  } catch {
+    // non-fatal
+  }
+};
+
+const clearStoredProjectSelection = () => {
+  try {
+    window.localStorage.removeItem(PROJECT_SELECTION_STORAGE_KEY);
+  } catch {
+    // non-fatal
+  }
+};
+
 // ── Slots Page ────────────────────────────────────────────────────────────────
 
 function SlotsPage({ projectId }: { projectId: number | null }) {
@@ -521,10 +563,39 @@ export default function App() {
   const loadProjects = async () => {
     try {
       const list = await fetchProjects();
+      const storedSelection = readStoredProjectSelection();
       setProjects(list);
-      if (list.length > 0 && selectedProjectId == null) {
-        setSelectedProjectId(list[0].id);
+
+      if (list.length === 0) {
+        setSelectedProjectId(null);
+        if (storedSelection.kind === "invalid") clearStoredProjectSelection();
+        return;
       }
+
+      if (storedSelection.kind === "id") {
+        const savedProject = list.find((project) => project.id === storedSelection.id);
+        if (savedProject) {
+          setSelectedProjectId(savedProject.id);
+          return;
+        }
+        clearStoredProjectSelection();
+      }
+
+      if (storedSelection.kind === "all") {
+        setSelectedProjectId(null);
+        return;
+      }
+
+      if (storedSelection.kind === "invalid") {
+        clearStoredProjectSelection();
+      }
+
+      setSelectedProjectId((currentProjectId) => {
+        if (currentProjectId != null && list.some((project) => project.id === currentProjectId)) {
+          return currentProjectId;
+        }
+        return list[0].id;
+      });
     } catch {
       // non-fatal
     }
@@ -541,7 +612,11 @@ export default function App() {
             {projects.length > 1 && (
               <select
                 value={selectedProjectId ?? ""}
-                onChange={(e) => setSelectedProjectId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => {
+                  const nextProjectId = e.target.value ? Number(e.target.value) : null;
+                  setSelectedProjectId(nextProjectId);
+                  writeStoredProjectSelection(nextProjectId);
+                }}
                 style={{
                   background: "#1e2a3a",
                   color: "#e2e8f0",
