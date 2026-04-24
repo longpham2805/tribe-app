@@ -247,9 +247,10 @@ export function TicketDetailModal({
                 key={phase}
                 role="button"
                 tabIndex={0}
-                className={`phase-card ${isActive ? "phase-card--active" : ""} ${isCompleted ? "phase-card--completed" : ""} ${isPending ? "phase-card--pending" : ""} ${isRunning ? "phase-card--running" : ""}`}
+                className={`phase-card ${isActive ? "phase-card--active" : ""} ${isCompleted ? "phase-card--completed" : ""} ${isPending ? "phase-card--pending" : ""} ${isRunning ? "phase-card--running" : ""} ${isSelected ? "phase-card--selected" : ""}`}
                 style={{
                   cursor: "pointer",
+                  "--selection-accent": phaseColor,
                   ...(isRunning
                     ? ({ "--running-accent": accent } as CSSProperties)
                     : isActive
@@ -257,8 +258,7 @@ export function TicketDetailModal({
                       : isCompleted
                         ? { borderColor: `${phaseColor}55` }
                         : {}),
-                  ...(isSelected ? { outline: `2px solid ${phaseColor}`, outlineOffset: 2 } : {}),
-                }}
+                } as CSSProperties}
                 onClick={() => onSelectPhase(ticket.id, phase)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
