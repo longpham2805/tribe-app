@@ -1,4 +1,4 @@
-import { useEffect, useId, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from "react";
 
 interface ModalProps {
   open: boolean;
@@ -18,6 +18,7 @@ export function Modal({
   variant = "center",
 }: ModalProps) {
   const titleId = useId();
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -27,6 +28,24 @@ export function Modal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open || variant !== "right-pane") return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, variant]);
+
+  useEffect(() => {
+    if (!open || variant !== "right-pane") return;
+
+    const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.focus();
+    return () => previousActiveElement?.focus();
+  }, [open, variant]);
 
   if (!open) return null;
 
@@ -38,12 +57,14 @@ export function Modal({
   return (
     <div className={`modal-backdrop modal-backdrop--${variant}`} onClick={onClose}>
       <div
+        ref={panelRef}
         className={`modal-panel modal-panel--${variant}`}
         style={panelStyle}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
       >
         <div className="modal-header">
           <div className="modal-title" id={titleId}>
