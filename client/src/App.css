@@ -301,54 +301,8 @@
   transition: border-color 0.15s;
 }
 
-.ticket-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.ticket-card__action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid #2e3f52;
-  background: transparent;
-  color: #cbd5e1;
-  font-size: 0.78rem;
-  font-weight: 600;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-}
-
-.ticket-card__action:hover {
-  border-color: #3b82f6;
-  color: #f8fafc;
-}
-
-.ticket-card__action:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-.ticket-card__action--primary {
-  background: #1d4ed822;
-  border-color: #2563eb55;
-  color: #93c5fd;
-}
-
-.ticket-card__action--primary:hover {
-  background: #1d4ed833;
-  border-color: #3b82f6;
-}
-
-.ticket-card__action--secondary {
-  font-family: inherit;
+.ticket-card--interactive {
+  outline: none;
 }
 
 .ticket-card--running {
@@ -359,6 +313,11 @@
 
 .ticket-card:hover {
   border-color: #2e3f52;
+}
+
+.ticket-card--interactive:focus-visible {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px #60a5fa;
 }
 
 .ticket-card--running:hover {
@@ -428,6 +387,19 @@
   line-height: 1.4;
 }
 
+.ticket-card-description {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .ticket-desc {
   font-size: 0.85rem;
   color: #64748b;
@@ -495,6 +467,42 @@
   align-items: center;
   justify-content: space-between;
   margin-top: 0.25rem;
+}
+
+.ticket-card-footer-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.ticket-card-pr-link {
+  color: #60a5fa;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.ticket-card-pr-link:hover {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
+.ticket-card-pr-link:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.ticket-card-pr-extra,
+.ticket-card-footer-hint,
+.ticket-card-footer-action {
+  color: #64748b;
+}
+
+.ticket-card-footer-action {
+  white-space: nowrap;
 }
 
 .phase-select {

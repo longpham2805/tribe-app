@@ -1,6 +1,26 @@
-import { memo, type CSSProperties } from "react";
-import { getPrimaryPullRequestLink } from "../../constants/ticket";
+import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import type { PhaseStatus, Ticket, TicketPhase } from "../../types";
+
+const extractUrl = (raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
+  if (markdownMatch?.[1]) return markdownMatch[1];
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return null;
+};
+
+const getPrLinkLabel = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/+$/, "");
+    const number = path.match(/\/pull\/(\d+)$/)?.[1];
+    if (number) return `PR #${number}`;
+  } catch {
+    // fall through
+  }
+  return "Open PR";
+};
 
 interface TicketSummaryCardProps {
   ticket: Ticket;
@@ -32,32 +52,61 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
   const runningAccent = runningPhase ? statusColors[runningPhase.status] ?? phaseColors[runningPhase.phaseName] : null;
 
   const createdAt = new Date(ticket.createdAt).toLocaleDateString();
-  const primaryPullRequest = getPrimaryPullRequestLink(ticket.pullRequests);
-  const hasPullRequests = (ticket.pullRequests?.length ?? 0) > 0;
-  const pullRequestCountLabel = hasPullRequests
-    ? `${ticket.pullRequests?.length ?? 0} PR${ticket.pullRequests?.length === 1 ? "" : "s"}`
-    : null;
-  const detailHint =
-    ticket.branchName && pullRequestCountLabel
-      ? `Branch ${ticket.branchName} · ${pullRequestCountLabel}`
-      : ticket.branchName
-        ? `Branch ${ticket.branchName}`
-        : pullRequestCountLabel;
+  const pullRequestCount = ticket.pullRequests?.length ?? 0;
+  const hasPullRequests = pullRequestCount > 0;
+  const resolvedPullRequests = (ticket.pullRequests ?? []).flatMap((pullRequest) => {
+    const url = extractUrl(pullRequest.prUrl);
+    return url ? [{ ...pullRequest, url }] : [];
+  });
+  const primaryPullRequest = resolvedPullRequests[0] ?? null;
+  const extraPullRequestCount = Math.max(resolvedPullRequests.length - 1, 0);
+  const fallbackHint = ticket.branchName
+    ? `Branch ${ticket.branchName}`
+    : hasPullRequests
+      ? `${pullRequestCount} PR${pullRequestCount === 1 ? "" : "s"}`
+      : "Open for details";
+  const descriptionPreview = ticket.description?.trim() ?? "";
+  const hasDescriptionPreview = descriptionPreview.length > 0;
+
+  const clickableCardStyle: CSSProperties = {
+    width: "100%",
+    textAlign: "left",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    padding: "0.85rem 1rem",
+    gap: "0.6rem",
+  };
 
   const footerStyle: CSSProperties = {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "center",
+    alignItems: "flex-start",
     flexWrap: "wrap",
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onOpen();
+  };
+
+  const stopCardOpen = (event: MouseEvent<HTMLAnchorElement> | KeyboardEvent<HTMLAnchorElement>) => {
+    event.stopPropagation();
+  };
+
   return (
-    <article
-      className={`ticket-card${runningPhase ? " ticket-card--running" : ""}`}
+    <div
+      role="button"
+      tabIndex={0}
+      className={`ticket-card ticket-card--interactive${runningPhase ? " ticket-card--running" : ""}`}
       style={{
+        ...clickableCardStyle,
         ...(runningAccent ? ({ "--ticket-running-accent": runningAccent } as CSSProperties) : {}),
       }}
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
+      aria-label={`Open ticket #${ticket.id}: ${ticket.title}`}
     >
       <div className="ticket-header">
         <div className="ticket-meta" style={{ flexWrap: "wrap" }}>
@@ -111,32 +160,28 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
         {ticket.title}
       </h3>
 
-      <div style={footerStyle}>
-        <span className="ticket-date" style={{ color: "#64748b" }}>
-          {detailHint ?? "Open for details"}
-        </span>
-        <div className="ticket-card__actions">
-          <button
-            type="button"
-            className="ticket-card__action ticket-card__action--secondary"
-            onClick={onOpen}
-            aria-label={`View details for ticket #${ticket.id}: ${ticket.title}`}
-          >
-            View details
-          </button>
-          {primaryPullRequest ? (
+      {hasDescriptionPreview ? <p className="ticket-card-description">{descriptionPreview}</p> : null}
+
+      <div className="ticket-footer" style={footerStyle}>
+        {primaryPullRequest ? (
+          <span className="ticket-card-footer-meta">
             <a
-              className="ticket-card__action ticket-card__action--primary"
+              className="ticket-card-pr-link"
               href={primaryPullRequest.url}
               target="_blank"
               rel="noreferrer"
-              aria-label={`${primaryPullRequest.label} for ticket #${ticket.id} in a new tab`}
+              onClick={stopCardOpen}
+              onKeyDown={stopCardOpen}
             >
-              {primaryPullRequest.label}
+              {getPrLinkLabel(primaryPullRequest.url)}
             </a>
-          ) : null}
-        </div>
+            {extraPullRequestCount > 0 ? <span className="ticket-card-pr-extra">+{extraPullRequestCount}</span> : null}
+          </span>
+        ) : (
+          <span className="ticket-date ticket-card-footer-hint">{fallbackHint}</span>
+        )}
+        <span className="ticket-date ticket-card-footer-action">View details</span>
       </div>
-    </article>
+    </div>
   );
 });
