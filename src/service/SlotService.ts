@@ -38,16 +38,17 @@ export class SlotService {
       slotId: freeSlot.id,
       waitingForSlot: false,
     });
+    this.ensureReposOnDev(freeSlot);
 
     return freeSlot;
   }
 
   /**
-   * Run git reset on every repo found inside the slot's rootPath.
+   * Ensure every child repo in the slot workspace is on `dev` and synced.
    * Discovers repos automatically by checking for a `.git` directory in each
    * immediate subdirectory — so adding new repos to the workspace just works.
    */
-  gitReset(slot: Slot): void {
+  ensureReposOnDev(slot: Slot): void {
     let entries;
     try {
       entries = readdirSync(slot.rootPath, { withFileTypes: true });
@@ -71,25 +72,25 @@ export class SlotService {
         execSync(
           `git -C "${repoPath}" fetch origin && ` +
           `git -C "${repoPath}" checkout dev && ` +
-          `git -C "${repoPath}" reset --hard origin/dev`,
+          `git -C "${repoPath}" pull --ff-only origin dev`,
           { stdio: "inherit" }
         );
-        console.log(`[SlotService] Reset "${repoPath}" to origin/dev`);
+        console.log(`[SlotService] Synced "${repoPath}" on dev`);
       } catch (err) {
-        console.error(`[SlotService] git reset failed for "${repoPath}":`, err);
+        console.error(`[SlotService] git sync failed for "${repoPath}":`, err);
       }
     }
   }
 
   /**
    * Release a slot after a ticket's SHIP phase completes:
-   * 1. Run git reset on the slot repos.
+   * 1. Sync the slot repos to the latest `dev`.
    * 2. Free the slot.
    * 3. Find the oldest queued ticket and assign the slot to it.
    */
   async releaseAndPromoteQueue(slot: Slot): Promise<void> {
     // 1. Clean the workspace
-    this.gitReset(slot);
+    this.ensureReposOnDev(slot);
 
     // 2. Release the slot and clear the old ticket's slotId
     if (slot.currentTicketId != null) {
@@ -109,6 +110,7 @@ export class SlotService {
       slotId: slot.id,
       waitingForSlot: false,
     });
+    this.ensureReposOnDev(slot);
 
     console.log(
       `[SlotService] Slot ${slot.id} promoted to waiting ticket #${nextTicket.id}`
