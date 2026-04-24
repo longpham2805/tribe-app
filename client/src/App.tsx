@@ -51,6 +51,15 @@ const STATUS_COLORS: Record<PhaseStatus, string | null> = {
   ERROR: "#ef4444",
 };
 
+const TICKET_GROUPS = ["RUNNING", "WAITING", "DONE"] as const;
+type TicketGroup = typeof TICKET_GROUPS[number];
+
+const TICKET_GROUP_LABELS: Record<TicketGroup, string> = {
+  RUNNING: "Running",
+  WAITING: "Waiting",
+  DONE: "Done",
+};
+
 type View = "tickets" | "slots" | "projects";
 
 type StoredProjectSelection =
@@ -381,6 +390,23 @@ function TicketsPage({ projectId, canImportFromMonday }: { projectId: number | n
   }, [tickets, filesByTicket]);
 
   const slotById = (id: number | null) => slots.find((s) => s.id === id) ?? null;
+
+  const getTicketGroup = (ticket: Ticket): TicketGroup => {
+    if (ticket.waitingForSlot) return "WAITING";
+    const shipPhase = ticket.phases.find((phase) => phase.phaseName === "SHIP");
+    if (shipPhase?.status === "COMPLETED") return "DONE";
+    return "RUNNING";
+  };
+
+  const ticketsByGroup = TICKET_GROUPS.reduce<Record<TicketGroup, Ticket[]>>(
+    (groups, group) => ({ ...groups, [group]: [] }),
+    { RUNNING: [], WAITING: [], DONE: [] },
+  );
+
+  for (const ticket of tickets) {
+    ticketsByGroup[getTicketGroup(ticket)].push(ticket);
+  }
+
   const selectedTicket = selectedTicketId != null
     ? tickets.find((ticket) => ticket.id === selectedTicketId) ?? null
     : null;
@@ -502,24 +528,42 @@ function TicketsPage({ projectId, canImportFromMonday }: { projectId: number | n
       ) : tickets.length === 0 ? (
         <div className="empty">No tickets found.</div>
       ) : (
-        <div className="ticket-list">
-          {tickets.map((ticket) => {
-            const assignedSlot = slotById(ticket.slotId);
+        <div className="ticket-groups">
+          {TICKET_GROUPS.map((group) => {
+            const groupedTickets = ticketsByGroup[group];
+            if (groupedTickets.length === 0) return null;
+
             return (
-              <TicketSummaryCard
-                key={ticket.id}
-                ticket={ticket}
-                assignedSlotName={assignedSlot?.name ?? null}
-                onOpen={() => {
-                  setSelectedTicketId(ticket.id);
-                  setViewer(null);
-                }}
-                phaseLabels={PHASE_LABELS}
-                phaseColors={PHASE_COLORS}
-                statusLabels={STATUS_LABELS}
-                statusColors={STATUS_COLORS}
-                pausedStatuses={PAUSED_STATUSES}
-              />
+              <section key={group} className="ticket-group-section">
+                <div className="ticket-group-header">
+                  <h2 className="ticket-group-title">{TICKET_GROUP_LABELS[group]}</h2>
+                  <span className="count">
+                    {groupedTickets.length} ticket{groupedTickets.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                <div className="ticket-list">
+                  {groupedTickets.map((ticket) => {
+                    const assignedSlot = slotById(ticket.slotId);
+                    return (
+                      <TicketSummaryCard
+                        key={ticket.id}
+                        ticket={ticket}
+                        assignedSlotName={assignedSlot?.name ?? null}
+                        onOpen={() => {
+                          setSelectedTicketId(ticket.id);
+                          setViewer(null);
+                        }}
+                        phaseLabels={PHASE_LABELS}
+                        phaseColors={PHASE_COLORS}
+                        statusLabels={STATUS_LABELS}
+                        statusColors={STATUS_COLORS}
+                        pausedStatuses={PAUSED_STATUSES}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
             );
           })}
         </div>
