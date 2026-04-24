@@ -91,7 +91,13 @@ export class SlotService {
     // 1. Clean the workspace
     this.gitReset(slot);
 
-    // 2. Release the slot
+    // 2. Release the slot and clear the old ticket's slotId
+    if (slot.currentTicketId != null) {
+      await this.ticketRepo.updateSlotFields(slot.currentTicketId, {
+        slotId: null,
+        waitingForSlot: false,
+      });
+    }
     await this.slotRepo.release(slot.id);
 
     // 3. Promote the next waiting ticket (FIFO — oldest createdAt first, same project)
