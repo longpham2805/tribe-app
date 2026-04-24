@@ -95,7 +95,6 @@ export function TicketDetailModal({
 
   const fileToPhase = (fileName: string): TicketPhase | null => {
     const base = fileName.replace(/\.md$/, "").toLowerCase();
-    if (base === "brainstorm") return "BRAINSTORM";
     if (base === "planning") return "PLANNING";
     if (base === "implementation") return "IMPLEMENTATION";
     if (base === "ship") return "SHIP";

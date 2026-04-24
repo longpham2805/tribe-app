@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "Run a planning phase: decompose a chosen approach into ordered phases with file ownership, risks, and verification checks. Writes planning.md. Use after brainstorm is approved and before any code is written."
+description: "Run a planning phase: decompose the ticket into ordered phases with file ownership, risks, and verification checks. Writes planning.md. Use before any code is written."
 ---
 
 # Plan
@@ -10,13 +10,10 @@ Playbook for the PLANNING phase. Persona rules live in `docs/agents/planner.md`;
 ## Inputs
 
 - `ticket.md` — the original request
-- `brainstorm.md` — the approved approach and open questions
-
-If `brainstorm.md` names multiple viable options without a recommendation, stop and ask which one to plan for. Do not plan all three.
 
 ## Flow
 
-1. **Read both inputs in full.** Planning without the brainstorm recommendation is guessing.
+1. **Read the ticket input in full.** If the request has multiple plausible approaches, pick the simplest viable path and state the assumption.
 2. **Scout** (see `scout` skill) for the entry point, dispatch, transforms, and exit touched by this change. Record `path:line` for each.
 3. **Decompose into phases.** Each phase = a coherent, independently shippable slice. Three phases is common; more than six is usually a sign the ticket needs splitting.
 4. **Assign file ownership per phase.** No two phases may edit the same file. If they must, merge them or serialize them.

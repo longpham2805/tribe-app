@@ -1,6 +1,6 @@
 ---
 name: report-format
-description: "Structure phase output markdown (brainstorm.md, planning.md, implementation.md). Use whenever a phase writes its final artifact. Defines frontmatter, section order, concision rules, and the status trailer contract."
+description: "Structure phase output markdown (planning.md, implementation.md). Use whenever a phase writes its final artifact. Defines frontmatter, section order, concision rules, and the status trailer contract."
 ---
 
 # Report format
@@ -9,7 +9,6 @@ Every phase ends by writing a single markdown file to the ticket workspace. That
 
 ## File naming
 
-- BRAINSTORM phase writes `brainstorm.md`
 - PLANNING phase writes `planning.md`
 - IMPLEMENTATION phase writes `implementation.md`
 
@@ -21,7 +20,7 @@ Every report starts with YAML frontmatter:
 
 ```yaml
 ---
-phase: {brainstorm | planning | implementation}
+phase: {planning | implementation}
 ticket: {ticket id or short slug}
 status: {completed | blocked}
 created: {YYYY-MM-DD}
@@ -36,7 +35,6 @@ Use level-2 headings. Include only the sections that carry signal for the next p
 
 | Phase | Required sections |
 |---|---|
-| brainstorm | `## Problem`, `## Options` (2–3), `## Recommendation`, `## Open Questions` |
 | planning | `## Goal`, `## Phases` (table), `## Risks`, `## Verification` |
 | implementation | `## Changes` (files + lines), `## Verification` (commands + results), `## Follow-ups` |
 
@@ -80,20 +78,13 @@ status: completed
 created: 2026-04-23
 ---
 
-## Problem
+## Goal
 <1–3 sentences>
 
-## Options
-| Option | Summary | Trade-off |
-|---|---|---|
-| A | ... | ... |
-| B | ... | ... |
-
-## Recommendation
-<1–2 sentences, name the chosen option and why>
-
-## Open Questions
-- ...
+## Phases
+| # | Phase | Files owned | Blocked by | Risk | Verification |
+|---|---|---|---|---|---|
+| 1 | ... | ... | ... | ... | ... |
 ```
 
 If the template feels too short for your ticket, the ticket is probably bigger than one phase — surface that before inflating the report.

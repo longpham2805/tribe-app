@@ -10,7 +10,6 @@ Playbook for the IMPLEMENTATION phase. Persona rules live in `docs/agents/fullst
 ## Inputs
 
 - `ticket.md` — the original request
-- `brainstorm.md` — chosen approach
 - `planning.md` — phases, file ownership, verification commands
 
 If `planning.md` has unanswered questions in `## Open Questions`, stop and ask them. Do not guess.

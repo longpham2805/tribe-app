@@ -1,4 +1,4 @@
-export type TicketPhase = "CREATED" | "BRAINSTORM" | "PLANNING" | "IMPLEMENTATION" | "SHIP";
+export type TicketPhase = "CREATED" | "PLANNING" | "IMPLEMENTATION" | "SHIP";
 
 export type PhaseStatus =
   | "PENDING"

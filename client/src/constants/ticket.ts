@@ -1,10 +1,9 @@
 import type { PhaseStatus, TicketPhase } from "../types";
 
-export const PHASES: TicketPhase[] = ["CREATED", "BRAINSTORM", "PLANNING", "IMPLEMENTATION", "SHIP"];
+export const PHASES: TicketPhase[] = ["CREATED", "PLANNING", "IMPLEMENTATION", "SHIP"];
 
 export const PHASE_LABELS: Record<TicketPhase, string> = {
   CREATED: "Created",
-  BRAINSTORM: "Brainstorm",
   PLANNING: "Planning",
   IMPLEMENTATION: "Implementation",
   SHIP: "Ship",
@@ -12,7 +11,6 @@ export const PHASE_LABELS: Record<TicketPhase, string> = {
 
 export const PHASE_COLORS: Record<TicketPhase, string> = {
   CREATED: "#6b7280",
-  BRAINSTORM: "#8b5cf6",
   PLANNING: "#3b82f6",
   IMPLEMENTATION: "#f59e0b",
   SHIP: "#10b981",

@@ -9,7 +9,6 @@ import { TicketPhase } from "../enum/TicketPhase";
 
 const ALL_PHASES: TicketPhase[] = [
   TicketPhase.CREATED,
-  TicketPhase.BRAINSTORM,
   TicketPhase.PLANNING,
   TicketPhase.IMPLEMENTATION,
   TicketPhase.SHIP,

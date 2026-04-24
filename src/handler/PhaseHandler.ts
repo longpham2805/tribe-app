@@ -292,8 +292,6 @@ export class PhaseHandler {
     switch (phaseName) {
       case TicketPhase.CREATED:
         return this.handleCreated(ticket);
-      case TicketPhase.BRAINSTORM:
-        return this.handleBrainstorm(ticket);
       case TicketPhase.PLANNING:
         return this.handlePlanning(ticket);
       case TicketPhase.IMPLEMENTATION:
@@ -443,27 +441,9 @@ export class PhaseHandler {
         status: PhaseStatus.COMPLETED,
         completedAt: new Date(),
       });
-      log(`CREATED phase completed for ticket #${ticket.id} — auto-advancing to BRAINSTORM`);
-      await this.trigger(ticket.id, TicketPhase.BRAINSTORM);
+      log(`CREATED phase completed for ticket #${ticket.id} — auto-advancing to PLANNING`);
+      await this.trigger(ticket.id, TicketPhase.PLANNING);
     }
-  }
-
-  protected async handleBrainstorm(ticket: Ticket): Promise<void> {
-    log(`handleBrainstorm → ticket #${ticket.id}`);
-    this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.BRAINSTORM }, "handler_enter", "Entered brainstorm handler");
-    const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
-
-    if (!existsSync(join(tmpDir, "ticket.md"))) {
-      log(`ticket.md missing — running handleCreated first`);
-      await this.handleCreated(ticket);
-    }
-
-    const ticketContent = readFileSync(join(tmpDir, "ticket.md"), "utf-8");
-    const agent = getAgent(TicketPhase.BRAINSTORM);
-    if (!agent) throw new Error("No agent configured for BRAINSTORM");
-    const prompt = agent.buildPrompt({ ticketContent });
-
-    await this.runPhase(ticket, TicketPhase.BRAINSTORM, slotRoot, tmpDir, prompt, "brainstorm.md");
   }
 
   protected async handlePlanning(ticket: Ticket): Promise<void> {
@@ -477,18 +457,10 @@ export class PhaseHandler {
     }
 
     const ticketContent = readFileSync(join(tmpDir, "ticket.md"), "utf-8");
-    const brainstormPath = join(tmpDir, "brainstorm.md");
-    const brainstormContent = existsSync(brainstormPath)
-      ? readFileSync(brainstormPath, "utf-8")
-      : "";
-
-    if (!brainstormContent) {
-      log(`WARN: brainstorm.md not found for ticket #${ticket.id} — planning without it`);
-    }
 
     const agent = getAgent(TicketPhase.PLANNING);
     if (!agent) throw new Error("No agent configured for PLANNING");
-    const prompt = agent.buildPrompt({ ticketContent, brainstormContent });
+    const prompt = agent.buildPrompt({ ticketContent });
 
     await this.runPhase(ticket, TicketPhase.PLANNING, slotRoot, tmpDir, prompt, "planning.md");
   }
@@ -504,24 +476,18 @@ export class PhaseHandler {
     }
 
     const ticketContent = readFileSync(join(tmpDir, "ticket.md"), "utf-8");
-    const brainstormPath = join(tmpDir, "brainstorm.md");
     const planningPath = join(tmpDir, "planning.md");
 
-    const brainstormContent = existsSync(brainstormPath)
-      ? readFileSync(brainstormPath, "utf-8")
-      : "";
     const planningContent = existsSync(planningPath)
       ? readFileSync(planningPath, "utf-8")
       : "";
 
-    if (!brainstormContent) log(`WARN: brainstorm.md not found for ticket #${ticket.id}`);
     if (!planningContent) log(`WARN: planning.md not found for ticket #${ticket.id}`);
 
     const agent = getAgent(TicketPhase.IMPLEMENTATION);
     if (!agent) throw new Error("No agent configured for IMPLEMENTATION");
     const prompt = agent.buildPrompt({
       ticketContent,
-      brainstormContent,
       planningContent,
       checklistOutputPath: join(tmpDir, "implementation-testing-checklist.md"),
     });
@@ -614,8 +580,6 @@ export class PhaseHandler {
 
   private nextPhase(current: TicketPhase): TicketPhase | null {
     switch (current) {
-      case TicketPhase.BRAINSTORM:
-        return TicketPhase.PLANNING;
       case TicketPhase.PLANNING:
         return TicketPhase.IMPLEMENTATION;
       case TicketPhase.IMPLEMENTATION:
@@ -627,8 +591,6 @@ export class PhaseHandler {
 
   private phaseOutputFile(phaseName: TicketPhase): string | null {
     switch (phaseName) {
-      case TicketPhase.BRAINSTORM:
-        return "brainstorm.md";
       case TicketPhase.PLANNING:
         return "planning.md";
       case TicketPhase.IMPLEMENTATION:
