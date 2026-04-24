@@ -139,6 +139,12 @@
   flex: 1;
 }
 
+.tickets-page {
+  --ticket-pane-gap: 24px;
+  width: 100%;
+  min-width: 0;
+}
+
 .new-ticket-form {
   background: #161b27;
   border: 1px solid #1e2a3a;
@@ -880,6 +886,12 @@
 
 .modal-panel--right-pane .modal-body::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@media (min-width: 1376px) {
+  .tickets-page--pane-open {
+    max-width: calc(100% - var(--ticket-pane-width) - var(--ticket-pane-gap));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

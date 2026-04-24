@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createTicket,
   deleteTicket,
@@ -72,6 +72,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
 });
 
 export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps) {
+  const paneWidth = 720;
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -239,6 +240,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     () => (selectedTicketId != null ? tickets.find((ticket) => ticket.id === selectedTicketId) ?? null : null),
     [tickets, selectedTicketId],
   );
+  const paneOpen = selectedTicket != null;
+  const layoutStyle = useMemo(
+    () => ({ "--ticket-pane-width": `${paneWidth}px` }) as CSSProperties,
+    [paneWidth],
+  );
 
   useEffect(() => {
     if (selectedTicketId == null) return;
@@ -348,98 +354,104 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
   return (
     <>
-      {showForm && (
-        <form className="new-ticket-form" onSubmit={handleCreate}>
-          <h2>New Ticket</h2>
-          <input
-            className="input"
-            placeholder="Title"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            required
-            autoFocus
-          />
-          <textarea
-            className="input textarea"
-            placeholder="Description (optional)"
-            value={newDesc}
-            onChange={(e) => setNewDesc(e.target.value)}
-            rows={3}
-          />
-          <select
-            className="input"
-            value={newCliType}
-            onChange={(e) => setNewCliType(e.target.value as CliType | "")}
-          >
-            <option value="">Auto (round-robin)</option>
-            <option value="CLAUDE">Claude</option>
-            <option value="CODEX">Codex</option>
-          </select>
-          <button className="btn btn-primary" type="submit" disabled={creating}>
-            {creating ? "Creating..." : "Create Ticket"}
-          </button>
-        </form>
-      )}
-
-      {canImportFromMonday && (
-        <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
-          <MondayPicker onImported={load} projectId={projectId} />
-        </Modal>
-      )}
-
-      <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
-            {showForm ? "Cancel" : "+ New Ticket"}
-          </button>
-          {canImportFromMonday && (
-            <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
-              Import from Monday
-            </button>
-          )}
-        </div>
-        <div className="filter-tabs">
-          <button className={`tab ${filterPhase === "" ? "active" : ""}`} onClick={() => setFilterPhase("")}>
-            All
-          </button>
-          {PHASES.map((phase) => (
-            <button
-              key={phase}
-              className={`tab ${filterPhase === phase ? "active" : ""}`}
-              onClick={() => setFilterPhase(phase)}
-              style={filterPhase === phase ? { borderColor: PHASE_COLORS[phase] } : {}}
-            >
-              {PHASE_LABELS[phase]}
-            </button>
-          ))}
-        </div>
-        <span className="count">
-          {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-
-      {error && <div className="error">{error}</div>}
-
-      {loading ? (
-        <div className="empty">Loading...</div>
-      ) : tickets.length === 0 ? (
-        <div className="empty">No tickets found.</div>
-      ) : (
-        <div className="ticket-groups">
-          {TICKET_GROUPS.map((group) => (
-            <TicketGroupSection
-              key={group}
-              group={group}
-              tickets={ticketsByGroup[group]}
-              getSlotName={getSlotName}
-              onOpenTicket={openTicket}
+      <div
+        className={`tickets-page ${paneOpen ? "tickets-page--pane-open" : ""}`}
+        style={layoutStyle}
+      >
+        {showForm && (
+          <form className="new-ticket-form" onSubmit={handleCreate}>
+            <h2>New Ticket</h2>
+            <input
+              className="input"
+              placeholder="Title"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              required
+              autoFocus
             />
-          ))}
+            <textarea
+              className="input textarea"
+              placeholder="Description (optional)"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              rows={3}
+            />
+            <select
+              className="input"
+              value={newCliType}
+              onChange={(e) => setNewCliType(e.target.value as CliType | "")}
+            >
+              <option value="">Auto (round-robin)</option>
+              <option value="CLAUDE">Claude</option>
+              <option value="CODEX">Codex</option>
+            </select>
+            <button className="btn btn-primary" type="submit" disabled={creating}>
+              {creating ? "Creating..." : "Create Ticket"}
+            </button>
+          </form>
+        )}
+
+        {canImportFromMonday && (
+          <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
+            <MondayPicker onImported={load} projectId={projectId} />
+          </Modal>
+        )}
+
+        <div className="toolbar" style={{ justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
+              {showForm ? "Cancel" : "+ New Ticket"}
+            </button>
+            {canImportFromMonday && (
+              <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
+                Import from Monday
+              </button>
+            )}
+          </div>
+          <div className="filter-tabs">
+            <button className={`tab ${filterPhase === "" ? "active" : ""}`} onClick={() => setFilterPhase("")}>
+              All
+            </button>
+            {PHASES.map((phase) => (
+              <button
+                key={phase}
+                className={`tab ${filterPhase === phase ? "active" : ""}`}
+                onClick={() => setFilterPhase(phase)}
+                style={filterPhase === phase ? { borderColor: PHASE_COLORS[phase] } : {}}
+              >
+                {PHASE_LABELS[phase]}
+              </button>
+            ))}
+          </div>
+          <span className="count">
+            {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
+          </span>
         </div>
-      )}
+
+        {error && <div className="error">{error}</div>}
+
+        {loading ? (
+          <div className="empty">Loading...</div>
+        ) : tickets.length === 0 ? (
+          <div className="empty">No tickets found.</div>
+        ) : (
+          <div className="ticket-groups">
+            {TICKET_GROUPS.map((group) => (
+              <TicketGroupSection
+                key={group}
+                group={group}
+                tickets={ticketsByGroup[group]}
+                getSlotName={getSlotName}
+                onOpenTicket={openTicket}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       <TicketDetailModal
         open={selectedTicket != null}
+        paneWidth={paneWidth}
         ticket={selectedTicket}
         viewer={viewer}
         selectedPhase={selectedTicket ? selectedPhaseByTicket[selectedTicket.id] : undefined}
