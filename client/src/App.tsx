@@ -7,10 +7,10 @@ import {
 import type { Ticket, TicketPhase, PhaseStatus, Phase, Slot, TicketFile, WsMessage, Project } from "./types";
 import { useWebSocket } from "./ws";
 import { Modal } from "./Modal";
-import { MarkdownViewer } from "./MarkdownViewer";
 import { MondayPicker } from "./MondayPicker";
-import { PhaseLiveFeed } from "./PhaseLiveFeed";
 import { ProjectsPage } from "./ProjectsPage";
+import { TicketDetailModal } from "./TicketDetailModal";
+import { TicketSummaryCard } from "./TicketSummaryCard";
 import "./App.css";
 
 const PHASES: TicketPhase[] = ["CREATED", "BRAINSTORM", "PLANNING", "IMPLEMENTATION", "SHIP"];
@@ -52,27 +52,6 @@ const STATUS_COLORS: Record<PhaseStatus, string | null> = {
 };
 
 type View = "tickets" | "slots" | "projects";
-
-const extractUrl = (raw: string): string | null => {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
-  if (markdownMatch?.[1]) return markdownMatch[1];
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return null;
-};
-
-const getPrLinkLabel = (url: string): string => {
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.replace(/\/+$/, "");
-    const number = path.match(/\/pull\/(\d+)$/)?.[1];
-    if (number) return `PR #${number}`;
-  } catch {
-    // fall through
-  }
-  return "Open PR";
-};
 
 // ── Slots Page ────────────────────────────────────────────────────────────────
 
@@ -245,8 +224,8 @@ function TicketsPage({ projectId }: { projectId: number | null }) {
 
   // Per-ticket file list cache
   const [filesByTicket, setFilesByTicket] = useState<Record<number, TicketFile[]>>({});
-  // Open modal state
-  const [viewer, setViewer] = useState<{ ticketId: number; fileName: string } | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [viewer, setViewer] = useState<{ fileName: string | null } | null>(null);
   // Live streaming phase.log events keyed by "ticketId:phaseName"
   const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
   // Selected phase for activity feed per ticket; auto-follows the active phase
@@ -354,6 +333,16 @@ function TicketsPage({ projectId }: { projectId: number | null }) {
   }, [tickets, filesByTicket]);
 
   const slotById = (id: number | null) => slots.find((s) => s.id === id) ?? null;
+  const selectedTicket = selectedTicketId != null
+    ? tickets.find((ticket) => ticket.id === selectedTicketId) ?? null
+    : null;
+
+  useEffect(() => {
+    if (selectedTicketId == null) return;
+    if (tickets.some((ticket) => ticket.id === selectedTicketId)) return;
+    setSelectedTicketId(null);
+    setViewer(null);
+  }, [tickets, selectedTicketId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -377,7 +366,14 @@ function TicketsPage({ projectId }: { projectId: number | null }) {
 
   const handleDelete = async (id: number) => {
     if (!confirm("Delete this ticket?")) return;
-    try { await deleteTicket(id); await load(); }
+    try {
+      await deleteTicket(id);
+      if (selectedTicketId === id) {
+        setSelectedTicketId(null);
+        setViewer(null);
+      }
+      await load();
+    }
     catch (e: any) { setError(e.message); }
   };
 
@@ -458,237 +454,59 @@ function TicketsPage({ projectId }: { projectId: number | null }) {
           {tickets.map((ticket) => {
             const assignedSlot = slotById(ticket.slotId);
             return (
-              <div key={ticket.id} className="ticket-card">
-                <div className="ticket-header">
-                  <div className="ticket-meta">
-                    <span className="ticket-id">#{ticket.id}</span>
-                    <span className="phase-badge"
-                      style={{ background: PHASE_COLORS[ticket.currentPhase] + "22", color: PHASE_COLORS[ticket.currentPhase] }}>
-                      {PHASE_LABELS[ticket.currentPhase]}
-                    </span>
-                    {/* Slot badge */}
-                    {ticket.waitingForSlot ? (
-                      <span className="phase-badge" style={{ background: "#ef444422", color: "#ef4444" }}>
-                        Waiting for slot
-                      </span>
-                    ) : assignedSlot ? (
-                      <span className="phase-badge" style={{ background: "#0ea5e922", color: "#0ea5e9" }}>
-                        {assignedSlot.name}
-                      </span>
-                    ) : null}
-                  </div>
-                  <button className="btn-delete" onClick={() => handleDelete(ticket.id)} title="Delete">×</button>
-                </div>
-
-                <h3 className="ticket-title">{ticket.title}</h3>
-                <span className="ticket-date" style={{ display: "block", marginBottom: 4 }}>{new Date(ticket.createdAt).toLocaleDateString()}</span>
-                {ticket.description && <p className="ticket-desc">{ticket.description}</p>}
-                {(ticket.branchName || (ticket.pullRequests?.length ?? 0) > 0) && (
-                  <div className="ship-artifacts card">
-                    <div className="ship-artifacts-title">Ship Artifacts</div>
-                    {ticket.branchName && (
-                      <div className="ship-artifacts-branch">
-                        Branch: <code>{ticket.branchName}</code>
-                      </div>
-                    )}
-                    {!!ticket.pullRequests?.length && (
-                      <table className="ship-artifacts-table" aria-label={`Ticket ${ticket.id} pull requests`}>
-                        <thead>
-                          <tr>
-                            <th>Repo</th>
-                            <th>PR Link</th>
-                            <th>Commit</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ticket.pullRequests.map((pr) => (
-                            <tr key={`${pr.repo}-${pr.prUrl}`}>
-                              <td>{pr.repo}</td>
-                              <td>
-                                {(() => {
-                                  const url = extractUrl(pr.prUrl);
-                                  if (!url) return <span>{pr.prUrl}</span>;
-                                  return (
-                                    <a href={url} target="_blank" rel="noreferrer">
-                                      {getPrLinkLabel(url)}
-                                    </a>
-                                  );
-                                })()}
-                              </td>
-                              <td><code>{pr.commitSha}</code></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )}
-
-                {ticket.phases.length > 0 && (() => {
-                  const ticketRunning = ticket.phases.some((ph) => ph.status === "RUNNING");
-                  return (
-                  <div className="phase-pipeline">
-                    {PHASES.map((p) => {
-                      const phaseRecord = ticket.phases.find((ph) => ph.phaseName === p);
-                      const isCompleted = !!phaseRecord?.completedAt;
-                      const isActive = !!phaseRecord?.startedAt && !phaseRecord?.completedAt;
-                      const isPending = !phaseRecord?.startedAt;
-                      const phaseColor = PHASE_COLORS[p];
-                      const isBusy = triggeringPhase === `${ticket.id}:${p}`;
-                      const status = phaseRecord?.status ?? "PENDING";
-                      const statusColor = STATUS_COLORS[status];
-                      const accent = statusColor ?? phaseColor;
-                      const stateLabel = isCompleted
-                        ? "Completed"
-                        : isPending
-                          ? "Pending"
-                          : STATUS_LABELS[status] ?? "Active";
-                      const isRunning = isActive && status === "RUNNING";
-                      const icon = isCompleted
-                        ? "✓"
-                        : status === "ERROR"
-                          ? "!"
-                          : status === "REQUIRES_ACTION" || status === "QUESTION"
-                            ? "?"
-                            : isActive
-                              ? "●"
-                              : "○";
-                      const isSelected = selectedPhaseByTicket[ticket.id] === p;
-                      return (
-                        <div key={p}
-                          className={`phase-card ${isActive ? "phase-card--active" : ""} ${isCompleted ? "phase-card--completed" : ""} ${isPending ? "phase-card--pending" : ""} ${isRunning ? "phase-card--running" : ""}`}
-                          style={{
-                            cursor: "pointer",
-                            ...(isRunning ? { "--running-accent": accent } as React.CSSProperties : isActive ? { borderColor: accent } : isCompleted ? { borderColor: phaseColor + "55" } : {}),
-                            ...(isSelected ? { outline: `2px solid ${phaseColor}`, outlineOffset: 2 } : {}),
-                          }}
-                          onClick={() => setSelectedPhaseByTicket((prev) => ({ ...prev, [ticket.id]: p }))}
-                        >
-                          <div className="phase-card-header" style={isActive ? { color: accent } : isCompleted ? { color: phaseColor } : {}}>
-                            <span className={`phase-card-icon${isRunning ? " phase-card-icon--running" : ""}`}>{icon}</span>
-                            <span className="phase-card-name">{PHASE_LABELS[p]}</span>
-                          </div>
-                          <div className="phase-card-status" style={isActive && statusColor ? { color: statusColor } : {}}>
-                            {stateLabel}
-                          </div>
-                          <button className="phase-card-trigger"
-                            style={isActive ? { borderColor: accent + "66", color: accent } : {}}
-                            disabled={isBusy || ticketRunning}
-                            onClick={() => handleTriggerPhase(ticket.id, p)}
-                            title={ticketRunning ? "A phase is already running" : `Trigger ${PHASE_LABELS[p]}`}>
-                            {isBusy ? "…" : "Trigger"}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  );
-                })()}
-
-                {(() => {
-                  const selectedPhaseName = selectedPhaseByTicket[ticket.id];
-                  if (!selectedPhaseName) return null;
-                  const selectedPhaseRecord = ticket.phases.find((ph) => ph.phaseName === selectedPhaseName);
-                  return (
-                    <PhaseLiveFeed
-                      ticketId={ticket.id}
-                      phaseName={selectedPhaseName}
-                      status={selectedPhaseRecord?.status ?? "PENDING"}
-                      liveEvents={liveLogs[`${ticket.id}:${selectedPhaseName}`] ?? []}
-                    />
-                  );
-                })()}
-
-                {(() => {
-                  const files = filesByTicket[ticket.id] ?? [];
-                  if (files.length === 0) return null;
-                  return (
-                    <div className="file-chips">
-                      {files.map((f) => (
-                        <button
-                          key={f.name}
-                          className="file-chip"
-                          onClick={() => setViewer({ ticketId: ticket.id, fileName: f.name })}
-                          title={`${f.size} bytes · ${new Date(f.mtime).toLocaleString()}`}
-                        >
-                          <span className="file-chip-icon">📄</span>
-                          {f.name}
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-                {(() => {
-                  const paused = ticket.phases.find(
-                    (ph) => !!ph.startedAt && !ph.completedAt && PAUSED_STATUSES.includes(ph.status),
-                  );
-                  if (!paused) return null;
-                  const color = STATUS_COLORS[paused.status] ?? "#f59e0b";
-                  const isBusy = respondingTicket === ticket.id;
-                  return (
-                    <div className="phase-paused" style={{ borderColor: color + "66" }}>
-                      <div className="phase-paused-header" style={{ color }}>
-                        {PHASE_LABELS[paused.phaseName]} — {STATUS_LABELS[paused.status]}
-                      </div>
-                      {paused.lastMessage && (
-                        <div className="phase-paused-message">{paused.lastMessage}</div>
-                      )}
-                      <textarea
-                        className="input textarea"
-                        rows={3}
-                        placeholder="Reply to the agent…"
-                        value={responseDraft[ticket.id] ?? ""}
-                        onChange={(e) =>
-                          setResponseDraft((prev) => ({ ...prev, [ticket.id]: e.target.value }))
-                        }
-                      />
-                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                        <button
-                          className="btn btn-primary"
-                          disabled={isBusy || !(responseDraft[ticket.id] ?? "").trim()}
-                          onClick={() => handleRespond(ticket.id)}
-                        >
-                          {isBusy ? "Sending…" : "Send reply"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-              </div>
+              <TicketSummaryCard
+                key={ticket.id}
+                ticket={ticket}
+                assignedSlotName={assignedSlot?.name ?? null}
+                onOpen={() => {
+                  setSelectedTicketId(ticket.id);
+                  setViewer(null);
+                }}
+                phaseLabels={PHASE_LABELS}
+                phaseColors={PHASE_COLORS}
+                statusLabels={STATUS_LABELS}
+                statusColors={STATUS_COLORS}
+                pausedStatuses={PAUSED_STATUSES}
+              />
             );
           })}
         </div>
       )}
 
-      {viewer && (() => {
-        const fileToPhase = (n: string): TicketPhase | null => {
-          const base = n.replace(/\.md$/, "").toLowerCase();
-          if (base === "brainstorm") return "BRAINSTORM";
-          if (base === "planning") return "PLANNING";
-          if (base === "implementation") return "IMPLEMENTATION";
-          if (base === "ship") return "SHIP";
-          if (base === "ticket") return "CREATED";
-          return null;
-        };
-        const phaseName = fileToPhase(viewer.fileName);
-        const live = phaseName ? (liveLogs[`${viewer.ticketId}:${phaseName}`] ?? []) : [];
-        return (
-          <Modal
-            open
-            onClose={() => setViewer(null)}
-            title={`Ticket #${viewer.ticketId} · ${viewer.fileName}`}
-          >
-            <MarkdownViewer
-              ticketId={viewer.ticketId}
-              fileName={viewer.fileName}
-              phaseName={phaseName}
-              liveEvents={live}
-            />
-          </Modal>
-        );
-      })()}
+      <TicketDetailModal
+        open={selectedTicket != null}
+        ticket={selectedTicket}
+        viewer={viewer}
+        selectedPhase={selectedTicket ? selectedPhaseByTicket[selectedTicket.id] : undefined}
+        liveLogs={liveLogs}
+        files={selectedTicket ? filesByTicket[selectedTicket.id] ?? [] : []}
+        assignedSlotName={selectedTicket ? slotById(selectedTicket.slotId)?.name ?? null : null}
+        triggeringPhase={triggeringPhase}
+        respondingTicket={respondingTicket}
+        responseDraft={selectedTicket ? responseDraft[selectedTicket.id] ?? "" : ""}
+        onClose={() => {
+          setSelectedTicketId(null);
+          setViewer(null);
+        }}
+        onDelete={handleDelete}
+        onTriggerPhase={handleTriggerPhase}
+        onSelectPhase={(ticketId, phase) =>
+          setSelectedPhaseByTicket((prev) => ({ ...prev, [ticketId]: phase }))
+        }
+        onOpenFile={(fileName) => setViewer({ fileName })}
+        onCloseFile={() => setViewer(null)}
+        onResponseDraftChange={(value) => {
+          if (!selectedTicket) return;
+          setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
+        }}
+        onRespond={handleRespond}
+        phases={PHASES}
+        phaseLabels={PHASE_LABELS}
+        phaseColors={PHASE_COLORS}
+        statusLabels={STATUS_LABELS}
+        statusColors={STATUS_COLORS}
+        pausedStatuses={PAUSED_STATUSES}
+      />
     </>
   );
 }
