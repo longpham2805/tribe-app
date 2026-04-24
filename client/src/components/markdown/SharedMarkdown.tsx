@@ -1,12 +1,12 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-interface Props {
+interface SharedMarkdownProps {
   content: string;
   compact?: boolean;
 }
 
-export function SharedMarkdown({ content, compact = false }: Props) {
+export function SharedMarkdown({ content, compact = false }: SharedMarkdownProps) {
   const fontSize = compact ? 12 : 14;
   return (
     <div style={{ lineHeight: 1.6, fontSize, color: "inherit", wordBreak: "break-word" }}>

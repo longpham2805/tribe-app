@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchPhaseLog } from "./api";
-import { extractEventText } from "./phaseEvents";
-import { SharedMarkdown } from "./SharedMarkdown";
-import type { PhaseStatus, TicketPhase } from "./types";
+import { fetchPhaseLog } from "../../api";
+import { extractEventText } from "../../phaseEvents";
+import type { PhaseStatus, TicketPhase } from "../../types";
+import { SharedMarkdown } from "../markdown/SharedMarkdown";
 
-interface Props {
+interface PhaseLiveFeedProps {
   ticketId: number;
   phaseName: TicketPhase;
   status: PhaseStatus;
@@ -13,7 +13,7 @@ interface Props {
 
 const AUTO_EXPAND_STATUSES: PhaseStatus[] = ["RUNNING", "QUESTION", "REQUIRES_ACTION", "ERROR"];
 
-export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Props) {
+export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: PhaseLiveFeedProps) {
   const [historicalEvents, setHistoricalEvents] = useState<any[]>([]);
   const [expanded, setExpanded] = useState(() => AUTO_EXPAND_STATUSES.includes(status));
   const lastStatusRef = useRef<PhaseStatus>(status);
@@ -41,10 +41,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Props
   }, [status]);
 
   const allEvents = useMemo(() => [...historicalEvents, ...liveEvents], [historicalEvents, liveEvents]);
-  const activityText = useMemo(
-    () => allEvents.map(extractEventText).filter(Boolean).join("\n\n"),
-    [allEvents],
-  );
+  const activityText = useMemo(() => allEvents.map(extractEventText).filter(Boolean).join("\n\n"), [allEvents]);
 
   useEffect(() => {
     if (!expanded) return;

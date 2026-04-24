@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
-import type { PhaseStatus, Ticket, TicketPhase } from "./types";
+import { memo, type CSSProperties } from "react";
+import type { PhaseStatus, Ticket, TicketPhase } from "../../types";
 
 interface TicketSummaryCardProps {
   ticket: Ticket;
@@ -12,7 +12,7 @@ interface TicketSummaryCardProps {
   pausedStatuses: readonly PhaseStatus[];
 }
 
-export function TicketSummaryCard({
+export const TicketSummaryCard = memo(function TicketSummaryCard({
   ticket,
   assignedSlotName,
   onOpen,
@@ -61,9 +61,7 @@ export function TicketSummaryCard({
       className={`ticket-card${runningPhase ? " ticket-card--running" : ""}`}
       style={{
         ...clickableCardStyle,
-        ...(runningAccent
-          ? ({ "--ticket-running-accent": runningAccent } as CSSProperties)
-          : {}),
+        ...(runningAccent ? ({ "--ticket-running-accent": runningAccent } as CSSProperties) : {}),
       }}
       onClick={onOpen}
       aria-label={`Open ticket #${ticket.id}: ${ticket.title}`}
@@ -128,4 +126,4 @@ export function TicketSummaryCard({
       </div>
     </button>
   );
-}
+});

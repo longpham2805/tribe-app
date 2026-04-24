@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
-import { Modal } from "./Modal";
-import { MarkdownViewer } from "./MarkdownViewer";
+import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
+import { MarkdownViewer } from "../markdown/MarkdownViewer";
+import { Modal } from "../ui/Modal";
 import { PhaseLiveFeed } from "./PhaseLiveFeed";
-import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "./types";
 
 const extractUrl = (raw: string): string | null => {
   const trimmed = raw.trim();
@@ -88,14 +88,10 @@ export function TicketDetailModal({
   const paused = ticket.phases.find(
     (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
   );
-  const selectedPhaseRecord = selectedPhase
-    ? ticket.phases.find((phase) => phase.phaseName === selectedPhase)
-    : null;
+  const selectedPhaseRecord = selectedPhase ? ticket.phases.find((phase) => phase.phaseName === selectedPhase) : null;
   const ticketRunning = ticket.phases.some((phase) => phase.status === "RUNNING");
   const isReplyBusy = respondingTicket === ticket.id;
-  const title = viewer?.fileName
-    ? `Ticket #${ticket.id} · ${viewer.fileName}`
-    : `Ticket #${ticket.id} · ${ticket.title}`;
+  const title = viewer?.fileName ? `Ticket #${ticket.id} · ${viewer.fileName}` : `Ticket #${ticket.id} · ${ticket.title}`;
 
   const fileToPhase = (fileName: string): TicketPhase | null => {
     const base = fileName.replace(/\.md$/, "").toLowerCase();
@@ -117,12 +113,7 @@ export function TicketDetailModal({
             ← Back to ticket
           </button>
         </div>
-        <MarkdownViewer
-          ticketId={ticket.id}
-          fileName={viewer.fileName}
-          phaseName={phaseName}
-          liveEvents={live}
-        />
+        <MarkdownViewer ticketId={ticket.id} fileName={viewer.fileName} phaseName={phaseName} liveEvents={live} />
       </Modal>
     );
   }
@@ -227,11 +218,7 @@ export function TicketDetailModal({
             const isBusy = triggeringPhase === `${ticket.id}:${phase}`;
             const isRunning = isActive && status === "RUNNING";
             const isSelected = selectedPhase === phase;
-            const stateLabel = isCompleted
-              ? "Completed"
-              : isPending
-                ? "Pending"
-                : statusLabels[status] ?? "Active";
+            const stateLabel = isCompleted ? "Completed" : isPending ? "Pending" : statusLabels[status] ?? "Active";
             const icon = isCompleted
               ? "✓"
               : status === "ERROR"
@@ -271,9 +258,7 @@ export function TicketDetailModal({
                   className="phase-card-header"
                   style={isActive ? { color: accent } : isCompleted ? { color: phaseColor } : {}}
                 >
-                  <span className={`phase-card-icon${isRunning ? " phase-card-icon--running" : ""}`}>
-                    {icon}
-                  </span>
+                  <span className={`phase-card-icon${isRunning ? " phase-card-icon--running" : ""}`}>{icon}</span>
                   <span className="phase-card-name">{phaseLabels[phase]}</span>
                 </div>
                 <div className="phase-card-status" style={isActive && statusColor ? { color: statusColor } : {}}>
@@ -290,7 +275,7 @@ export function TicketDetailModal({
                   }}
                   title={ticketRunning ? "A phase is already running" : `Trigger ${phaseLabels[phase]}`}
                 >
-                  {isBusy ? "…" : "Trigger"}
+                  {isBusy ? "..." : "Trigger"}
                 </button>
               </div>
             );
@@ -333,7 +318,7 @@ export function TicketDetailModal({
           <textarea
             className="input textarea"
             rows={3}
-            placeholder="Reply to the agent…"
+            placeholder="Reply to the agent..."
             value={responseDraft}
             onChange={(event) => onResponseDraftChange(event.target.value)}
           />
@@ -344,7 +329,7 @@ export function TicketDetailModal({
               disabled={isReplyBusy || !responseDraft.trim()}
               onClick={() => onRespond(ticket.id)}
             >
-              {isReplyBusy ? "Sending…" : "Send reply"}
+              {isReplyBusy ? "Sending..." : "Send reply"}
             </button>
           </div>
         </div>

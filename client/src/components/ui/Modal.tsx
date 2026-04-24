@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 
 interface ModalProps {
   open: boolean;
@@ -12,8 +11,8 @@ interface ModalProps {
 export function Modal({ open, onClose, title, children, width = 820 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -23,14 +22,12 @@ export function Modal({ open, onClose, title, children, width = 820 }: ModalProp
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal-panel"
-        style={{ width, maxWidth: "95vw" }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="modal-panel" style={{ width, maxWidth: "95vw" }} onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title">{title}</div>
-          <button className="btn-delete" onClick={onClose} title="Close">×</button>
+          <button className="btn-delete" onClick={onClose} title="Close">
+            ×
+          </button>
         </div>
         <div className="modal-body">{children}</div>
       </div>
