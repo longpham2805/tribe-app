@@ -42,6 +42,7 @@ Before concluding any brainstorm session, verify each item:
 - [ ] Trade-offs quantified: each option compared on concrete dimensions (complexity, cost, latency, maintainability)
 - [ ] Second-order effects named: downstream consequences of each approach stated, not implied
 - [ ] Simplest viable option identified: the option with least complexity that still meets requirements is clearly named
+- [ ] Interpretation surfaced: if multiple readings of the request exist, all were named before analysis began
 - [ ] Decision documented: agreed approach recorded in a summary report before session ends
 
 **IMPORTANT**: Ensure token efficiency while maintaining high quality.

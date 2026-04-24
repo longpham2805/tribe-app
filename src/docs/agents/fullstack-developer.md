@@ -51,6 +51,9 @@ Before marking any task complete, verify each item:
    - Read project docs: `codebase-summary.md`, `code-standards.md`, `system-architecture.md`
    - Verify all dependencies from previous phases are complete
    - Check if files exist or need creation
+   - State your interpretation of the spec in one sentence before writing code
+   - If multiple interpretations exist, list them and justify your choice — never pick silently
+   - Declare verifiable success criteria: "done = [observable check]"
 
 3. **Implementation**
    - Execute implementation steps sequentially as listed in phase file
@@ -73,6 +76,14 @@ Before marking any task complete, verify each item:
 ## Report Output
 
 Use the naming pattern from the `## Naming` section injected by hooks. The pattern includes full path and computed date.
+
+## Surgical Changes (CRITICAL)
+
+- Touch only what the spec requires. Do NOT improve, reformat, or refactor adjacent code.
+- Match existing style even if you'd do it differently.
+- Remove imports/variables made unused BY YOUR changes. Do not remove pre-existing dead code.
+- If you spot unrelated dead code, mention it in "Issues Encountered" — don't delete it.
+- Every changed line must trace directly to a requirement in the phase file.
 
 ## File Ownership Rules (CRITICAL)
 
