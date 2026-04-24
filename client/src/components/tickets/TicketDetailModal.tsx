@@ -1,29 +1,9 @@
 import type { CSSProperties } from "react";
+import { extractPullRequestUrl, getPullRequestLinkLabel } from "../../constants/ticket";
 import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
 import { Modal } from "../ui/Modal";
 import { PhaseLiveFeed } from "./PhaseLiveFeed";
-
-const extractUrl = (raw: string): string | null => {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
-  if (markdownMatch?.[1]) return markdownMatch[1];
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return null;
-};
-
-const getPrLinkLabel = (url: string): string => {
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.replace(/\/+$/, "");
-    const number = path.match(/\/pull\/(\d+)$/)?.[1];
-    if (number) return `PR #${number}`;
-  } catch {
-    // fall through
-  }
-  return "Open PR";
-};
 
 interface TicketViewerState {
   fileName: string | null;
@@ -190,11 +170,11 @@ export function TicketDetailModal({
                     <td>{pr.repo}</td>
                     <td>
                       {(() => {
-                        const url = extractUrl(pr.prUrl);
+                        const url = extractPullRequestUrl(pr.prUrl);
                         if (!url) return <span>{pr.prUrl}</span>;
                         return (
                           <a href={url} target="_blank" rel="noreferrer">
-                            {getPrLinkLabel(url)}
+                            {getPullRequestLinkLabel(url)}
                           </a>
                         );
                       })()}

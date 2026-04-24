@@ -1,4 +1,5 @@
 import { memo, type CSSProperties } from "react";
+import { getPrimaryPullRequestLink } from "../../constants/ticket";
 import type { PhaseStatus, Ticket, TicketPhase } from "../../types";
 
 interface TicketSummaryCardProps {
@@ -31,21 +32,17 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
   const runningAccent = runningPhase ? statusColors[runningPhase.status] ?? phaseColors[runningPhase.phaseName] : null;
 
   const createdAt = new Date(ticket.createdAt).toLocaleDateString();
+  const primaryPullRequest = getPrimaryPullRequestLink(ticket.pullRequests);
   const hasPullRequests = (ticket.pullRequests?.length ?? 0) > 0;
-  const detailHint = ticket.branchName
-    ? `Branch ${ticket.branchName}`
-    : hasPullRequests
-      ? `${ticket.pullRequests?.length ?? 0} PR${ticket.pullRequests?.length === 1 ? "" : "s"}`
-      : null;
-
-  const clickableCardStyle: CSSProperties = {
-    width: "100%",
-    textAlign: "left",
-    cursor: "pointer",
-    fontFamily: "inherit",
-    padding: "0.85rem 1rem",
-    gap: "0.6rem",
-  };
+  const pullRequestCountLabel = hasPullRequests
+    ? `${ticket.pullRequests?.length ?? 0} PR${ticket.pullRequests?.length === 1 ? "" : "s"}`
+    : null;
+  const detailHint =
+    ticket.branchName && pullRequestCountLabel
+      ? `Branch ${ticket.branchName} · ${pullRequestCountLabel}`
+      : ticket.branchName
+        ? `Branch ${ticket.branchName}`
+        : pullRequestCountLabel;
 
   const footerStyle: CSSProperties = {
     display: "flex",
@@ -56,15 +53,11 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
   };
 
   return (
-    <button
-      type="button"
+    <article
       className={`ticket-card${runningPhase ? " ticket-card--running" : ""}`}
       style={{
-        ...clickableCardStyle,
         ...(runningAccent ? ({ "--ticket-running-accent": runningAccent } as CSSProperties) : {}),
       }}
-      onClick={onOpen}
-      aria-label={`Open ticket #${ticket.id}: ${ticket.title}`}
     >
       <div className="ticket-header">
         <div className="ticket-meta" style={{ flexWrap: "wrap" }}>
@@ -122,8 +115,28 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
         <span className="ticket-date" style={{ color: "#64748b" }}>
           {detailHint ?? "Open for details"}
         </span>
-        <span className="ticket-date">View details</span>
+        <div className="ticket-card__actions">
+          <button
+            type="button"
+            className="ticket-card__action ticket-card__action--secondary"
+            onClick={onOpen}
+            aria-label={`View details for ticket #${ticket.id}: ${ticket.title}`}
+          >
+            View details
+          </button>
+          {primaryPullRequest ? (
+            <a
+              className="ticket-card__action ticket-card__action--primary"
+              href={primaryPullRequest.url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${primaryPullRequest.label} for ticket #${ticket.id} in a new tab`}
+            >
+              {primaryPullRequest.label}
+            </a>
+          ) : null}
+        </div>
       </div>
-    </button>
+    </article>
   );
 });
