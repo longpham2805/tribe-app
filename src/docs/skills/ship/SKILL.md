@@ -41,7 +41,7 @@ Use this type for both:
 Use the injected `## Ticket` block for slug/suffix:
 
 - Slug: lowercase, strip punctuation, convert spaces to `-`, max 40 chars.
-- Suffix: `-<last6(mondayItemId)>`.
+- Suffix: `-<last6(mondayItemId)>` only if the ticket has a Monday item ID; omit the suffix entirely when no Monday ID is present.
 - Prefix: must come from Step 3 commit type mapping so branch and commit stay consistent.
 
 ## 5) Resolve branch collisions
@@ -77,7 +77,7 @@ Create PR against `dev`:
 
 PR body must include:
 
-- `Monday: <url>`
+- `Monday: <url>` — only if the ticket contains a Monday item URL; omit this line entirely when the project has no Monday integration.
 - `## Implementation Details` excerpt from `implementation.md`
 
 ## 10) Capture outputs
