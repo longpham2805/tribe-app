@@ -582,6 +582,7 @@
   background: transparent;
   overflow: hidden;
   overscroll-behavior: none;
+  pointer-events: none;
 }
 
 .modal-panel {
@@ -612,6 +613,7 @@
   flex-shrink: 0;
   min-width: 0;
   overscroll-behavior: contain;
+  pointer-events: auto;
   transform: translateX(0);
   transform-origin: right center;
   will-change: transform;
@@ -729,6 +731,7 @@
 @media (max-width: 768px) {
   .modal-backdrop--right-pane {
     padding-top: 16px;
+    pointer-events: auto;
   }
 
   .modal-panel--right-pane {
