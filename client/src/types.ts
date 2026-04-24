@@ -37,6 +37,9 @@ export interface Project {
   mondayBoardIds: number[] | null;
   mondayDefaultPersonId: string | null;
   mondayDevPeople: string[] | null;
+  ticketCount?: number;
+  runningTicketCount?: number;
+  hasRunningTickets?: boolean;
   createdAt: string;
   updatedAt: string;
 }

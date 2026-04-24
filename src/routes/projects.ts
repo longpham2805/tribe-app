@@ -7,7 +7,7 @@ const router = Router();
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const repo = new ProjectRepository();
-    const projects = await repo.findAll();
+    const projects = await repo.findAllWithActivity();
     res.json(projects);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -23,7 +23,7 @@ router.get("/:id", async (req: Request, res: Response) => {
       res.status(400).json({ error: "Invalid project ID" });
       return;
     }
-    const project = await repo.findById(id);
+    const project = await repo.findByIdWithActivity(id);
     if (!project) {
       res.status(404).json({ error: `Project ${id} not found` });
       return;
