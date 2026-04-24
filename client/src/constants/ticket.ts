@@ -1,4 +1,4 @@
-import type { PhaseStatus, TicketPhase } from "../types";
+import type { PhaseStatus, Ticket, TicketPhase } from "../types";
 
 export const PHASES: TicketPhase[] = ["CREATED", "PLANNING", "IMPLEMENTATION", "SHIP"];
 
@@ -43,4 +43,50 @@ export const TICKET_GROUP_LABELS: Record<TicketGroup, string> = {
   RUNNING: "Running",
   WAITING: "Waiting",
   DONE: "Done",
+};
+
+export interface TicketPrLink {
+  url: string;
+  label: string;
+}
+
+export const extractPullRequestUrl = (raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
+  if (markdownMatch?.[1]) return markdownMatch[1];
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  return null;
+};
+
+export const getPullRequestLinkLabel = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/+$/, "");
+    const number = path.match(/\/pull\/(\d+)$/)?.[1];
+
+    if (number) return `PR #${number}`;
+  } catch {
+    return "Open PR";
+  }
+
+  return "Open PR";
+};
+
+export const getPrimaryPullRequestLink = (
+  pullRequests: Ticket["pullRequests"],
+): TicketPrLink | null => {
+  for (const pullRequest of pullRequests ?? []) {
+    const url = extractPullRequestUrl(pullRequest.prUrl);
+    if (!url) continue;
+
+    return {
+      url,
+      label: getPullRequestLinkLabel(url),
+    };
+  }
+
+  return null;
 };
