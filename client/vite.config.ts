@@ -13,6 +13,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    host: true,
     port: 8200,
     proxy: {
       "/api": "http://localhost:8100",
