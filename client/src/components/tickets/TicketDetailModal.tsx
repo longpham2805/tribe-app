@@ -12,6 +12,7 @@ interface TicketViewerState {
 interface TicketDetailModalProps {
   ticket: Ticket | null;
   open: boolean;
+  paneWidth?: number;
   viewer: TicketViewerState | null;
   selectedPhase: TicketPhase | undefined;
   liveLogs: Record<string, any[]>;
@@ -39,6 +40,7 @@ interface TicketDetailModalProps {
 export function TicketDetailModal({
   ticket,
   open,
+  paneWidth = 720,
   viewer,
   selectedPhase,
   liveLogs,
@@ -86,7 +88,7 @@ export function TicketDetailModal({
     const phaseName = fileToPhase(viewer.fileName);
     const live = phaseName ? liveLogs[`${ticket.id}:${phaseName}`] ?? [] : [];
     return (
-      <Modal open={open} onClose={onCloseFile} title={title} variant="right-pane" width={720}>
+      <Modal open={open} onClose={onCloseFile} title={title} variant="right-pane" width={paneWidth}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
           <button className="btn" type="button" onClick={onCloseFile}>
             ← Back to ticket
@@ -106,7 +108,7 @@ export function TicketDetailModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={720}>
+    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={paneWidth}>
       <div className="ticket-header" style={{ marginBottom: 10 }}>
         <div className="ticket-meta" style={{ flexWrap: "wrap" }}>
           <span className="ticket-id">#{ticket.id}</span>
