@@ -1,6 +1,16 @@
+function formatSystemEvent(evt: any): string {
+  if (evt?.type !== "system" || evt.source !== "PhaseHandler" || typeof evt.message !== "string") {
+    return "";
+  }
+  const at = typeof evt.at === "string" ? evt.at : null;
+  const time = at ? new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+  return `**PhaseHandler${time ? ` ${time}` : ""}:** ${evt.message}`;
+}
+
 export function extractEventText(evt: any): string {
   if (!evt) return "";
   if (evt.type === "_tribe.run_start") return "_Run started_";
+  if (evt.type === "system") return formatSystemEvent(evt);
   if (evt.type === "user_message") return `**You:** ${evt.text}`;
   if (evt.type === "raw" && typeof evt.text === "string") return evt.text;
   if (evt.type === "result" && typeof evt.result === "string") return evt.result;

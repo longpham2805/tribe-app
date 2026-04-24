@@ -37,6 +37,14 @@ interface PullRequestArtifact {
   commitSha: string;
 }
 
+type PhaseLogContext = {
+  ticketId: number;
+  uid: string | null;
+  phaseName: TicketPhase;
+};
+
+type PhaseSystemEventMetadata = Record<string, string | number | boolean | null | undefined>;
+
 export class PhaseHandler {
   private ticketRepo: TicketRepository;
   private phaseRepo: PhaseRepository;
@@ -53,6 +61,56 @@ export class PhaseHandler {
       emit({ type: "phase.updated", ticketId: fresh.ticketId, phase: fresh });
     }
     return fresh;
+  }
+
+  private buildPhaseSystemEvent(
+    logContext: PhaseLogContext,
+    code: string,
+    message: string,
+    metadata?: PhaseSystemEventMetadata,
+  ): Record<string, unknown> {
+    const detail = Object.fromEntries(
+      Object.entries(metadata ?? {}).filter(([, value]) => value !== undefined),
+    );
+
+    return {
+      type: "system",
+      source: "PhaseHandler",
+      code,
+      message,
+      at: new Date().toISOString(),
+      ticketId: logContext.ticketId,
+      phaseName: logContext.phaseName,
+      ...(Object.keys(detail).length ? { detail } : {}),
+    };
+  }
+
+  private persistPhaseEvent(logContext: PhaseLogContext, evt: unknown): void {
+    if (!logContext.uid) return;
+    try {
+      const logDir = getLogDir(logContext.uid);
+      mkdirSync(logDir, { recursive: true });
+      const logFile = getLogFile(logContext.uid, logContext.phaseName);
+      appendFileSync(logFile, JSON.stringify(evt) + "\n");
+      emit({
+        type: "phase.log",
+        ticketId: logContext.ticketId,
+        phaseName: logContext.phaseName,
+        event: evt,
+      });
+    } catch (err) {
+      console.error("[PhaseHandler] failed to persist log event:", err);
+    }
+  }
+
+  private persistPhaseSystemEvent(
+    logContext: PhaseLogContext | undefined,
+    code: string,
+    message: string,
+    metadata?: PhaseSystemEventMetadata,
+  ): void {
+    if (!logContext) return;
+    this.persistPhaseEvent(logContext, this.buildPhaseSystemEvent(logContext, code, message, metadata));
   }
 
   private async emitTicket(ticketId: number): Promise<void> {
@@ -164,6 +222,14 @@ export class PhaseHandler {
 
     const ticket = await this.ticketRepo.findById(ticketId);
     if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+    const phaseLogContext: PhaseLogContext = {
+      ticketId,
+      uid: ticket.uid ?? null,
+      phaseName,
+    };
+    this.persistPhaseSystemEvent(phaseLogContext, "trigger", `Triggered ${phaseName}`, {
+      ticketId,
+    });
     let phaseEntered = false;
 
     if (ticket.currentPhase !== phaseName) {
@@ -179,6 +245,9 @@ export class PhaseHandler {
         await this.phaseRepo.activate(pending.id);
         const fresh = await this.phaseRepo.findById(pending.id);
         if (fresh) emit({ type: "phase.updated", ticketId, phase: fresh });
+        this.persistPhaseSystemEvent(phaseLogContext, "activate", `Activated ${phaseName}`, {
+          phaseId: pending.id,
+        });
         phaseEntered = true;
       } else {
         log(`WARN: no pending phase ${phaseName} found for ticket #${ticketId}`);
@@ -186,6 +255,7 @@ export class PhaseHandler {
 
       await this.ticketRepo.update(ticketId, { currentPhase: phaseName });
       log(`ticket #${ticketId} currentPhase → ${phaseName}`);
+      this.persistPhaseSystemEvent(phaseLogContext, "current_phase", `Current phase set to ${phaseName}`);
       await this.emitTicket(ticketId);
     } else {
       log(`ticket #${ticketId} is already in phase ${phaseName}, re-running handler`);
@@ -199,8 +269,12 @@ export class PhaseHandler {
 
     // Run phase handler in the background — Claude spawns can take many minutes
     // and must not block the HTTP response. WS pushes updates to the client.
+    this.persistPhaseSystemEvent(phaseLogContext, "dispatch", `Dispatching ${phaseName}`);
     this.dispatch(phaseName, updatedTicket).catch(async (err) => {
       log(`dispatch error for ticket #${updatedTicket.id} phase=${phaseName}: ${err?.message ?? err}`);
+      this.persistPhaseSystemEvent(phaseLogContext, "dispatch_error", `Dispatch failed for ${phaseName}`, {
+        error: String(err?.message ?? err).slice(-500),
+      });
       const current = await this.phaseRepo.findActiveByTicketId(updatedTicket.id);
       if (current && current.phaseName === phaseName) {
         await this.updatePhase(current.id, {
@@ -304,6 +378,9 @@ export class PhaseHandler {
       const next = this.nextPhase(activePhase.phaseName);
       if (next) {
         log(`auto-advance ticket #${ticket.id} → ${next}`);
+        this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: activePhase.phaseName }, "auto_advance", `Auto-advancing to ${next}`, {
+          nextPhase: next,
+        });
         await this.trigger(ticket.id, next);
       }
     }
@@ -373,6 +450,7 @@ export class PhaseHandler {
 
   protected async handleBrainstorm(ticket: Ticket): Promise<void> {
     log(`handleBrainstorm → ticket #${ticket.id}`);
+    this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.BRAINSTORM }, "handler_enter", "Entered brainstorm handler");
     const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
 
     if (!existsSync(join(tmpDir, "ticket.md"))) {
@@ -390,6 +468,7 @@ export class PhaseHandler {
 
   protected async handlePlanning(ticket: Ticket): Promise<void> {
     log(`handlePlanning → ticket #${ticket.id}`);
+    this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.PLANNING }, "handler_enter", "Entered planning handler");
     const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
 
     if (!existsSync(join(tmpDir, "ticket.md"))) {
@@ -416,6 +495,7 @@ export class PhaseHandler {
 
   protected async handleImplementation(ticket: Ticket): Promise<void> {
     log(`handleImplementation → ticket #${ticket.id}`);
+    this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.IMPLEMENTATION }, "handler_enter", "Entered implementation handler");
     const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
 
     if (!existsSync(join(tmpDir, "ticket.md"))) {
@@ -451,6 +531,7 @@ export class PhaseHandler {
 
   protected async handleShip(ticket: Ticket): Promise<void> {
     log(`handleShip → ticket #${ticket.id}`);
+    this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.SHIP }, "handler_enter", "Entered ship handler");
     if (ticket.slotId == null) { log(`no slot — nothing to ship`); return; }
 
     const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
@@ -512,6 +593,9 @@ export class PhaseHandler {
       const next = this.nextPhase(phaseName);
       if (next) {
         log(`auto-advance ticket #${ticket.id} → ${next}`);
+        this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName }, "auto_advance", `Auto-advancing to ${next}`, {
+          nextPhase: next,
+        });
         await this.trigger(ticket.id, next);
       }
     } else {
@@ -589,37 +673,22 @@ export class PhaseHandler {
 
       log(`claude spawn: ${resuming ? `--resume ${resumeUuid}` : "new session"} cwd=${cwd}`);
 
-      let logFile: string | null = null;
       let stderrFile: string | null = null;
-      if (logContext) {
+      if (logContext?.uid) {
         const logDir = getLogDir(logContext.uid);
         mkdirSync(logDir, { recursive: true });
-        logFile = getLogFile(logContext.uid, logContext.phaseName);
         stderrFile = getStderrFile(logContext.uid, logContext.phaseName);
         // Mark the start of a new run so readers can distinguish resumptions.
-        appendFileSync(
-          logFile,
-          JSON.stringify({
-            type: "_tribe.run_start",
-            at: new Date().toISOString(),
-            resumeUuid: resumeUuid ?? null,
-          }) + "\n",
-        );
+        this.persistPhaseEvent(logContext, {
+          type: "_tribe.run_start",
+          at: new Date().toISOString(),
+          resumeUuid: resumeUuid ?? null,
+        });
       }
 
       const persistEvent = (evt: unknown) => {
-        if (!logContext || !logFile) return;
-        try {
-          appendFileSync(logFile, JSON.stringify(evt) + "\n");
-          emit({
-            type: "phase.log",
-            ticketId: logContext.ticketId,
-            phaseName: logContext.phaseName,
-            event: evt,
-          });
-        } catch (err) {
-          console.error("[PhaseHandler] failed to persist log event:", err);
-        }
+        if (!logContext) return;
+        this.persistPhaseEvent(logContext, evt);
       };
 
       const proc = spawn("claude", args, {
@@ -696,8 +765,15 @@ export class PhaseHandler {
         clearTimeout(timeout);
         if (stdoutBuf.trim()) consumeLine(stdoutBuf);
         log(`claude exited with code ${code} (sessionUuid=${sessionUuid ?? "none"})`);
+        this.persistPhaseSystemEvent(logContext, "claude_exit", `Claude exited with code ${code ?? "unknown"}`, {
+          exitCode: code ?? null,
+          resumed: resuming,
+        });
 
         if (timedOut) {
+          this.persistPhaseSystemEvent(logContext, "claude_timeout", "Claude timed out", {
+            timeoutMs: SPAWN_TIMEOUT_MS,
+          });
           resolve({
             output,
             status: PhaseStatus.ERROR,

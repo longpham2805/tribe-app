@@ -6,7 +6,7 @@ import { extractAssistantText } from "./phaseEvents";
 import { SharedMarkdown } from "./SharedMarkdown";
 import type { TicketPhase } from "./types";
 
-type Tab = "markdown" | "assistant" | "raw";
+type Tab = "markdown" | "activity" | "raw";
 
 interface Props {
   ticketId: number;
@@ -56,7 +56,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Pr
     [historicalEvents, liveEvents],
   );
 
-  const assistantText = useMemo(
+  const activityText = useMemo(
     () => allEvents.map(extractAssistantText).filter(Boolean).join("\n\n"),
     [allEvents],
   );
@@ -75,8 +75,8 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Pr
         </button>
         {linkedPhase && (
           <>
-            <button className={`tab ${tab === "assistant" ? "active" : ""}`} onClick={() => setTab("assistant")}>
-              Assistant log
+            <button className={`tab ${tab === "activity" ? "active" : ""}`} onClick={() => setTab("activity")}>
+              Activity log
             </button>
             <button className={`tab ${tab === "raw" ? "active" : ""}`} onClick={() => setTab("raw")}>
               Raw events ({allEvents.length})
@@ -92,12 +92,12 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Pr
         </div>
       )}
 
-      {tab === "assistant" && (
+      {tab === "activity" && (
         <div className="log-body">
-          {assistantText ? (
-            <SharedMarkdown content={assistantText} />
+          {activityText ? (
+            <SharedMarkdown content={activityText} />
           ) : (
-            <div className="empty">No assistant output yet.</div>
+            <div className="empty">No activity yet.</div>
           )}
           <div ref={logEnd} />
         </div>
