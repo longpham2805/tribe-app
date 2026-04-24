@@ -41,7 +41,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Props
   }, [status]);
 
   const allEvents = useMemo(() => [...historicalEvents, ...liveEvents], [historicalEvents, liveEvents]);
-  const assistantText = useMemo(
+  const activityText = useMemo(
     () => allEvents.map(extractEventText).filter(Boolean).join("\n\n"),
     [allEvents],
   );
@@ -51,7 +51,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Props
     const el = bodyRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [expanded, assistantText]);
+  }, [expanded, activityText]);
 
   return (
     <div style={{ marginTop: 6 }}>
@@ -76,11 +76,11 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Props
             background: "#0f1117",
           }}
         >
-          {assistantText.trim().length === 0 ? (
+          {activityText.trim().length === 0 ? (
             <div style={{ fontSize: 11, color: "#64748b" }}>No events yet.</div>
           ) : (
             <div style={{ color: "#cbd5e1" }}>
-              <SharedMarkdown content={assistantText} compact />
+              <SharedMarkdown content={activityText} compact />
             </div>
           )}
         </div>
