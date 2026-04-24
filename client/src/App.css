@@ -579,6 +579,9 @@
   justify-content: flex-end;
   align-items: stretch;
   padding: 0;
+  background: transparent;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .modal-panel {
@@ -602,6 +605,26 @@
   border-left: 1px solid #1e2a3a;
   border-radius: 0;
   box-shadow: -20px 0 60px rgba(0, 0, 0, 0.45);
+  animation: modal-slide-in-right 180ms ease-out;
+  contain: layout paint;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
+  overscroll-behavior: contain;
+  transform: translateX(0);
+  transform-origin: right center;
+  will-change: transform;
+}
+
+@keyframes modal-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }
 
 .modal-header {
@@ -624,7 +647,83 @@
 }
 
 .modal-body--right-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.modal-panel--right-pane:focus {
+  outline: none;
+}
+
+.modal-panel--right-pane:focus-visible {
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.45), inset 0 0 0 1px #60a5fa;
+}
+
+.modal-panel--right-pane .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 61px;
+  min-width: 0;
+  padding: 14px 14px 14px 18px;
+  background: color-mix(in srgb, #0a0d14 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.modal-panel--right-pane .modal-title {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-panel--right-pane .btn-delete {
+  margin-left: 12px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: #64748b;
+}
+
+.modal-panel--right-pane .btn-delete:hover {
+  color: #cbd5e1;
+}
+
+.modal-panel--right-pane .btn-delete:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+  background: #111827;
+}
+
+.modal-panel--right-pane .modal-body {
+  min-width: 0;
+  padding: 16px 16px 18px 18px;
+  scrollbar-color: #1e293b transparent;
+}
+
+.modal-panel--right-pane .modal-body > * {
+  min-width: 0;
+}
+
+.modal-panel--right-pane .modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modal-panel--right-pane .modal-body::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 999px;
+  border: 2px solid #0a0d14;
+}
+
+.modal-panel--right-pane .modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel--right-pane {
+    animation: none;
+  }
 }
 
 @media (max-width: 768px) {
