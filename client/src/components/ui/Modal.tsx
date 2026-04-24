@@ -54,8 +54,12 @@ export function Modal({
       ? { width: `min(100vw, ${width}px)` }
       : { width, maxWidth: "95vw" };
 
+  const handleBackdropClick = () => {
+    if (variant === "center") onClose();
+  };
+
   return (
-    <div className={`modal-backdrop modal-backdrop--${variant}`} onClick={onClose}>
+    <div className={`modal-backdrop modal-backdrop--${variant}`} onClick={handleBackdropClick}>
       <div
         ref={panelRef}
         className={`modal-panel modal-panel--${variant}`}
