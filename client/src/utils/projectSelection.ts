@@ -1,17 +1,17 @@
 type StoredProjectSelection =
   | { kind: "missing" }
-  | { kind: "all" }
+  | { kind: "legacy-all" }
   | { kind: "id"; id: number }
   | { kind: "invalid" };
 
 const PROJECT_SELECTION_STORAGE_KEY = "tribe.selectedProjectId";
-const ALL_PROJECTS_STORAGE_VALUE = "all";
+const LEGACY_ALL_PROJECTS_STORAGE_VALUE = "all";
 
 export const readStoredProjectSelection = (): StoredProjectSelection => {
   try {
     const raw = window.localStorage.getItem(PROJECT_SELECTION_STORAGE_KEY);
     if (raw == null) return { kind: "missing" };
-    if (raw === ALL_PROJECTS_STORAGE_VALUE) return { kind: "all" };
+    if (raw === LEGACY_ALL_PROJECTS_STORAGE_VALUE) return { kind: "legacy-all" };
     const id = Number(raw);
     if (Number.isInteger(id) && id > 0) return { kind: "id", id };
   } catch {
@@ -23,7 +23,7 @@ export const readStoredProjectSelection = (): StoredProjectSelection => {
 export const writeStoredProjectSelection = (projectId: number | null) => {
   try {
     if (projectId == null) {
-      window.localStorage.setItem(PROJECT_SELECTION_STORAGE_KEY, ALL_PROJECTS_STORAGE_VALUE);
+      window.localStorage.removeItem(PROJECT_SELECTION_STORAGE_KEY);
       return;
     }
     window.localStorage.setItem(PROJECT_SELECTION_STORAGE_KEY, String(projectId));

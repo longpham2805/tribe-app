@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -33,6 +34,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>("tickets");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectIdState] = useState<number | null>(null);
+  const selectedProjectIdRef = useRef<number | null>(null);
 
   const selectedProject = useMemo(
     () => (selectedProjectId != null ? projects.find((project) => project.id === selectedProjectId) ?? null : null),
@@ -42,6 +44,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const canImportFromMonday = !!selectedProject?.mondayBoardIds?.length;
 
   const setSelectedProjectId = useCallback((projectId: number | null) => {
+    selectedProjectIdRef.current = projectId;
     setSelectedProjectIdState(projectId);
     writeStoredProjectSelection(projectId);
   }, []);
@@ -53,6 +56,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProjects(list);
 
       if (list.length === 0) {
+        selectedProjectIdRef.current = null;
         setSelectedProjectIdState(null);
         if (storedSelection.kind === "invalid") clearStoredProjectSelection();
         return;
@@ -61,29 +65,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (storedSelection.kind === "id") {
         const savedProject = list.find((project) => project.id === storedSelection.id);
         if (savedProject) {
+          selectedProjectIdRef.current = savedProject.id;
           setSelectedProjectIdState(savedProject.id);
           return;
         }
         clearStoredProjectSelection();
       }
 
-      if (storedSelection.kind === "all") {
-        setSelectedProjectIdState(null);
-        return;
-      }
-
       if (storedSelection.kind === "invalid") {
         clearStoredProjectSelection();
       }
 
-      setSelectedProjectIdState((currentProjectId) => {
-        if (currentProjectId != null && list.some((project) => project.id === currentProjectId)) {
-          return currentProjectId;
-        }
-        return list[0].id;
-      });
-    } catch {
-      // non-fatal
+      const currentProjectId = storedSelection.kind === "legacy-all" ? null : selectedProjectIdRef.current;
+      const nextProjectId =
+        currentProjectId != null && list.some((project) => project.id === currentProjectId)
+          ? currentProjectId
+          : list[0].id;
+
+      selectedProjectIdRef.current = nextProjectId;
+      setSelectedProjectIdState(nextProjectId);
+      writeStoredProjectSelection(nextProjectId);
+    } catch (error) {
+      console.error("Failed to load projects", error);
     }
   }, []);
 
