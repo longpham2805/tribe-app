@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, type CSSProperties, type ReactNode } from "react";
 
 interface ModalProps {
   open: boolean;
@@ -6,9 +6,19 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   width?: number;
+  variant?: "center" | "right-pane";
 }
 
-export function Modal({ open, onClose, title, children, width = 820 }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  width = 820,
+  variant = "center",
+}: ModalProps) {
+  const titleId = useId();
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -20,16 +30,30 @@ export function Modal({ open, onClose, title, children, width = 820 }: ModalProp
 
   if (!open) return null;
 
+  const panelStyle: CSSProperties =
+    variant === "right-pane"
+      ? { width: `min(100vw, ${width}px)` }
+      : { width, maxWidth: "95vw" };
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-panel" style={{ width, maxWidth: "95vw" }} onClick={(event) => event.stopPropagation()}>
+    <div className={`modal-backdrop modal-backdrop--${variant}`} onClick={onClose}>
+      <div
+        className={`modal-panel modal-panel--${variant}`}
+        style={panelStyle}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="modal-header">
-          <div className="modal-title">{title}</div>
-          <button className="btn-delete" onClick={onClose} title="Close">
+          <div className="modal-title" id={titleId}>
+            {title}
+          </div>
+          <button className="btn-delete" type="button" onClick={onClose} title="Close" aria-label="Close">
             ×
           </button>
         </div>
-        <div className="modal-body">{children}</div>
+        <div className={`modal-body modal-body--${variant}`}>{children}</div>
       </div>
     </div>
   );

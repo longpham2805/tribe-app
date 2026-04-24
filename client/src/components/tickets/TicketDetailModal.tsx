@@ -106,7 +106,7 @@ export function TicketDetailModal({
     const phaseName = fileToPhase(viewer.fileName);
     const live = phaseName ? liveLogs[`${ticket.id}:${phaseName}`] ?? [] : [];
     return (
-      <Modal open={open} onClose={onCloseFile} title={title}>
+      <Modal open={open} onClose={onCloseFile} title={title} variant="right-pane" width={720}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
           <button className="btn" type="button" onClick={onCloseFile}>
             ← Back to ticket
@@ -126,7 +126,7 @@ export function TicketDetailModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={title}>
+    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={720}>
       <div className="ticket-header" style={{ marginBottom: 10 }}>
         <div className="ticket-meta" style={{ flexWrap: "wrap" }}>
           <span className="ticket-id">#{ticket.id}</span>
