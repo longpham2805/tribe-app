@@ -28,7 +28,7 @@ import {
   type TicketGroup,
 } from "../constants/ticket";
 import type { CliType, Phase, Slot, Ticket, TicketFile, TicketPhase, WsMessage } from "../types";
-import { useAppContext } from "../context/AppContext";
+import { useAppContext, type PaletteAction } from "../context/AppContext";
 import { useWebSocket } from "../ws";
 
 type TicketsPageProps = {
@@ -91,7 +91,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
 });
 
 export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps) {
-  const { appState, shortcutIntent, clearShortcutIntent } = useAppContext();
+  const { appState, shortcutIntent, clearShortcutIntent, setPaletteContextActions } = useAppContext();
   const paneWidth = 720;
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -251,6 +251,42 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       setFilesByTicket((cur) => (selectedTicketId in cur ? cur : { ...cur, [selectedTicketId]: [] }));
     });
   }, [fetchAndStoreTicketFiles, selectedTicketId]);
+
+  useEffect(() => {
+    const actions: PaletteAction[] = [];
+
+    if (showForm) {
+      actions.push({
+        id: "close-create",
+        label: "Close create ticket modal",
+        icon: "✕",
+        onSelect: () => setShowForm(false),
+      });
+    } else if (selectedTicketId != null) {
+      const ticket = tickets.find((t) => t.id === selectedTicketId);
+      if (ticket) {
+        const prs = ticket.pullRequests ?? [];
+        for (const pr of prs) {
+          actions.push({
+            id: `open-pr-${pr.prUrl}`,
+            label: prs.length === 1 ? "Open pull request" : `Open PR: ${pr.repo}`,
+            icon: "↗",
+            onSelect: () => window.open(pr.prUrl, "_blank"),
+          });
+        }
+        for (const phase of PHASES) {
+          actions.push({
+            id: `goto-phase-${phase}`,
+            label: PHASE_LABELS[phase],
+            icon: "▶",
+            onSelect: () => setSelectedPhaseByTicket((prev) => ({ ...prev, [selectedTicketId]: phase })),
+          });
+        }
+      }
+    }
+
+    setPaletteContextActions(actions);
+  }, [selectedTicketId, showForm, tickets, setPaletteContextActions]);
 
   const getTicketGroup = useCallback((ticket: Ticket): TicketGroup => {
     if (ticket.waitingForSlot) return "WAITING";

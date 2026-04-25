@@ -10,7 +10,7 @@ import { TicketsPage } from "./pages/TicketsPage";
 import "./App.css";
 
 export default function App() {
-  const { view, projects, selectedProjectId, setSelectedProjectId, canImportFromMonday, loadProjects, setShortcutIntent } = useAppContext();
+  const { view, projects, selectedProjectId, setSelectedProjectId, canImportFromMonday, loadProjects, setShortcutIntent, paletteContextActions } = useAppContext();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -52,6 +52,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onAction={handlePaletteAction}
         projectId={selectedProjectId}
+        contextActions={paletteContextActions}
       />
     </div>
   );
