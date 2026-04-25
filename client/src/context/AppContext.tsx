@@ -24,6 +24,13 @@ export type ShortcutIntent =
   | { type: "open-ticket"; ticketId: number }
   | null;
 
+export type PaletteAction = {
+  id: string;
+  label: string;
+  icon?: string;
+  onSelect: () => void;
+};
+
 type AppContextValue = {
   view: View;
   setView: (view: View) => void;
@@ -39,6 +46,8 @@ type AppContextValue = {
   shortcutIntent: ShortcutIntent;
   setShortcutIntent: (intent: ShortcutIntent) => void;
   clearShortcutIntent: () => void;
+  paletteContextActions: PaletteAction[];
+  setPaletteContextActions: (actions: PaletteAction[]) => void;
 };
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -49,6 +58,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [appState, setAppState] = useState<AppState | null>(null);
   const [selectedProjectId, setSelectedProjectIdState] = useState<number | null>(null);
   const [shortcutIntent, setShortcutIntent] = useState<ShortcutIntent>(null);
+  const [paletteContextActions, setPaletteContextActionsState] = useState<PaletteAction[]>([]);
   const selectedProjectIdRef = useRef<number | null>(null);
 
   const selectedProject = useMemo(
@@ -131,6 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const clearShortcutIntent = useCallback(() => setShortcutIntent(null), []);
+  const setPaletteContextActions = useCallback((actions: PaletteAction[]) => setPaletteContextActionsState(actions), []);
 
   useEffect(() => {
     void loadProjects();
@@ -161,6 +172,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       shortcutIntent,
       setShortcutIntent,
       clearShortcutIntent,
+      paletteContextActions,
+      setPaletteContextActions,
     }),
     [
       view,
@@ -175,6 +188,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadProjects,
       shortcutIntent,
       clearShortcutIntent,
+      paletteContextActions,
+      setPaletteContextActions,
     ],
   );
 
