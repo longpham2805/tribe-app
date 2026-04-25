@@ -12,6 +12,11 @@ import type {
 
 const BASE = "/api";
 
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const body = await res.json().catch(() => null) as { error?: unknown } | null;
+  return typeof body?.error === "string" ? body.error : fallback;
+}
+
 export async function fetchTickets(phase?: TicketPhase, projectId?: number): Promise<Ticket[]> {
   const params = new URLSearchParams();
   if (phase) params.set("phase", phase);
@@ -57,7 +62,7 @@ export async function updateTicket(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to update ticket");
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to update ticket"));
   return res.json();
 }
 

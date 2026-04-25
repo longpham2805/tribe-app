@@ -8,6 +8,7 @@ import {
   fetchTickets,
   respondPhase,
   triggerPhase,
+  updateTicket,
 } from "../api";
 import { MondayPicker } from "../components/tickets/MondayPicker";
 import { TicketDetailModal } from "../components/tickets/TicketDetailModal";
@@ -107,6 +108,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
   const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
   const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
+  const [savingTicketContent, setSavingTicketContent] = useState<number | null>(null);
   const [filesByTicket, setFilesByTicket] = useState<Record<number, TicketFile[]>>({});
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [viewer, setViewer] = useState<{ fileName: string | null } | null>(null);
@@ -372,6 +374,26 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     [load, selectedTicketId],
   );
 
+  const handleUpdateTicketContent = useCallback(
+    async (ticketId: number, patch: { title: string; description: string }) => {
+      setSavingTicketContent(ticketId);
+      setError(null);
+      try {
+        const updated = await updateTicket(ticketId, patch);
+        setTickets((prev) => prev.map((ticket) => (ticket.id === updated.id ? { ...ticket, ...updated } : ticket)));
+        await load();
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to update ticket";
+        setError(message);
+        await load();
+        throw new Error(message);
+      } finally {
+        setSavingTicketContent(null);
+      }
+    },
+    [load],
+  );
+
   const handleRespond = useCallback(
     async (ticketId: number) => {
       const message = (responseDraft[ticketId] ?? "").trim();
@@ -559,6 +581,8 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           setViewer(null);
         }}
         onDelete={handleDelete}
+        onUpdateContent={handleUpdateTicketContent}
+        savingContent={selectedTicket ? savingTicketContent === selectedTicket.id : false}
         onTriggerPhase={handleTriggerPhase}
         onSelectPhase={(ticketId, phase) => setSelectedPhaseByTicket((prev) => ({ ...prev, [ticketId]: phase }))}
         onOpenFile={(fileName) => setViewer({ fileName })}
