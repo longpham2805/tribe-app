@@ -592,6 +592,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
         }}
         onRespond={handleRespond}
+        onImageUploaded={() => { void load(); }}
         phases={PHASES}
         phaseLabels={PHASE_LABELS}
         phaseColors={PHASE_COLORS}

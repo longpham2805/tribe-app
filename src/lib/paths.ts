@@ -5,6 +5,14 @@ export function getTicketDir(uid: string): string {
   return join(homedir(), ".tribe", uid);
 }
 
+export function getGlobalImagesDir(): string {
+  return join(homedir(), ".tribe", "images");
+}
+
+export function getTicketImagesDir(uid: string): string {
+  return join(getTicketDir(uid), "images");
+}
+
 export function getLogDir(uid: string): string {
   return join(getTicketDir(uid), "logs");
 }

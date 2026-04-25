@@ -1,4 +1,5 @@
-import { type CSSProperties, type FormEvent, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, useEffect, useState, useRef } from "react";
+import { uploadTicketImage } from "../../api";
 import { extractPullRequestUrl, getPullRequestLinkLabel } from "../../constants/ticket";
 import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
@@ -31,6 +32,7 @@ interface TicketDetailModalProps {
   onCloseFile: () => void;
   onResponseDraftChange: (value: string) => void;
   onRespond: (ticketId: number) => void;
+  onImageUploaded?: () => void;
   phaseLabels: Record<TicketPhase, string>;
   phaseColors: Record<TicketPhase, string>;
   statusLabels: Record<PhaseStatus, string>;
@@ -62,6 +64,7 @@ export function TicketDetailModal({
   onCloseFile,
   onResponseDraftChange,
   onRespond,
+  onImageUploaded,
   phaseLabels,
   phaseColors,
   statusLabels,
@@ -81,11 +84,30 @@ export function TicketDetailModal({
     setDraftDescription(ticket?.description ?? "");
     setContentError(null);
   }, [ticket?.id, ticket?.title, ticket?.description, ticket?.waitingForSlot]);
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const [imgUploading, setImgUploading] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
 
   if (!ticket) return null;
 
   const canEditContent = ticket.waitingForSlot;
   const assignedArtifacts = ticket.branchName || (ticket.pullRequests?.length ?? 0) > 0;
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImgUploading(true);
+    setImgError(null);
+    try {
+      await uploadTicketImage(ticket.id, file);
+      onImageUploaded?.();
+    } catch (err: any) {
+      setImgError(err.message);
+    } finally {
+      setImgUploading(false);
+      if (imgInputRef.current) imgInputRef.current.value = "";
+    }
+  };
   const paused = ticket.phases.find(
     (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
   );
@@ -264,6 +286,26 @@ export function TicketDetailModal({
       ) : ticket.description ? (
         <p className="ticket-desc">{ticket.description}</p>
       ) : null}
+
+      <div style={{ marginBottom: 12 }}>
+        <input
+          ref={imgInputRef}
+          type="file"
+          accept=".jpg,.jpeg,.png,.gif,.webp"
+          style={{ display: "none" }}
+          onChange={handleImageChange}
+        />
+        <button
+          className="btn"
+          type="button"
+          style={{ fontSize: 11, padding: "3px 8px" }}
+          disabled={imgUploading}
+          onClick={() => imgInputRef.current?.click()}
+        >
+          {imgUploading ? "Uploading..." : "Upload Image"}
+        </button>
+        {imgError && <span style={{ fontSize: 11, color: "#ef4444", marginLeft: 8 }}>{imgError}</span>}
+      </div>
 
       {assignedArtifacts ? (
         <div className="ship-artifacts card">

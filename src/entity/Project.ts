@@ -44,6 +44,9 @@ export class Project {
   @Column({ type: "text", nullable: true })
   techStack!: string | null;
 
+  @Column({ type: "varchar", length: 500, nullable: true })
+  logoPath!: string | null;
+
   @OneToMany(() => Ticket, (t) => t.project)
   tickets!: Ticket[];
 
