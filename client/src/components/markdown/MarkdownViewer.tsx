@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchPhaseLog, fetchTicketFile } from "../../api";
-import { extractAssistantText } from "../../phaseEvents";
+import { getActivityMarkdownEntries, selectRecentActivityEvents } from "../../phaseEvents";
 import type { TicketPhase } from "../../types";
 import { SharedMarkdown } from "./SharedMarkdown";
 
@@ -28,10 +28,21 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [historicalEvents, setHistoricalEvents] = useState<any[]>([]);
+  const [historicalEvents, setHistoricalEvents] = useState<unknown[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
   const linkedPhase = phaseName ?? fileToPhase(fileName);
+
+  useEffect(() => {
+    setTab("markdown");
+    setHistoricalEvents([]);
+    setHistoryLoading(false);
+    setHistoryLoaded(false);
+    setHistoryError(null);
+  }, [fileName, linkedPhase, ticketId]);
 
   useEffect(() => {
     setContent("");
@@ -44,22 +55,44 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
   }, [ticketId, fileName]);
 
   useEffect(() => {
-    if (!linkedPhase) return;
+    if (!linkedPhase || tab === "markdown" || historyLoaded || historyLoading) return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryError(null);
     fetchPhaseLog(ticketId, linkedPhase)
-      .then(setHistoricalEvents)
-      .catch(() => setHistoricalEvents([]));
-  }, [ticketId, linkedPhase]);
+      .then((events) => {
+        if (cancelled) return;
+        setHistoricalEvents(events);
+        setHistoryLoaded(true);
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setHistoricalEvents([]);
+        setHistoryError(err.message ?? "Failed to load activity");
+        setHistoryLoaded(true);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [historyLoaded, historyLoading, linkedPhase, tab, ticketId]);
 
-  const allEvents = useMemo(() => [...historicalEvents, ...liveEvents], [historicalEvents, liveEvents]);
-  const activityText = useMemo(
-    () => allEvents.map(extractAssistantText).filter(Boolean).join("\n\n"),
-    [allEvents],
+  const activityWindow = useMemo(
+    () => selectRecentActivityEvents(historicalEvents, liveEvents),
+    [historicalEvents, liveEvents],
   );
+  const activityEntries = useMemo(
+    () => getActivityMarkdownEntries(activityWindow.events),
+    [activityWindow.events],
+  );
+  const hiddenCount = Math.max(activityWindow.totalCount - activityEntries.length, 0);
 
   useEffect(() => {
     if (tab === "markdown") return;
     logEndRef.current?.scrollIntoView({ block: "end" });
-  }, [allEvents, tab]);
+  }, [activityEntries.length, activityWindow.events.length, tab]);
 
   return (
     <div>
@@ -73,7 +106,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
               Activity log
             </button>
             <button className={`tab ${tab === "raw" ? "active" : ""}`} onClick={() => setTab("raw")}>
-              Raw events ({allEvents.length})
+              Raw events ({activityWindow.totalCount})
             </button>
           </>
         )}
@@ -93,17 +126,47 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
 
       {tab === "activity" && (
         <div className="log-body">
-          {activityText ? <SharedMarkdown content={activityText} /> : <div className="empty">No activity yet.</div>}
+          {historyLoading && activityEntries.length === 0 ? (
+            <div className="empty">Loading activity…</div>
+          ) : historyError ? (
+            <div className="error">{historyError}</div>
+          ) : activityEntries.length === 0 ? (
+            <div className="empty">No activity yet.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 12 }}>
+              {hiddenCount > 0 ? (
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                  Showing the most recent {activityEntries.length} of {activityWindow.totalCount} events.
+                </div>
+              ) : null}
+              {activityEntries.map((entry) => (
+                <SharedMarkdown key={entry.id} content={entry.content} />
+              ))}
+            </div>
+          )}
           <div ref={logEndRef} />
         </div>
       )}
 
       {tab === "raw" && (
         <div className="log-body">
-          {allEvents.length === 0 ? (
+          {historyLoading && activityWindow.events.length === 0 ? (
+            <div className="empty">Loading activity…</div>
+          ) : historyError ? (
+            <div className="error">{historyError}</div>
+          ) : activityWindow.events.length === 0 ? (
             <div className="empty">No events yet.</div>
           ) : (
-            <pre>{allEvents.map((event, i) => `[${i}] ${JSON.stringify(event, null, 2)}`).join("\n\n")}</pre>
+            <>
+              {hiddenCount > 0 ? (
+                <div style={{ marginBottom: 10, color: "#94a3b8" }}>
+                  Showing the most recent {activityWindow.events.length} of {activityWindow.totalCount} events.
+                </div>
+              ) : null}
+              <pre>
+                {activityWindow.events.map((event, i) => `[${i}] ${JSON.stringify(event, null, 2)}`).join("\n\n")}
+              </pre>
+            </>
           )}
           <div ref={logEndRef} />
         </div>

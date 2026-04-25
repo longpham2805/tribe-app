@@ -17,6 +17,7 @@ interface TicketDetailModalProps {
   selectedPhase: TicketPhase | undefined;
   liveLogs: Record<string, any[]>;
   files: TicketFile[];
+  filesLoading: boolean;
   assignedSlotName: string | null;
   triggeringPhase: string | null;
   respondingTicket: number | null;
@@ -45,6 +46,7 @@ export function TicketDetailModal({
   selectedPhase,
   liveLogs,
   files,
+  filesLoading,
   assignedSlotName,
   triggeringPhase,
   respondingTicket,
@@ -301,7 +303,9 @@ export function TicketDetailModal({
         />
       ) : null}
 
-      {files.length > 0 ? (
+      {filesLoading ? (
+        <div style={{ marginTop: 10, fontSize: 11, color: "#64748b" }}>Loading files…</div>
+      ) : files.length > 0 ? (
         <div className="file-chips">
           {files.map((file) => (
             <button

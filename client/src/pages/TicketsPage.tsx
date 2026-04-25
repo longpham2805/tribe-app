@@ -35,6 +35,7 @@ type TicketsPageProps = {
 function sortTicketsByNewest(tickets: Ticket[]): Ticket[] {
   return [...tickets].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || right.id - left.id);
 }
+const MAX_LIVE_LOG_EVENTS = 200;
 
 const TicketGroupSection = memo(function TicketGroupSection({
   group,
@@ -112,6 +113,13 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
   const ticketFileRefreshTimers = useRef<Record<number, number>>({});
   const isBoardMode = filterPhase === "";
+  const fetchAndStoreTicketFiles = useCallback(
+    async (ticketId: number) => {
+      const files = await fetchTicketFiles(ticketId);
+      setFilesByTicket((cur) => ({ ...cur, [ticketId]: files }));
+    },
+    [],
+  );
 
   const load = useCallback(async () => {
     try {
@@ -151,21 +159,24 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     if (!canImportFromMonday && showMondayPicker) setShowMondayPicker(false);
   }, [canImportFromMonday, showMondayPicker]);
 
-  const scheduleTicketFilesRefresh = useCallback((ticketId: number) => {
-    const existing = ticketFileRefreshTimers.current[ticketId];
-    if (existing) window.clearTimeout(existing);
+  const scheduleTicketFilesRefresh = useCallback(
+    (ticketId: number) => {
+      if (selectedTicketId !== ticketId) return;
+      const existing = ticketFileRefreshTimers.current[ticketId];
+      if (existing) window.clearTimeout(existing);
 
-    ticketFileRefreshTimers.current[ticketId] = window.setTimeout(() => {
-      fetchTicketFiles(ticketId)
-        .then((files) => setFilesByTicket((cur) => ({ ...cur, [ticketId]: files })))
-        .catch(() => {
-          // ignore refresh errors
-        })
-        .finally(() => {
-          delete ticketFileRefreshTimers.current[ticketId];
-        });
-    }, 2000);
-  }, []);
+      ticketFileRefreshTimers.current[ticketId] = window.setTimeout(() => {
+        void fetchAndStoreTicketFiles(ticketId)
+          .catch(() => {
+            // ignore refresh errors
+          })
+          .finally(() => {
+            delete ticketFileRefreshTimers.current[ticketId];
+          });
+      }, 2000);
+    },
+    [fetchAndStoreTicketFiles, selectedTicketId],
+  );
 
   useEffect(() => {
     return () => {
@@ -206,8 +217,9 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
         if (msg.type === "phase.log") {
           const key = `${msg.ticketId}:${msg.phaseName}`;
-          setLiveLogs((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), msg.event] }));
+          setLiveLogs((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), msg.event].slice(-MAX_LIVE_LOG_EVENTS) }));
           scheduleTicketFilesRefresh(msg.ticketId);
+          return;
         }
       },
       [projectId, scheduleTicketFilesRefresh],
@@ -226,22 +238,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   }, [tickets]);
 
   useEffect(() => {
-    const missing = tickets.filter((ticket) => !(ticket.id in filesByTicket));
-    if (missing.length === 0) return;
-    Promise.all(
-      missing.map((ticket) =>
-        fetchTicketFiles(ticket.id)
-          .then((files) => [ticket.id, files] as [number, TicketFile[]])
-          .catch(() => [ticket.id, [] as TicketFile[]] as [number, TicketFile[]]),
-      ),
-    ).then((pairs) => {
-      setFilesByTicket((prev) => {
-        const next = { ...prev };
-        for (const [id, files] of pairs) next[id] = files;
-        return next;
-      });
+    if (selectedTicketId == null) return;
+    void fetchAndStoreTicketFiles(selectedTicketId).catch(() => {
+      setFilesByTicket((cur) => (selectedTicketId in cur ? cur : { ...cur, [selectedTicketId]: [] }));
     });
-  }, [tickets, filesByTicket]);
+  }, [fetchAndStoreTicketFiles, selectedTicketId]);
 
   const getTicketGroup = useCallback((ticket: Ticket): TicketGroup => {
     if (ticket.waitingForSlot) return "WAITING";
@@ -362,7 +363,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         const key = `${ticketId}:${pausedPhase.phaseName}`;
         setLiveLogs((prev) => ({
           ...prev,
-          [key]: [...(prev[key] ?? []), { type: "user_message", text: message }],
+          [key]: [...(prev[key] ?? []), { type: "user_message", text: message }].slice(-MAX_LIVE_LOG_EVENTS),
         }));
       }
 
@@ -517,6 +518,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         selectedPhase={selectedTicket ? selectedPhaseByTicket[selectedTicket.id] : undefined}
         liveLogs={liveLogs}
         files={selectedTicket ? filesByTicket[selectedTicket.id] ?? [] : []}
+        filesLoading={selectedTicket != null && !(selectedTicket.id in filesByTicket)}
         assignedSlotName={selectedTicket ? getSlotName(selectedTicket.slotId) : null}
         triggeringPhase={triggeringPhase}
         respondingTicket={respondingTicket}
