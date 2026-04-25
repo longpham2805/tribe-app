@@ -68,8 +68,8 @@
   width: 100%;
   min-height: 104px;
   aspect-ratio: auto;
-  padding: 0.65rem 0.5rem;
-  text-align: left;
+  padding: 0.75rem 0.45rem;
+  text-align: center;
   cursor: pointer;
   font-family: inherit;
   justify-content: space-between;
@@ -82,7 +82,6 @@
 
 .project-pane-card--active {
   border-color: #3b82f6;
-  background: #182233;
   box-shadow: inset 0 0 0 1px #3b82f6;
 }
 
@@ -92,20 +91,18 @@
 
 .project-pane-card__header {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
 }
 
 .project-pane-card__title {
-  font-size: 0.74rem;
+  font-size: 2rem;
   font-weight: 700;
-  color: #f8fafc;
-  line-height: 1.15;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
 }
 
 .project-pane-card__status {
@@ -118,7 +115,7 @@
   color: #22c55e;
   font-size: 0.63rem;
   font-weight: 700;
-  align-self: flex-start;
+  align-self: center;
 }
 
 .project-pane-card__status-count {

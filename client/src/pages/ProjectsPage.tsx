@@ -7,7 +7,11 @@ type EditState = {
   mondayBoardIds: string;
   mondayDefaultPersonId: string;
   mondayDevPeople: string;
+  primaryColor: string;
+  actionColor: string;
 };
+
+const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
 
 type ProjectsPageProps = {
   onProjectsChanged?: () => void;
@@ -19,6 +23,8 @@ function toEditState(project: Project): EditState {
     mondayBoardIds: (project.mondayBoardIds ?? []).join(", "),
     mondayDefaultPersonId: project.mondayDefaultPersonId ?? "",
     mondayDevPeople: (project.mondayDevPeople ?? []).join(", "),
+    primaryColor: project.primaryColor ?? "",
+    actionColor: project.actionColor ?? "",
   };
 }
 
@@ -33,6 +39,15 @@ function parseBoardIds(raw: string): number[] | null {
 function parsePeople(raw: string): string[] | null {
   const people = raw.split(",").map((value) => value.trim()).filter(Boolean);
   return people.length > 0 ? people : null;
+}
+
+function normalizeHexColorInput(raw: string, fieldLabel: string): string | null {
+  const normalized = raw.trim().toUpperCase();
+  if (!normalized) return null;
+  if (!HEX_COLOR_PATTERN.test(normalized)) {
+    throw new Error(`${fieldLabel} must be in #RRGGBB format`);
+  }
+  return normalized;
 }
 
 const ProjectCard = memo(function ProjectCard({
@@ -103,6 +118,20 @@ const ProjectCard = memo(function ProjectCard({
             placeholder="Dev people (comma-separated)"
             onChange={(e) => onChangeEdit(project.id, "mondayDevPeople", e.target.value)}
           />
+          <input
+            className="input"
+            value={editData.primaryColor}
+            placeholder="Primary color (#1D4ED8)"
+            maxLength={7}
+            onChange={(e) => onChangeEdit(project.id, "primaryColor", e.target.value)}
+          />
+          <input
+            className="input"
+            value={editData.actionColor}
+            placeholder="Action color (#EFF6FF)"
+            maxLength={7}
+            onChange={(e) => onChangeEdit(project.id, "actionColor", e.target.value)}
+          />
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => onSave(project.id)}>
               Save
@@ -128,6 +157,14 @@ const ProjectCard = memo(function ProjectCard({
               Dev people:{" "}
               <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayDevPeople?.join(", ") ?? "-"}</span>
             </div>
+            <div>
+              Primary color:{" "}
+              <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.primaryColor ?? "-"}</span>
+            </div>
+            <div>
+              Action color:{" "}
+              <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.actionColor ?? "-"}</span>
+            </div>
           </div>
         </div>
       )}
@@ -145,6 +182,8 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
     mondayBoardIds: "",
     mondayDefaultPersonId: "",
     mondayDevPeople: "",
+    primaryColor: "",
+    actionColor: "",
   });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Record<number, EditState>>({});
@@ -170,13 +209,24 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
       if (!newForm.name.trim()) return;
       setCreating(true);
       try {
+        const primaryColor = normalizeHexColorInput(newForm.primaryColor, "Primary color");
+        const actionColor = normalizeHexColorInput(newForm.actionColor, "Action color");
         await createProject({
           name: newForm.name.trim(),
           mondayBoardIds: parseBoardIds(newForm.mondayBoardIds),
           mondayDefaultPersonId: newForm.mondayDefaultPersonId.trim() || null,
           mondayDevPeople: parsePeople(newForm.mondayDevPeople),
+          primaryColor,
+          actionColor,
         });
-        setNewForm({ name: "", mondayBoardIds: "", mondayDefaultPersonId: "", mondayDevPeople: "" });
+        setNewForm({
+          name: "",
+          mondayBoardIds: "",
+          mondayDefaultPersonId: "",
+          mondayDevPeople: "",
+          primaryColor: "",
+          actionColor: "",
+        });
         setShowForm(false);
         await load();
         onProjectsChanged?.();
@@ -210,11 +260,15 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
       const data = editing[projectId];
       if (!data) return;
       try {
+        const primaryColor = normalizeHexColorInput(data.primaryColor, "Primary color");
+        const actionColor = normalizeHexColorInput(data.actionColor, "Action color");
         await updateProject(projectId, {
           name: data.name.trim(),
           mondayBoardIds: parseBoardIds(data.mondayBoardIds),
           mondayDefaultPersonId: data.mondayDefaultPersonId.trim() || null,
           mondayDevPeople: parsePeople(data.mondayDevPeople),
+          primaryColor,
+          actionColor,
         });
         cancelEdit(projectId);
         await load();
@@ -277,6 +331,20 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
             placeholder="Dev people (comma-separated names, e.g. Long Pham)"
             value={newForm.mondayDevPeople}
             onChange={(e) => setNewForm((prev) => ({ ...prev, mondayDevPeople: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="Primary color (#1D4ED8)"
+            value={newForm.primaryColor}
+            maxLength={7}
+            onChange={(e) => setNewForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="Action color (#EFF6FF)"
+            value={newForm.actionColor}
+            maxLength={7}
+            onChange={(e) => setNewForm((prev) => ({ ...prev, actionColor: e.target.value }))}
           />
           <button className="btn btn-primary" type="submit" disabled={creating}>
             {creating ? "Creating..." : "Create Project"}
