@@ -109,7 +109,8 @@ export class TicketRepository {
   }
 
   async findLastCreated(): Promise<Ticket | null> {
-    return this.repo.findOne({ order: { createdAt: "DESC" } });
+    const results = await this.repo.find({ order: { createdAt: "DESC" }, take: 1 });
+    return results[0] ?? null;
   }
 
   async update(
