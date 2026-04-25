@@ -1,4 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createProject, deleteProject, fetchProjects, updateProject, uploadProjectLogo } from "../api";
 import type { Project } from "../types";
 
@@ -62,6 +64,39 @@ function normalizeProjectContextInput(raw: string): string | null {
   return normalized || null;
 }
 
+function ColorSwatch({ hex }: { hex: string }) {
+  if (!HEX_COLOR_PATTERN.test(hex)) return null;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 14,
+        height: 14,
+        borderRadius: 3,
+        background: hex,
+        border: "1px solid #334155",
+        verticalAlign: "middle",
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+const formSectionStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+};
+
+const formSectionLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#64748b",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  marginBottom: 2,
+};
+
 const ProjectCard = memo(function ProjectCard({
   project,
   editData,
@@ -102,6 +137,11 @@ const ProjectCard = memo(function ProjectCard({
     }
   }, [project.id, onLogoUploaded]);
 
+  const hasMondayData =
+    (project.mondayBoardIds?.length ?? 0) > 0 ||
+    !!project.mondayDefaultPersonId ||
+    (project.mondayDevPeople?.length ?? 0) > 0;
+
   return (
     <div className="ticket-card" style={{ padding: "16px 20px" }}>
       <div className="ticket-header">
@@ -126,69 +166,99 @@ const ProjectCard = memo(function ProjectCard({
       </div>
 
       {isEditing ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-          <input
-            className="input"
-            value={editData.name}
-            placeholder="Name"
-            onChange={(e) => onChangeEdit(project.id, "name", e.target.value)}
-          />
-          <input
-            className="input"
-            value={editData.mondayBoardIds}
-            placeholder="Monday board IDs (comma-separated)"
-            onChange={(e) => onChangeEdit(project.id, "mondayBoardIds", e.target.value)}
-          />
-          <input
-            className="input"
-            value={editData.mondayDefaultPersonId}
-            placeholder="Default person ID"
-            onChange={(e) => onChangeEdit(project.id, "mondayDefaultPersonId", e.target.value)}
-          />
-          <input
-            className="input"
-            value={editData.mondayDevPeople}
-            placeholder="Dev people (comma-separated)"
-            onChange={(e) => onChangeEdit(project.id, "mondayDevPeople", e.target.value)}
-          />
-          <input
-            className="input"
-            value={editData.primaryColor}
-            placeholder="Primary color (#1D4ED8)"
-            maxLength={7}
-            onChange={(e) => onChangeEdit(project.id, "primaryColor", e.target.value)}
-          />
-          <input
-            className="input"
-            value={editData.actionColor}
-            placeholder="Action color (#EFF6FF)"
-            maxLength={7}
-            onChange={(e) => onChangeEdit(project.id, "actionColor", e.target.value)}
-          />
-          <textarea
-            className="input"
-            value={editData.introduction}
-            placeholder="Project introduction"
-            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-            rows={3}
-            onChange={(e) => onChangeEdit(project.id, "introduction", e.target.value)}
-          />
-          <textarea
-            className="input"
-            value={editData.techStack}
-            placeholder="Tech stack"
-            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-            rows={3}
-            onChange={(e) => onChangeEdit(project.id, "techStack", e.target.value)}
-          />
-          <textarea
-            className="input"
-            value={editData.rules}
-            placeholder="Project rules"
-            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-            rows={4}
-            onChange={(e) => onChangeEdit(project.id, "rules", e.target.value)}
-          />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
+          {/* Basic */}
+          <div style={formSectionStyle}>
+            <div style={formSectionLabelStyle}>Basic</div>
+            <input
+              className="input"
+              value={editData.name}
+              placeholder="Name"
+              onChange={(e) => onChangeEdit(project.id, "name", e.target.value)}
+            />
+          </div>
+
+          {/* Appearance */}
+          <div style={formSectionStyle}>
+            <div style={formSectionLabelStyle}>Appearance</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                className="input"
+                value={editData.primaryColor}
+                placeholder="Primary color (#1D4ED8)"
+                maxLength={7}
+                onChange={(e) => onChangeEdit(project.id, "primaryColor", e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <ColorSwatch hex={editData.primaryColor} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                className="input"
+                value={editData.actionColor}
+                placeholder="Action color (#EFF6FF)"
+                maxLength={7}
+                onChange={(e) => onChangeEdit(project.id, "actionColor", e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <ColorSwatch hex={editData.actionColor} />
+            </div>
+          </div>
+
+          {/* Context */}
+          <div style={formSectionStyle}>
+            <div style={formSectionLabelStyle}>Context</div>
+            <textarea
+              className="input"
+              value={editData.introduction}
+              placeholder="Project introduction (markdown supported)"
+              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+              rows={3}
+              onChange={(e) => onChangeEdit(project.id, "introduction", e.target.value)}
+            />
+            <textarea
+              className="input"
+              value={editData.techStack}
+              placeholder="Tech stack (markdown supported)"
+              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+              rows={3}
+              onChange={(e) => onChangeEdit(project.id, "techStack", e.target.value)}
+            />
+            <textarea
+              className="input"
+              value={editData.rules}
+              placeholder="Project rules (markdown supported)"
+              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+              rows={4}
+              onChange={(e) => onChangeEdit(project.id, "rules", e.target.value)}
+            />
+          </div>
+
+          {/* Monday.com */}
+          <details open={hasMondayData} style={{ borderTop: "1px solid #1e293b", paddingTop: 12 }}>
+            <summary style={{ ...formSectionLabelStyle, cursor: "pointer", userSelect: "none" }}>Monday.com</summary>
+            <div style={{ ...formSectionStyle, marginTop: 8 }}>
+              <input
+                className="input"
+                value={editData.mondayBoardIds}
+                placeholder="Monday board IDs (comma-separated)"
+                onChange={(e) => onChangeEdit(project.id, "mondayBoardIds", e.target.value)}
+              />
+              <input
+                className="input"
+                value={editData.mondayDefaultPersonId}
+                placeholder="Default person ID"
+                onChange={(e) => onChangeEdit(project.id, "mondayDefaultPersonId", e.target.value)}
+              />
+              <input
+                className="input"
+                value={editData.mondayDevPeople}
+                placeholder="Dev people (comma-separated)"
+                onChange={(e) => onChangeEdit(project.id, "mondayDevPeople", e.target.value)}
+              />
+            </div>
+          </details>
+
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => onSave(project.id)}>
               Save
@@ -210,40 +280,84 @@ const ProjectCard = memo(function ProjectCard({
             )}
             <div style={{ fontWeight: 600 }}>{project.name}</div>
           </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#94a3b8" }}>
-            <div>
-              Boards:{" "}
-              <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayBoardIds?.join(", ") ?? "-"}</span>
-            </div>
-            <div>
-              Default person:{" "}
-              <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayDefaultPersonId ?? "-"}</span>
-            </div>
-            <div>
-              Dev people:{" "}
-              <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayDevPeople?.join(", ") ?? "-"}</span>
-            </div>
-            <div>
-              Primary color:{" "}
-              <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.primaryColor ?? "-"}</span>
-            </div>
-            <div>
-              Action color:{" "}
-              <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.actionColor ?? "-"}</span>
-            </div>
-            <div>
-              Introduction:{" "}
-              <span style={{ color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{project.introduction ?? "-"}</span>
-            </div>
-            <div>
-              Tech stack:{" "}
-              <span style={{ color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{project.techStack ?? "-"}</span>
-            </div>
-            <div>
-              Project rules:{" "}
-              <span style={{ color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{project.rules ?? "-"}</span>
-            </div>
+            {/* Colors */}
+            {(project.primaryColor || project.actionColor) && (
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {project.primaryColor && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "#64748b" }}>Primary:</span>
+                    <ColorSwatch hex={project.primaryColor} />
+                    <code style={{ color: "#e2e8f0", fontSize: 11 }}>{project.primaryColor}</code>
+                  </div>
+                )}
+                {project.actionColor && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "#64748b" }}>Action:</span>
+                    <ColorSwatch hex={project.actionColor} />
+                    <code style={{ color: "#e2e8f0", fontSize: 11 }}>{project.actionColor}</code>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Monday.com — only shown when data exists */}
+            {hasMondayData && (
+              <details open style={{ marginTop: 4 }}>
+                <summary style={{ cursor: "pointer", color: "#64748b", userSelect: "none", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Monday.com
+                </summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
+                  {(project.mondayBoardIds?.length ?? 0) > 0 && (
+                    <div>
+                      Boards:{" "}
+                      <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayBoardIds!.join(", ")}</span>
+                    </div>
+                  )}
+                  {project.mondayDefaultPersonId && (
+                    <div>
+                      Default person:{" "}
+                      <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayDefaultPersonId}</span>
+                    </div>
+                  )}
+                  {(project.mondayDevPeople?.length ?? 0) > 0 && (
+                    <div>
+                      Dev people:{" "}
+                      <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayDevPeople!.join(", ")}</span>
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
+
+            {/* Markdown text fields */}
+            {project.introduction && (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Introduction</div>
+                <div className="project-markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.introduction}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+            {project.techStack && (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Tech Stack</div>
+                <div className="project-markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.techStack}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+            {project.rules && (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Rules</div>
+                <div className="project-markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.rules}</ReactMarkdown>
+                </div>
+              </div>
+            )}
           </div>
+
           <div style={{ marginTop: 8 }}>
             <input
               ref={logoInputRef}
@@ -418,70 +532,101 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
       {showForm && (
         <form className="new-ticket-form" onSubmit={handleCreate} style={{ marginBottom: 24 }}>
           <h2>New Project</h2>
-          <input
-            className="input"
-            placeholder="Name (e.g. eWebinar)"
-            value={newForm.name}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, name: e.target.value }))}
-            required
-            autoFocus
-          />
-          <input
-            className="input"
-            placeholder="Monday board IDs (comma-separated, e.g. 626076134)"
-            value={newForm.mondayBoardIds}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, mondayBoardIds: e.target.value }))}
-          />
-          <input
-            className="input"
-            placeholder="Default person ID (e.g. 14689324)"
-            value={newForm.mondayDefaultPersonId}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, mondayDefaultPersonId: e.target.value }))}
-          />
-          <input
-            className="input"
-            placeholder="Dev people (comma-separated names, e.g. Long Pham)"
-            value={newForm.mondayDevPeople}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, mondayDevPeople: e.target.value }))}
-          />
-          <input
-            className="input"
-            placeholder="Primary color (#1D4ED8)"
-            value={newForm.primaryColor}
-            maxLength={7}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
-          />
-          <input
-            className="input"
-            placeholder="Action color (#EFF6FF)"
-            value={newForm.actionColor}
-            maxLength={7}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, actionColor: e.target.value }))}
-          />
-          <textarea
-            className="input"
-            placeholder="Project introduction"
-            value={newForm.introduction}
-            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-            rows={3}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, introduction: e.target.value }))}
-          />
-          <textarea
-            className="input"
-            placeholder="Tech stack"
-            value={newForm.techStack}
-            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-            rows={3}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, techStack: e.target.value }))}
-          />
-          <textarea
-            className="input"
-            placeholder="Project rules"
-            value={newForm.rules}
-            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-            rows={4}
-            onChange={(e) => setNewForm((prev) => ({ ...prev, rules: e.target.value }))}
-          />
+
+          {/* Basic */}
+          <div style={{ ...formSectionStyle, marginBottom: 12 }}>
+            <div style={formSectionLabelStyle}>Basic</div>
+            <input
+              className="input"
+              placeholder="Name (e.g. eWebinar)"
+              value={newForm.name}
+              onChange={(e) => setNewForm((prev) => ({ ...prev, name: e.target.value }))}
+              required
+              autoFocus
+            />
+          </div>
+
+          {/* Appearance */}
+          <div style={{ ...formSectionStyle, marginBottom: 12 }}>
+            <div style={formSectionLabelStyle}>Appearance</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                className="input"
+                placeholder="Primary color (#1D4ED8)"
+                value={newForm.primaryColor}
+                maxLength={7}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
+                style={{ flex: 1 }}
+              />
+              <ColorSwatch hex={newForm.primaryColor} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                className="input"
+                placeholder="Action color (#EFF6FF)"
+                value={newForm.actionColor}
+                maxLength={7}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, actionColor: e.target.value }))}
+                style={{ flex: 1 }}
+              />
+              <ColorSwatch hex={newForm.actionColor} />
+            </div>
+          </div>
+
+          {/* Context */}
+          <div style={{ ...formSectionStyle, marginBottom: 12 }}>
+            <div style={formSectionLabelStyle}>Context</div>
+            <textarea
+              className="input"
+              placeholder="Project introduction (markdown supported)"
+              value={newForm.introduction}
+              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+              rows={3}
+              onChange={(e) => setNewForm((prev) => ({ ...prev, introduction: e.target.value }))}
+            />
+            <textarea
+              className="input"
+              placeholder="Tech stack (markdown supported)"
+              value={newForm.techStack}
+              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+              rows={3}
+              onChange={(e) => setNewForm((prev) => ({ ...prev, techStack: e.target.value }))}
+            />
+            <textarea
+              className="input"
+              placeholder="Project rules (markdown supported)"
+              value={newForm.rules}
+              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+              rows={4}
+              onChange={(e) => setNewForm((prev) => ({ ...prev, rules: e.target.value }))}
+            />
+          </div>
+
+          {/* Monday.com */}
+          <details style={{ marginBottom: 12 }}>
+            <summary style={{ ...formSectionLabelStyle, cursor: "pointer", userSelect: "none" }}>Monday.com</summary>
+            <div style={{ ...formSectionStyle, marginTop: 8 }}>
+              <input
+                className="input"
+                placeholder="Monday board IDs (comma-separated, e.g. 626076134)"
+                value={newForm.mondayBoardIds}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, mondayBoardIds: e.target.value }))}
+              />
+              <input
+                className="input"
+                placeholder="Default person ID (e.g. 14689324)"
+                value={newForm.mondayDefaultPersonId}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, mondayDefaultPersonId: e.target.value }))}
+              />
+              <input
+                className="input"
+                placeholder="Dev people (comma-separated names, e.g. Long Pham)"
+                value={newForm.mondayDevPeople}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, mondayDevPeople: e.target.value }))}
+              />
+            </div>
+          </details>
+
           <button className="btn btn-primary" type="submit" disabled={creating}>
             {creating ? "Creating..." : "Create Project"}
           </button>
