@@ -1247,6 +1247,52 @@
   padding-left: 1.5em;
 }
 
+.project-markdown {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+
+.project-markdown p {
+  margin: 0 0 6px;
+}
+
+.project-markdown h1, .project-markdown h2, .project-markdown h3 {
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0 4px;
+}
+
+.project-markdown code {
+  background: #0f1117;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.project-markdown pre {
+  background: #0f1117;
+  padding: 8px 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 11px;
+  margin: 4px 0;
+}
+
+.project-markdown ul, .project-markdown ol {
+  padding-left: 1.4em;
+  margin: 4px 0;
+}
+
+.project-markdown li {
+  margin-bottom: 2px;
+}
+
+.project-markdown a {
+  color: #3b82f6;
+}
+
 .log-body {
   max-height: 70vh;
   overflow-y: auto;
