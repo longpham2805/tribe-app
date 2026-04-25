@@ -182,6 +182,8 @@ export async function createProject(data: {
   mondayBoardIds?: number[] | null;
   mondayDefaultPersonId?: string | null;
   mondayDevPeople?: string[] | null;
+  primaryColor?: string | null;
+  actionColor?: string | null;
 }): Promise<Project> {
   const res = await fetch(`${BASE}/projects`, {
     method: "POST",
@@ -203,6 +205,8 @@ export async function updateProject(
     mondayBoardIds?: number[] | null;
     mondayDefaultPersonId?: string | null;
     mondayDevPeople?: string[] | null;
+    primaryColor?: string | null;
+    actionColor?: string | null;
   },
 ): Promise<Project> {
   const res = await fetch(`${BASE}/projects/${id}`, {

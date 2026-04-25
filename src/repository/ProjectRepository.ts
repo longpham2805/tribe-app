@@ -18,6 +18,8 @@ type ProjectActivityRow = {
   project_mondayBoardIds: number[] | string | null;
   project_mondayDefaultPersonId: string | null;
   project_mondayDevPeople: string[] | string | null;
+  project_primaryColor: string | null;
+  project_actionColor: string | null;
   project_createdAt: Date | string;
   project_updatedAt: Date | string;
   ticketCount?: number | string;
@@ -104,6 +106,8 @@ export class ProjectRepository {
       : raw.project_mondayDevPeople == null
         ? null
         : JSON.parse(String(raw.project_mondayDevPeople)) as string[];
+    project.primaryColor = raw.project_primaryColor == null ? null : String(raw.project_primaryColor);
+    project.actionColor = raw.project_actionColor == null ? null : String(raw.project_actionColor);
     project.createdAt = new Date(String(raw.project_createdAt));
     project.updatedAt = new Date(String(raw.project_updatedAt));
     const ticketCount = Number(raw.ticketCount ?? 0);
@@ -123,6 +127,8 @@ export class ProjectRepository {
     mondayBoardIds?: number[] | null;
     mondayDefaultPersonId?: string | null;
     mondayDevPeople?: string[] | null;
+    primaryColor?: string | null;
+    actionColor?: string | null;
   }): Promise<Project> {
     const project = this.repo.create({
       name: data.name,
@@ -130,6 +136,8 @@ export class ProjectRepository {
       mondayBoardIds: data.mondayBoardIds ?? null,
       mondayDefaultPersonId: data.mondayDefaultPersonId ?? null,
       mondayDevPeople: data.mondayDevPeople ?? null,
+      primaryColor: data.primaryColor ?? null,
+      actionColor: data.actionColor ?? null,
     });
     return this.repo.save(project);
   }
@@ -142,6 +150,8 @@ export class ProjectRepository {
       mondayBoardIds?: number[] | null;
       mondayDefaultPersonId?: string | null;
       mondayDevPeople?: string[] | null;
+      primaryColor?: string | null;
+      actionColor?: string | null;
     },
   ): Promise<Project | null> {
     const project = await this.findById(id);
@@ -152,6 +162,8 @@ export class ProjectRepository {
     if (data.mondayBoardIds !== undefined) project.mondayBoardIds = data.mondayBoardIds;
     if (data.mondayDefaultPersonId !== undefined) project.mondayDefaultPersonId = data.mondayDefaultPersonId;
     if (data.mondayDevPeople !== undefined) project.mondayDevPeople = data.mondayDevPeople;
+    if (data.primaryColor !== undefined) project.primaryColor = data.primaryColor;
+    if (data.actionColor !== undefined) project.actionColor = data.actionColor;
 
     return this.repo.save(project);
   }

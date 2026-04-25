@@ -29,6 +29,12 @@ export class Project {
   @Column({ type: "json", nullable: true })
   mondayDevPeople!: string[] | null;
 
+  @Column({ type: "varchar", length: 7, nullable: true })
+  primaryColor!: string | null;
+
+  @Column({ type: "varchar", length: 7, nullable: true })
+  actionColor!: string | null;
+
   @OneToMany(() => Ticket, (t) => t.project)
   tickets!: Ticket[];
 

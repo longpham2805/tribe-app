@@ -2,6 +2,69 @@ import { Router, type Request, type Response } from "express";
 import { ProjectRepository } from "../repository/ProjectRepository";
 
 const router = Router();
+const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+
+type ProjectPayload = {
+  name?: unknown;
+  slug?: unknown;
+  mondayBoardIds?: unknown;
+  mondayDefaultPersonId?: unknown;
+  mondayDevPeople?: unknown;
+  primaryColor?: unknown;
+  actionColor?: unknown;
+};
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+function normalizeProjectColor(
+  value: unknown,
+  fieldName: "primaryColor" | "actionColor",
+): { value: string | null | undefined; error?: string } {
+  if (value === undefined) return { value: undefined };
+  if (value === null) return { value: null };
+  if (typeof value !== "string") {
+    return { value: undefined, error: `${fieldName} must be a hex color in #RRGGBB format` };
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return { value: null };
+  if (!HEX_COLOR_PATTERN.test(normalized)) {
+    return { value: undefined, error: `${fieldName} must be a hex color in #RRGGBB format` };
+  }
+
+  return { value: normalized };
+}
+
+function parseProjectColors(
+  payload: ProjectPayload,
+  routeName: string,
+): { primaryColor: string | null | undefined; actionColor: string | null | undefined; error?: string } {
+  const primaryColor = normalizeProjectColor(payload.primaryColor, "primaryColor");
+  const actionColor = normalizeProjectColor(payload.actionColor, "actionColor");
+  const errors = [primaryColor.error, actionColor.error].filter(Boolean) as string[];
+
+  if (errors.length > 0) {
+    console.warn("Rejected project color payload", {
+      route: routeName,
+      fields: [
+        primaryColor.error ? "primaryColor" : null,
+        actionColor.error ? "actionColor" : null,
+      ].filter(Boolean),
+    });
+    return {
+      primaryColor: undefined,
+      actionColor: undefined,
+      error: errors[0],
+    };
+  }
+
+  return {
+    primaryColor: primaryColor.value,
+    actionColor: actionColor.value,
+  };
+}
 
 // GET /api/projects
 router.get("/", async (_req: Request, res: Response) => {
@@ -9,8 +72,8 @@ router.get("/", async (_req: Request, res: Response) => {
     const repo = new ProjectRepository();
     const projects = await repo.findAllWithActivity();
     res.json(projects);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (error: unknown) {
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 });
 
@@ -29,24 +92,41 @@ router.get("/:id", async (req: Request, res: Response) => {
       return;
     }
     res.json(project);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (error: unknown) {
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 });
 
-// POST /api/projects  { name, slug?, mondayBoardIds?, mondayDefaultPersonId?, mondayDevPeople? }
+// POST /api/projects  { name, slug?, mondayBoardIds?, mondayDefaultPersonId?, mondayDevPeople?, primaryColor?, actionColor? }
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { name, slug, mondayBoardIds, mondayDefaultPersonId, mondayDevPeople } = req.body;
+    const payload = req.body as ProjectPayload;
+    const { name, slug, mondayBoardIds, mondayDefaultPersonId, mondayDevPeople } = payload;
     if (!name || typeof name !== "string") {
       res.status(400).json({ error: "name is required" });
       return;
     }
+    const colors = parseProjectColors(payload, "POST /api/projects");
+    if (colors.error) {
+      res.status(400).json({ error: colors.error });
+      return;
+    }
     const repo = new ProjectRepository();
-    const project = await repo.create({ name, slug, mondayBoardIds, mondayDefaultPersonId, mondayDevPeople });
+    const project = await repo.create({
+      name,
+      slug: typeof slug === "string" || slug == null ? slug : undefined,
+      mondayBoardIds: Array.isArray(mondayBoardIds) ? mondayBoardIds as number[] : undefined,
+      mondayDefaultPersonId:
+        typeof mondayDefaultPersonId === "string" || mondayDefaultPersonId == null
+          ? mondayDefaultPersonId
+          : undefined,
+      mondayDevPeople: Array.isArray(mondayDevPeople) ? mondayDevPeople as string[] : undefined,
+      primaryColor: colors.primaryColor,
+      actionColor: colors.actionColor,
+    });
     res.status(201).json(project);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (error: unknown) {
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 });
 
@@ -59,15 +139,32 @@ router.patch("/:id", async (req: Request, res: Response) => {
       res.status(400).json({ error: "Invalid project ID" });
       return;
     }
-    const { name, slug, mondayBoardIds, mondayDefaultPersonId, mondayDevPeople } = req.body;
-    const updated = await repo.update(id, { name, slug, mondayBoardIds, mondayDefaultPersonId, mondayDevPeople });
+    const payload = req.body as ProjectPayload;
+    const { name, slug, mondayBoardIds, mondayDefaultPersonId, mondayDevPeople } = payload;
+    const colors = parseProjectColors(payload, "PATCH /api/projects/:id");
+    if (colors.error) {
+      res.status(400).json({ error: colors.error });
+      return;
+    }
+    const updated = await repo.update(id, {
+      name: typeof name === "string" ? name : undefined,
+      slug: typeof slug === "string" || slug == null ? slug : undefined,
+      mondayBoardIds: Array.isArray(mondayBoardIds) ? mondayBoardIds as number[] : undefined,
+      mondayDefaultPersonId:
+        typeof mondayDefaultPersonId === "string" || mondayDefaultPersonId == null
+          ? mondayDefaultPersonId
+          : undefined,
+      mondayDevPeople: Array.isArray(mondayDevPeople) ? mondayDevPeople as string[] : undefined,
+      primaryColor: colors.primaryColor,
+      actionColor: colors.actionColor,
+    });
     if (!updated) {
       res.status(404).json({ error: `Project ${id} not found` });
       return;
     }
     res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (error: unknown) {
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 });
 
@@ -87,8 +184,8 @@ router.delete("/:id", async (req: Request, res: Response) => {
       return;
     }
     res.json({ message: `Project ${id} deleted successfully` });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (error: unknown) {
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 });
 
