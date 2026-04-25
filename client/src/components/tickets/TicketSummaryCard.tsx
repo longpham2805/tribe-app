@@ -1,5 +1,49 @@
 import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
-import type { PhaseStatus, Ticket, TicketPhase } from "../../types";
+import type { CliType, PhaseStatus, Ticket, TicketPhase } from "../../types";
+
+type TicketTagTone = "phase" | "slot" | "status" | "running" | "cli";
+
+interface TicketTagProps {
+  icon: string;
+  label: string;
+  tone: TicketTagTone;
+  color: string;
+  title?: string;
+  running?: boolean;
+}
+
+const CLI_TAGS: Record<CliType, { label: string; icon: string; color: string }> = {
+  CLAUDE: { label: "Claude", icon: ">_", color: "#6366f1" },
+  CODEX: { label: "Codex", icon: ">_", color: "#6366f1" },
+};
+
+const PAUSED_STATUS_ICONS: Partial<Record<PhaseStatus, string>> = {
+  REQUIRES_ACTION: "!",
+  QUESTION: "?",
+  ERROR: "x",
+};
+
+function TicketTag({ icon, label, tone, color, title, running = false }: TicketTagProps) {
+  const accessibleLabel = title ?? label;
+
+  return (
+    <span
+      className={`phase-badge ticket-tag ticket-tag--${tone}${running ? " ticket-running-badge" : ""}`}
+      style={{ background: `${color}22`, color }}
+      title={accessibleLabel}
+      aria-label={accessibleLabel}
+    >
+      {running ? (
+        <span className="ticket-running-dot ticket-tag-icon" aria-hidden="true" />
+      ) : (
+        <span className="ticket-tag-icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <span className="ticket-tag-label">{label}</span>
+    </span>
+  );
+}
 
 const extractUrl = (raw: string): string | null => {
   const trimmed = raw.trim();
@@ -50,6 +94,7 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
     (phase) => !!phase.startedAt && !phase.completedAt && phase.status === "RUNNING",
   );
   const runningAccent = runningPhase ? statusColors[runningPhase.status] ?? phaseColors[runningPhase.phaseName] : null;
+  const cliTag = CLI_TAGS[ticket.cliType];
 
   const createdAt = new Date(ticket.createdAt).toLocaleDateString();
   const pullRequestCount = ticket.pullRequests?.length ?? 0;
@@ -111,47 +156,50 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
       <div className="ticket-header">
         <div className="ticket-meta" style={{ flexWrap: "wrap" }}>
           <span className="ticket-id">#{ticket.id}</span>
-          <span
-            className="phase-badge"
-            style={{
-              background: `${phaseColors[ticket.currentPhase]}22`,
-              color: phaseColors[ticket.currentPhase],
-            }}
-          >
-            {phaseLabels[ticket.currentPhase]}
-          </span>
+          <TicketTag
+            icon="P"
+            label={phaseLabels[ticket.currentPhase]}
+            tone="phase"
+            color={phaseColors[ticket.currentPhase]}
+            title={`Phase: ${phaseLabels[ticket.currentPhase]}`}
+          />
           {ticket.waitingForSlot ? (
-            <span className="phase-badge" style={{ background: "#ef444422", color: "#ef4444" }}>
-              Waiting for slot
-            </span>
+            <TicketTag icon="S" label="Waiting for slot" tone="slot" color="#ef4444" title="Waiting for slot" />
           ) : assignedSlotName ? (
-            <span className="phase-badge" style={{ background: "#0ea5e922", color: "#0ea5e9" }}>
-              {assignedSlotName}
-            </span>
+            <TicketTag
+              icon="S"
+              label={assignedSlotName}
+              tone="slot"
+              color="#0ea5e9"
+              title={`Slot: ${assignedSlotName}`}
+            />
           ) : null}
           {pausedPhase ? (
-            <span
-              className="phase-badge"
-              style={{
-                background: `${statusColors[pausedPhase.status] ?? "#f59e0b"}22`,
-                color: statusColors[pausedPhase.status] ?? "#f59e0b",
-              }}
-            >
-              {statusLabels[pausedPhase.status]}
-            </span>
+            <TicketTag
+              icon={PAUSED_STATUS_ICONS[pausedPhase.status] ?? "!"}
+              label={statusLabels[pausedPhase.status]}
+              tone="status"
+              color={statusColors[pausedPhase.status] ?? "#f59e0b"}
+              title={`Status: ${statusLabels[pausedPhase.status]}`}
+            />
           ) : null}
           {runningPhase ? (
-            <span
-              className="phase-badge ticket-running-badge"
-              style={{
-                background: `${runningAccent ?? phaseColors[runningPhase.phaseName]}22`,
-                color: runningAccent ?? phaseColors[runningPhase.phaseName],
-              }}
-            >
-              <span className="ticket-running-dot" aria-hidden="true" />
-              <span>{phaseLabels[runningPhase.phaseName]} running</span>
-            </span>
+            <TicketTag
+              icon="R"
+              label={`${phaseLabels[runningPhase.phaseName]} running`}
+              tone="running"
+              color={runningAccent ?? phaseColors[runningPhase.phaseName]}
+              title={`Running phase: ${phaseLabels[runningPhase.phaseName]}`}
+              running
+            />
           ) : null}
+          <TicketTag
+            icon={cliTag.icon}
+            label={cliTag.label}
+            tone="cli"
+            color={cliTag.color}
+            title={`CLI agent: ${cliTag.label}`}
+          />
         </div>
         <span className="ticket-date">{createdAt}</span>
       </div>
