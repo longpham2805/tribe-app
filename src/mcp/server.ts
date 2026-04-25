@@ -109,7 +109,9 @@ function createServer(): McpServer {
 
       const ticket = await ticketRepo.create({ title, description, status: ticketStatus, cliType });
       if (ticketStatus === TicketStatus.READY) {
-        await new PhaseHandler().initCreated(ticket);
+        new PhaseHandler().initCreated(ticket).catch((err) => {
+          console.error(`initCreated error for ticket #${ticket.id}: ${err?.message ?? err}`);
+        });
       }
       const full = await ticketRepo.findById(ticket.id);
       return {
