@@ -66,12 +66,10 @@ export const ProjectPane = memo(function ProjectPane({
 
           const style: CSSProperties = item.running
             ? ({
-                backgroundColor: item.backgroundColor,
                 color: item.textColor,
                 "--ticket-running-accent": "#22c55e",
               } as CSSProperties)
             : {
-                backgroundColor: item.backgroundColor,
                 color: item.textColor,
               };
 

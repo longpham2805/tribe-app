@@ -164,7 +164,7 @@
   width: 100%;
   min-height: 64px;
   aspect-ratio: 1;
-  padding: 0.5rem;
+  padding: 5px;
   text-align: center;
   cursor: pointer;
   font-family: inherit;
@@ -426,6 +426,11 @@
   flex-direction: column;
   gap: 0.5rem;
   transition: border-color 0.15s;
+}
+
+.ticket-card.project-pane-card {
+  background: none;
+  border: 2px solid #3b82f6;
 }
 
 .ticket-card--interactive {
