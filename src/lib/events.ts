@@ -1,7 +1,8 @@
 export type TribeEvent =
   | { type: "phase.updated"; ticketId: number; phase: unknown }
   | { type: "phase.log"; ticketId: number; phaseName: string; event: unknown }
-  | { type: "ticket.updated"; ticket: unknown };
+  | { type: "ticket.updated"; ticket: unknown }
+  | { type: "app-state.updated"; appState: unknown };
 
 type Listener = (event: TribeEvent) => void;
 

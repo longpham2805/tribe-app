@@ -4,6 +4,7 @@ import { Ticket } from "./entity/Ticket";
 import { Phase } from "./entity/Phase";
 import { Slot } from "./entity/Slot";
 import { Project } from "./entity/Project";
+import { AppState } from "./entity/AppState";
 import { TicketSubscriber } from "./subscriber/TicketSubscriber";
 import * as dotenv from "dotenv";
 
@@ -18,7 +19,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_DATABASE || process.env.DATABASE_NAME || "tribe",
   synchronize: false,
   logging: ["error", "warn"],
-  entities: [Ticket, Phase, Slot, Project],
+  entities: [Ticket, Phase, Slot, Project, AppState],
   migrations: ["src/migration/*.ts"],
   subscribers: [TicketSubscriber],
 });

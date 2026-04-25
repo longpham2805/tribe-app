@@ -2,6 +2,14 @@ export type TicketPhase = "CREATED" | "PLANNING" | "IMPLEMENTATION" | "SHIP";
 
 export type CliType = "CLAUDE" | "CODEX";
 
+export interface AppState {
+  id: number;
+  autoTriggerEnabled: boolean;
+  availableCliTypes: CliType[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type PhaseStatus =
   | "PENDING"
   | "RUNNING"
@@ -30,7 +38,8 @@ export type WsMessage =
   | { type: "hello" }
   | { type: "phase.updated"; ticketId: number; phase: Phase }
   | { type: "phase.log"; ticketId: number; phaseName: TicketPhase; event: any }
-  | { type: "ticket.updated"; ticket: Ticket };
+  | { type: "ticket.updated"; ticket: Ticket }
+  | { type: "app-state.updated"; appState: AppState };
 
 export interface Project {
   id: number;

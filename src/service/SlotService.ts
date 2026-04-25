@@ -5,15 +5,18 @@ import { Slot } from "../entity/Slot";
 import { Ticket } from "../entity/Ticket";
 import { SlotRepository } from "../repository/SlotRepository";
 import { TicketRepository } from "../repository/TicketRepository";
+import { AppStateRepository } from "../repository/AppStateRepository";
 import { PhaseHandler } from "../handler/PhaseHandler";
 
 export class SlotService {
   private slotRepo: SlotRepository;
   private ticketRepo: TicketRepository;
+  private appStateRepo: AppStateRepository;
 
   constructor() {
     this.slotRepo = new SlotRepository();
     this.ticketRepo = new TicketRepository();
+    this.appStateRepo = new AppStateRepository();
   }
 
   /**
@@ -101,8 +104,16 @@ export class SlotService {
     }
     await this.slotRepo.release(slot.id);
 
+    const appState = await this.appStateRepo.get();
+    if (!appState.autoTriggerEnabled) {
+      console.log(`[SlotService] Auto trigger paused — slot ${slot.id} released without promotion`);
+      return;
+    }
+
     // 3. Promote the next waiting ticket (FIFO — oldest createdAt first, same project)
-    const nextTicket = await this.ticketRepo.findOldestWaiting(slot.projectId ?? undefined);
+    const nextTicket = await this.ticketRepo.findOldestWaiting(slot.projectId ?? undefined, {
+      cliTypes: appState.availableCliTypes,
+    });
     if (!nextTicket) return;
 
     await this.slotRepo.assign(slot.id, nextTicket.id);

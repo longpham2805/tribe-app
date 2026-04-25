@@ -25,6 +25,7 @@ import {
   type TicketGroup,
 } from "../constants/ticket";
 import type { CliType, Phase, Slot, Ticket, TicketFile, TicketPhase, WsMessage } from "../types";
+import { useAppContext } from "../context/AppContext";
 import { useWebSocket } from "../ws";
 
 type TicketsPageProps = {
@@ -87,6 +88,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
 });
 
 export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps) {
+  const { appState } = useAppContext();
   const paneWidth = 720;
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -273,11 +275,18 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     () => (selectedTicketId != null ? tickets.find((ticket) => ticket.id === selectedTicketId) ?? null : null),
     [tickets, selectedTicketId],
   );
+  const availableCliTypes = useMemo(() => appState?.availableCliTypes ?? [], [appState]);
   const paneOpen = selectedTicket != null;
   const layoutStyle = useMemo(
     () => ({ "--ticket-pane-width": `${paneWidth}px` }) as CSSProperties,
     [paneWidth],
   );
+
+  useEffect(() => {
+    if (newCliType && !availableCliTypes.includes(newCliType)) {
+      setNewCliType("");
+    }
+  }, [availableCliTypes, newCliType]);
 
   useEffect(() => {
     if (selectedTicketId == null) return;
@@ -437,11 +446,19 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
               value={newCliType}
               onChange={(e) => setNewCliType(e.target.value as CliType | "")}
             >
-              <option value="">Auto (round-robin)</option>
-              <option value="CLAUDE">Claude</option>
-              <option value="CODEX">Codex</option>
+              <option value="">Auto</option>
+              <option value="CLAUDE" disabled={!availableCliTypes.includes("CLAUDE")}>
+                Claude
+              </option>
+              <option value="CODEX" disabled={!availableCliTypes.includes("CODEX")}>
+                Codex
+              </option>
             </select>
-            <button className="btn btn-primary" type="submit" disabled={creating}>
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={creating || (appState !== null && availableCliTypes.length === 0)}
+            >
               {creating ? "Creating..." : "Create Ticket"}
             </button>
           </form>

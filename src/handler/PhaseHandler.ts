@@ -10,6 +10,7 @@ import { Phase } from "../entity/Phase";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { SlotRepository } from "../repository/SlotRepository";
+import { AppStateRepository } from "../repository/AppStateRepository";
 import { SlotService } from "../service/SlotService";
 import { getTicketDir, getLogDir, getLogFile, getStderrFile } from "../lib/paths";
 import { emit } from "../lib/events";
@@ -50,10 +51,12 @@ type PhaseSystemEventMetadata = Record<string, string | number | boolean | null 
 export class PhaseHandler {
   private ticketRepo: TicketRepository;
   private phaseRepo: PhaseRepository;
+  private appStateRepo: AppStateRepository;
 
   constructor() {
     this.ticketRepo = new TicketRepository();
     this.phaseRepo = new PhaseRepository();
+    this.appStateRepo = new AppStateRepository();
   }
 
   private async updatePhase(phaseId: number, data: Partial<Phase>): Promise<Phase | null> {
@@ -225,6 +228,9 @@ export class PhaseHandler {
 
     const ticket = await this.ticketRepo.findById(ticketId);
     if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+    if (phaseName !== TicketPhase.CREATED) {
+      await this.ensureCliAvailable(ticket);
+    }
     const phaseLogContext: PhaseLogContext = {
       ticketId,
       uid: ticket.uid ?? null,
@@ -322,6 +328,7 @@ export class PhaseHandler {
       throw new Error(`Phase ${activePhase.phaseName} has no CLI session ID to resume`);
     }
 
+    await this.ensureCliAvailable(ticket);
     const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
     await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING, lastMessage: null });
 
@@ -377,13 +384,7 @@ export class PhaseHandler {
 
     if (result.status === PhaseStatus.COMPLETED) {
       const next = this.nextPhase(activePhase.phaseName);
-      if (next) {
-        log(`auto-advance ticket #${ticket.id} → ${next}`);
-        this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: activePhase.phaseName }, "auto_advance", `Auto-advancing to ${next}`, {
-          nextPhase: next,
-        });
-        await this.trigger(ticket.id, next);
-      }
+      if (next) await this.maybeAutoTriggerNext(ticket, activePhase.phaseName, next);
     }
   }
 
@@ -444,8 +445,7 @@ export class PhaseHandler {
         status: PhaseStatus.COMPLETED,
         completedAt: new Date(),
       });
-      log(`CREATED phase completed for ticket #${ticket.id} — auto-advancing to PLANNING`);
-      await this.trigger(ticket.id, TicketPhase.PLANNING);
+      await this.maybeAutoTriggerNext(ticket, TicketPhase.CREATED, TicketPhase.PLANNING);
     }
   }
 
@@ -541,6 +541,7 @@ export class PhaseHandler {
       throw new Error(`No active ${phaseName} phase for ticket #${ticket.id}`);
     }
 
+    await this.ensureCliAvailable(ticket);
     await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING });
 
     log(`spawning ${ticket.cliType} for ${phaseName.toLowerCase()} (resume=${activePhase.cliSessionId ?? "none"})`);
@@ -560,15 +561,51 @@ export class PhaseHandler {
 
     if (result.status === PhaseStatus.COMPLETED) {
       const next = this.nextPhase(phaseName);
-      if (next) {
-        log(`auto-advance ticket #${ticket.id} → ${next}`);
-        this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName }, "auto_advance", `Auto-advancing to ${next}`, {
-          nextPhase: next,
-        });
-        await this.trigger(ticket.id, next);
-      }
+      if (next) await this.maybeAutoTriggerNext(ticket, phaseName, next);
     } else {
       log(`phase ${phaseName} paused with status=${result.status} — awaiting user`);
+    }
+  }
+
+  private async maybeAutoTriggerNext(
+    ticket: Ticket,
+    currentPhase: TicketPhase,
+    nextPhase: TicketPhase,
+  ): Promise<void> {
+    const logContext = { ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: currentPhase };
+    const appState = await this.appStateRepo.get();
+
+    if (!appState.autoTriggerEnabled) {
+      log(`auto trigger paused — ticket #${ticket.id} remains after ${currentPhase}`);
+      this.persistPhaseSystemEvent(logContext, "auto_trigger_paused", `Auto trigger paused before ${nextPhase}`, {
+        nextPhase,
+      });
+      return;
+    }
+
+    if (!appState.availableCliTypes.includes(ticket.cliType)) {
+      log(`auto trigger skipped — ${ticket.cliType} unavailable for ticket #${ticket.id}`);
+      this.persistPhaseSystemEvent(logContext, "cli_unavailable", `${ticket.cliType} unavailable before ${nextPhase}`, {
+        cliType: ticket.cliType,
+        nextPhase,
+      });
+      return;
+    }
+
+    log(`auto-advance ticket #${ticket.id} → ${nextPhase}`);
+    this.persistPhaseSystemEvent(logContext, "auto_advance", `Auto-advancing to ${nextPhase}`, {
+      nextPhase,
+    });
+    await this.trigger(ticket.id, nextPhase);
+  }
+
+  private async ensureCliAvailable(ticket: Ticket): Promise<void> {
+    const appState = await this.appStateRepo.get();
+    if (appState.availableCliTypes.length === 0) {
+      throw new Error("No CLI is currently available");
+    }
+    if (!appState.availableCliTypes.includes(ticket.cliType)) {
+      throw new Error(`${ticket.cliType} is currently unavailable`);
     }
   }
 

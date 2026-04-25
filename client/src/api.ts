@@ -7,6 +7,7 @@ import type {
   TicketFile,
   MondayNotStartedItem,
   Project,
+  AppState,
 } from "./types";
 
 const BASE = "/api";
@@ -40,7 +41,10 @@ export async function createTicket(data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to create ticket");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to create ticket");
+  }
   return res.json();
 }
 
@@ -68,7 +72,10 @@ export async function triggerPhase(ticketId: number, phaseName: TicketPhase): Pr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phaseName }),
   });
-  if (!res.ok) throw new Error("Failed to trigger phase");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to trigger phase");
+  }
 }
 
 export async function respondPhase(ticketId: number, message: string): Promise<void> {
@@ -81,6 +88,30 @@ export async function respondPhase(ticketId: number, message: string): Promise<v
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "Failed to respond to phase");
   }
+}
+
+// ── App state ─────────────────────────────────────────────────────
+
+export async function fetchAppState(): Promise<AppState> {
+  const res = await fetch(`${BASE}/app-state`);
+  if (!res.ok) throw new Error("Failed to fetch app state");
+  return res.json();
+}
+
+export async function updateAppState(data: {
+  autoTriggerEnabled?: boolean;
+  availableCliTypes?: CliType[];
+}): Promise<AppState> {
+  const res = await fetch(`${BASE}/app-state`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to update app state");
+  }
+  return res.json();
 }
 
 // ── Slots ─────────────────────────────────────────────────────────

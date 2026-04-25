@@ -18,6 +18,7 @@ import phaseRoutes from "../routes/phases";
 import mondayRoutes from "../routes/monday";
 import slotRoutes from "../routes/slots";
 import projectRoutes from "../routes/projects";
+import appStateRoutes from "../routes/appState";
 import filesRoutes from "../routes/files";
 import { SlotRepository } from "../repository/SlotRepository";
 import { ProjectRepository } from "../repository/ProjectRepository";
@@ -534,6 +535,7 @@ async function main() {
   app.use("/api/monday", mondayRoutes);
   app.use("/api/slots", slotRoutes);
   app.use("/api/projects", projectRoutes);
+  app.use("/api/app-state", appStateRoutes);
 
   // ── SPA Static Files ─────────────────────────────────────────────
   const publicDir = path.join(__dirname, "../../public");

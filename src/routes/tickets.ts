@@ -5,6 +5,7 @@ import { TicketPhase } from "../enum/TicketPhase";
 import { CliType } from "../enum/CliType";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { pickCliForNewTicket } from "../cli";
+import { AppStateRepository } from "../repository/AppStateRepository";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const router = Router();
@@ -102,9 +103,19 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const ticketRepo = new TicketRepository();
+    const appState = await new AppStateRepository().get();
+    if (appState.availableCliTypes.length === 0) {
+      res.status(409).json({ error: "No CLI is currently available" });
+      return;
+    }
+    if (cliTypeRaw !== undefined && !appState.availableCliTypes.includes(cliTypeRaw as CliType)) {
+      res.status(409).json({ error: `${cliTypeRaw} is currently unavailable` });
+      return;
+    }
+
     const cliType = cliTypeRaw
       ? (cliTypeRaw as CliType)
-      : await pickCliForNewTicket(ticketRepo);
+      : await pickCliForNewTicket(ticketRepo, appState.availableCliTypes);
 
     const ticket = await ticketRepo.create({
       title,
@@ -121,7 +132,8 @@ router.post("/", async (req: Request, res: Response) => {
     const full = await ticketRepo.findById(ticket.id);
     res.status(201).json(full);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const status = err.message.includes("No CLI") ? 409 : 500;
+    res.status(status).json({ error: err.message });
   }
 });
 
@@ -243,7 +255,10 @@ router.post("/:ticketId/trigger-phase", async (req: Request, res: Response) => {
     const result = await handler.trigger(ticketId, phaseName as TicketPhase);
     res.json(result);
   } catch (err: any) {
-    const status = err.message.includes("not found") ? 404 : 500;
+    const msg = err.message ?? "";
+    let status = 500;
+    if (msg.includes("not found")) status = 404;
+    else if (msg.includes("currently unavailable") || msg.includes("No CLI")) status = 409;
     res.status(status).json({ error: err.message });
   }
 });
@@ -270,6 +285,7 @@ router.post("/:ticketId/respond-phase", async (req: Request, res: Response) => {
     const msg = err.message ?? "";
     let status = 500;
     if (msg.includes("not found")) status = 404;
+    else if (msg.includes("currently unavailable") || msg.includes("No CLI")) status = 409;
     else if (
       msg.includes("has no active phase") ||
       msg.includes("not awaiting a response") ||

@@ -1,4 +1,4 @@
-import { Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 import { AppDataSource } from "../data-source";
 import { Ticket } from "../entity/Ticket";
 import { TicketPhase } from "../enum/TicketPhase";
@@ -153,11 +153,17 @@ export class TicketRepository {
   }
 
   /** Find the oldest ticket currently waiting for a slot (FIFO), scoped to a project. */
-  async findOldestWaiting(projectId?: number): Promise<Ticket | null> {
+  async findOldestWaiting(
+    projectId?: number,
+    opts?: { cliTypes?: CliType[] },
+  ): Promise<Ticket | null> {
+    if (opts?.cliTypes && opts.cliTypes.length === 0) return null;
+
     return this.repo.findOne({
       where: {
         waitingForSlot: true,
         ...(projectId != null ? { projectId } : {}),
+        ...(opts?.cliTypes ? { cliType: In(opts.cliTypes) } : {}),
       },
       order: { createdAt: "ASC" },
     });
@@ -168,4 +174,3 @@ export class TicketRepository {
     return (result.affected ?? 0) > 0;
   }
 }
-

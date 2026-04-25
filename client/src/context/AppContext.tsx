@@ -8,13 +8,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { fetchProjects } from "../api";
-import type { Project } from "../types";
+import { fetchAppState, fetchProjects, updateAppState } from "../api";
+import type { AppState, CliType, Project, WsMessage } from "../types";
 import {
   clearStoredProjectSelection,
   readStoredProjectSelection,
   writeStoredProjectSelection,
 } from "../utils/projectSelection";
+import { useWebSocket } from "../ws";
 
 export type View = "tickets" | "slots" | "projects";
 
@@ -25,6 +26,10 @@ type AppContextValue = {
   selectedProjectId: number | null;
   setSelectedProjectId: (projectId: number | null) => void;
   canImportFromMonday: boolean;
+  appState: AppState | null;
+  loadAppState: () => Promise<void>;
+  setAutoTriggerEnabled: (enabled: boolean) => Promise<void>;
+  setCliAvailable: (cliType: CliType, available: boolean) => Promise<void>;
   loadProjects: () => Promise<void>;
 };
 
@@ -33,6 +38,7 @@ const AppContext = createContext<AppContextValue | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>("tickets");
   const [projects, setProjects] = useState<Project[]>([]);
+  const [appState, setAppState] = useState<AppState | null>(null);
   const [selectedProjectId, setSelectedProjectIdState] = useState<number | null>(null);
   const selectedProjectIdRef = useRef<number | null>(null);
 
@@ -90,9 +96,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loadAppState = useCallback(async () => {
+    try {
+      setAppState(await fetchAppState());
+    } catch (error) {
+      console.error("Failed to load app state", error);
+    }
+  }, []);
+
+  const setAutoTriggerEnabled = useCallback(async (enabled: boolean) => {
+    const next = await updateAppState({ autoTriggerEnabled: enabled });
+    setAppState(next);
+  }, []);
+
+  const setCliAvailable = useCallback(
+    async (cliType: CliType, available: boolean) => {
+      const current = appState?.availableCliTypes ?? [];
+      const nextCliTypes = available
+        ? [...new Set([...current, cliType])]
+        : current.filter((value) => value !== cliType);
+      const next = await updateAppState({ availableCliTypes: nextCliTypes });
+      setAppState(next);
+    },
+    [appState],
+  );
+
   useEffect(() => {
     void loadProjects();
-  }, [loadProjects]);
+    void loadAppState();
+  }, [loadProjects, loadAppState]);
+
+  useWebSocket(
+    useCallback((msg: WsMessage) => {
+      if (msg.type === "app-state.updated") {
+        setAppState(msg.appState);
+      }
+    }, []),
+  );
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -102,9 +142,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       selectedProjectId,
       setSelectedProjectId,
       canImportFromMonday,
+      appState,
+      loadAppState,
+      setAutoTriggerEnabled,
+      setCliAvailable,
       loadProjects,
     }),
-    [view, projects, selectedProjectId, setSelectedProjectId, canImportFromMonday, loadProjects],
+    [
+      view,
+      projects,
+      selectedProjectId,
+      setSelectedProjectId,
+      canImportFromMonday,
+      appState,
+      loadAppState,
+      setAutoTriggerEnabled,
+      setCliAvailable,
+      loadProjects,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
