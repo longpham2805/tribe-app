@@ -7,6 +7,7 @@ import { TicketStatus } from "../enum/TicketStatus";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { pickCliForNewTicket } from "../cli";
 import { AppStateRepository } from "../repository/AppStateRepository";
+import { emit } from "../lib/events";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
@@ -186,6 +187,19 @@ router.patch("/:id", async (req: Request, res: Response) => {
     }
 
     const { title, description, currentPhase, status: statusRaw } = req.body;
+    const hasTitlePatch = title !== undefined;
+    const hasDescriptionPatch = description !== undefined;
+    const hasContentPatch = hasTitlePatch || hasDescriptionPatch;
+
+    if (hasTitlePatch && (typeof title !== "string" || title.trim().length === 0 || title.trim().length > 255)) {
+      res.status(400).json({ error: "title must be a non-empty string of 255 characters or fewer" });
+      return;
+    }
+
+    if (hasDescriptionPatch && typeof description !== "string") {
+      res.status(400).json({ error: "description must be a string" });
+      return;
+    }
 
     if (currentPhase && !PHASE_VALUES.includes(currentPhase)) {
       res.status(400).json({ error: `Invalid phase. Must be one of: ${PHASE_VALUES.join(", ")}` });
@@ -220,6 +234,11 @@ router.patch("/:id", async (req: Request, res: Response) => {
       }
     }
 
+    if (hasContentPatch && !existing.waitingForSlot) {
+      res.status(409).json({ error: "Ticket content can only be edited while waiting for a slot" });
+      return;
+    }
+
     // If phase is changing, complete the active phase and activate the pending one
     if (currentPhase && currentPhase !== existing.currentPhase) {
       const activePhase = await phaseRepo.findActiveByTicketId(id);
@@ -233,8 +252,8 @@ router.patch("/:id", async (req: Request, res: Response) => {
     }
 
     await ticketRepo.update(id, {
-      title,
-      description,
+      title: hasTitlePatch ? title.trim() : undefined,
+      description: hasDescriptionPatch ? description.trim() : undefined,
       currentPhase: currentPhase as TicketPhase | undefined,
       status: nextStatus === existing.status || (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY)
         ? undefined
@@ -249,6 +268,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
     }
 
     const full = await ticketRepo.findById(id);
+    if (full) emit({ type: "ticket.updated", ticket: full });
     res.json(full);
   } catch (err: any) {
     const msg = err.message ?? "";

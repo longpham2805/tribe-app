@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { type CSSProperties, type FormEvent, useEffect, useState } from "react";
 import { extractPullRequestUrl, getPullRequestLinkLabel } from "../../constants/ticket";
 import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
@@ -24,6 +24,7 @@ interface TicketDetailModalProps {
   responseDraft: string;
   onClose: () => void;
   onDelete: (ticketId: number) => void;
+  onUpdateContent: (ticketId: number, patch: { title: string; description: string }) => Promise<void>;
   onTriggerPhase: (ticketId: number, phase: TicketPhase) => void;
   onSelectPhase: (ticketId: number, phase: TicketPhase) => void;
   onOpenFile: (fileName: string) => void;
@@ -36,6 +37,7 @@ interface TicketDetailModalProps {
   statusColors: Record<PhaseStatus, string | null>;
   pausedStatuses: readonly PhaseStatus[];
   phases: readonly TicketPhase[];
+  savingContent: boolean;
 }
 
 export function TicketDetailModal({
@@ -53,6 +55,7 @@ export function TicketDetailModal({
   responseDraft,
   onClose,
   onDelete,
+  onUpdateContent,
   onTriggerPhase,
   onSelectPhase,
   onOpenFile,
@@ -65,9 +68,23 @@ export function TicketDetailModal({
   statusColors,
   pausedStatuses,
   phases,
+  savingContent,
 }: TicketDetailModalProps) {
+  const [editingContent, setEditingContent] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [contentError, setContentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditingContent(false);
+    setDraftTitle(ticket?.title ?? "");
+    setDraftDescription(ticket?.description ?? "");
+    setContentError(null);
+  }, [ticket?.id, ticket?.title, ticket?.description, ticket?.waitingForSlot]);
+
   if (!ticket) return null;
 
+  const canEditContent = ticket.waitingForSlot;
   const assignedArtifacts = ticket.branchName || (ticket.pullRequests?.length ?? 0) > 0;
   const paused = ticket.phases.find(
     (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
@@ -76,6 +93,24 @@ export function TicketDetailModal({
   const ticketRunning = ticket.phases.some((phase) => phase.status === "RUNNING");
   const isReplyBusy = respondingTicket === ticket.id;
   const title = viewer?.fileName ? `Ticket #${ticket.id} · ${viewer.fileName}` : `Ticket #${ticket.id} · ${ticket.title}`;
+  const trimmedDraftTitle = draftTitle.trim();
+  const titleTooLong = trimmedDraftTitle.length > 255;
+  const saveDisabled = savingContent || !trimmedDraftTitle || titleTooLong;
+
+  const handleContentSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (saveDisabled) return;
+    setContentError(null);
+    try {
+      await onUpdateContent(ticket.id, {
+        title: trimmedDraftTitle,
+        description: draftDescription.trim(),
+      });
+      setEditingContent(false);
+    } catch (error: unknown) {
+      setContentError(error instanceof Error ? error.message : "Failed to update ticket");
+    }
+  };
 
   const fileToPhase = (fileName: string): TicketPhase | null => {
     const base = fileName.replace(/\.md$/, "").toLowerCase();
@@ -131,30 +166,49 @@ export function TicketDetailModal({
             {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
           </span>
         </div>
-        <button
-          className="ticket-remove-button"
-          type="button"
-          onClick={() => onDelete(ticket.id)}
-          title="Remove ticket"
-        >
-          <svg
-            className="ticket-remove-button__icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        <div className="ticket-detail-actions">
+          {canEditContent ? (
+            <button
+              className="ticket-action-button"
+              type="button"
+              onClick={() => {
+                if (editingContent) {
+                  setDraftTitle(ticket.title);
+                  setDraftDescription(ticket.description ?? "");
+                }
+                setEditingContent((prev) => !prev);
+                setContentError(null);
+              }}
+              disabled={savingContent}
+            >
+              {editingContent ? "Cancel" : "Edit"}
+            </button>
+          ) : null}
+          <button
+            className="ticket-remove-button"
+            type="button"
+            onClick={() => onDelete(ticket.id)}
+            title="Remove ticket"
           >
-            <path d="M3 6h18" />
-            <path d="M8 6V4.75C8 4.336 8.336 4 8.75 4h6.5c.414 0 .75.336.75.75V6" />
-            <path d="M6.75 6l.6 11.3A2 2 0 0 0 9.347 19.2h5.306a2 2 0 0 0 1.997-1.9L17.25 6" />
-            <path d="M10 10.25v5.5" />
-            <path d="M14 10.25v5.5" />
-          </svg>
-          <span>Remove</span>
-        </button>
+            <svg
+              className="ticket-remove-button__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6V4.75C8 4.336 8.336 4 8.75 4h6.5c.414 0 .75.336.75.75V6" />
+              <path d="M6.75 6l.6 11.3A2 2 0 0 0 9.347 19.2h5.306a2 2 0 0 0 1.997-1.9L17.25 6" />
+              <path d="M10 10.25v5.5" />
+              <path d="M14 10.25v5.5" />
+            </svg>
+            <span>Remove</span>
+          </button>
+        </div>
       </div>
 
       <div style={metaRowStyle}>
@@ -170,7 +224,46 @@ export function TicketDetailModal({
         ) : null}
       </div>
 
-      {ticket.description ? <p className="ticket-desc">{ticket.description}</p> : null}
+      {editingContent ? (
+        <form className="ticket-edit-form" onSubmit={handleContentSubmit}>
+          <input
+            className="input"
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            maxLength={255}
+            required
+            autoFocus
+          />
+          <textarea
+            className="input textarea"
+            value={draftDescription}
+            onChange={(event) => setDraftDescription(event.target.value)}
+            rows={4}
+          />
+          {contentError ? <div className="ticket-edit-error">{contentError}</div> : null}
+          {titleTooLong ? <div className="ticket-edit-error">Title must be 255 characters or fewer.</div> : null}
+          <div className="ticket-edit-actions">
+            <button
+              className="btn"
+              type="button"
+              disabled={savingContent}
+              onClick={() => {
+                setEditingContent(false);
+                setDraftTitle(ticket.title);
+                setDraftDescription(ticket.description ?? "");
+                setContentError(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={saveDisabled}>
+              {savingContent ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      ) : ticket.description ? (
+        <p className="ticket-desc">{ticket.description}</p>
+      ) : null}
 
       {assignedArtifacts ? (
         <div className="ship-artifacts card">
