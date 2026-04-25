@@ -6,6 +6,7 @@ import {
 import { Ticket } from "../entity/Ticket";
 import { Phase } from "../entity/Phase";
 import { TicketPhase } from "../enum/TicketPhase";
+import { TicketStatus } from "../enum/TicketStatus";
 
 const ALL_PHASES: TicketPhase[] = [
   TicketPhase.CREATED,
@@ -23,12 +24,13 @@ export class TicketSubscriber implements EntitySubscriberInterface<Ticket> {
   async afterInsert(event: InsertEvent<Ticket>): Promise<void> {
     const ticketId = event.entity.id;
     const now = new Date();
+    const isReady = event.entity.status === TicketStatus.READY;
 
     const phases = ALL_PHASES.map((phaseName) =>
       event.manager.create(Phase, {
         ticketId,
         phaseName,
-        startedAt: phaseName === TicketPhase.CREATED ? now : null,
+        startedAt: isReady && phaseName === TicketPhase.CREATED ? now : null,
         completedAt: null,
       })
     );

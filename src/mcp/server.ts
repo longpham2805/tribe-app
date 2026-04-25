@@ -10,9 +10,12 @@ import { AppDataSource } from "../data-source";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { TicketPhase } from "../enum/TicketPhase";
+import { TicketStatus } from "../enum/TicketStatus";
+import { CliType } from "../enum/CliType";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { MondayHelper } from "../monday/MondayHelper";
 import { formatItemMarkdown } from "../monday/formatItemMarkdown";
+import { pickCliForNewTicket } from "../cli";
 import ticketRoutes from "../routes/tickets";
 import phaseRoutes from "../routes/phases";
 import mondayRoutes from "../routes/monday";
@@ -22,9 +25,20 @@ import appStateRoutes from "../routes/appState";
 import filesRoutes from "../routes/files";
 import { SlotRepository } from "../repository/SlotRepository";
 import { ProjectRepository } from "../repository/ProjectRepository";
+import { AppStateRepository } from "../repository/AppStateRepository";
 import { attachWebSocket } from "../ws/server";
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
+const TICKET_STATUS_VALUES = Object.values(TicketStatus) as [string, ...string[]];
+
+function hasProcessingStarted(ticket: { uid: string | null; slotId: number | null; waitingForSlot: boolean; phases?: Array<{ startedAt: Date | null; completedAt: Date | null }> }): boolean {
+  return (
+    ticket.uid != null ||
+    ticket.slotId != null ||
+    ticket.waitingForSlot ||
+    Boolean(ticket.phases?.some((phase) => phase.startedAt || phase.completedAt))
+  );
+}
 
 function createServer(): McpServer {
   const server = new McpServer({
@@ -74,11 +88,28 @@ function createServer(): McpServer {
     {
       title: z.string().describe("Short summary of the work"),
       description: z.string().optional().describe("Detailed description"),
+      status: z.enum(TICKET_STATUS_VALUES).optional().describe("Ticket readiness status"),
     },
-    async ({ title, description }) => {
+    async ({ title, description, status }) => {
       const ticketRepo = new TicketRepository();
+      const ticketStatus = (status as TicketStatus | undefined) ?? TicketStatus.READY;
+      let cliType = CliType.CLAUDE;
 
-      const ticket = await ticketRepo.create({ title, description });
+      if (ticketStatus === TicketStatus.READY) {
+        const appState = await new AppStateRepository().get();
+        if (appState.availableCliTypes.length === 0) {
+          return {
+            content: [{ type: "text", text: "No CLI is currently available" }],
+            isError: true,
+          };
+        }
+        cliType = await pickCliForNewTicket(ticketRepo, appState.availableCliTypes);
+      }
+
+      const ticket = await ticketRepo.create({ title, description, status: ticketStatus, cliType });
+      if (ticketStatus === TicketStatus.READY) {
+        await new PhaseHandler().initCreated(ticket);
+      }
       const full = await ticketRepo.findById(ticket.id);
       return {
         content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
@@ -94,8 +125,9 @@ function createServer(): McpServer {
       title: z.string().optional().describe("New title"),
       description: z.string().optional().describe("New description"),
       currentPhase: z.enum(PHASE_VALUES).optional().describe("Move ticket to this phase"),
+      status: z.enum(TICKET_STATUS_VALUES).optional().describe("Ticket readiness status"),
     },
-    async ({ id, title, description, currentPhase }) => {
+    async ({ id, title, description, currentPhase, status }) => {
       const ticketRepo = new TicketRepository();
       const phaseRepo = new PhaseRepository();
 
@@ -105,6 +137,35 @@ function createServer(): McpServer {
           content: [{ type: "text", text: `Ticket ${id} not found` }],
           isError: true,
         };
+      }
+
+      const nextStatus = (status as TicketStatus | undefined) ?? existing.status;
+      if (existing.status === TicketStatus.DRAFT && currentPhase && currentPhase !== existing.currentPhase) {
+        return {
+          content: [{ type: "text", text: `Ticket ${id} is draft and cannot be processed` }],
+          isError: true,
+        };
+      }
+      if (existing.status === TicketStatus.READY && nextStatus === TicketStatus.DRAFT && hasProcessingStarted(existing)) {
+        return {
+          content: [{ type: "text", text: `Ticket ${id} has already started processing and cannot be moved to draft` }],
+          isError: true,
+        };
+      }
+      if (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY) {
+        const appState = await new AppStateRepository().get();
+        if (appState.availableCliTypes.length === 0) {
+          return {
+            content: [{ type: "text", text: "No CLI is currently available" }],
+            isError: true,
+          };
+        }
+        if (!appState.availableCliTypes.includes(existing.cliType)) {
+          return {
+            content: [{ type: "text", text: `${existing.cliType} is currently unavailable` }],
+            isError: true,
+          };
+        }
       }
 
       // If phase is changing, complete the active phase and activate the pending one
@@ -119,11 +180,20 @@ function createServer(): McpServer {
         }
       }
 
-      const updated = await ticketRepo.update(id, {
+      await ticketRepo.update(id, {
         title,
         description,
         currentPhase: currentPhase as TicketPhase | undefined,
+        status: nextStatus === existing.status || (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY)
+          ? undefined
+          : nextStatus,
       });
+      if (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY) {
+        const full = await new PhaseHandler().publish(id);
+        return {
+          content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
+        };
+      }
       const full = await ticketRepo.findById(id);
       return {
         content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
@@ -356,9 +426,11 @@ function createServer(): McpServer {
         .string()
         .describe("Monday item ID or Monday item URL"),
       projectId: z.number().optional().describe("Project to import the ticket into"),
+      status: z.enum(TICKET_STATUS_VALUES).optional().describe("Ticket readiness status"),
     },
-    async ({ mondayItemId, projectId }) => {
+    async ({ mondayItemId, projectId, status }) => {
       try {
+        const ticketStatus = (status as TicketStatus | undefined) ?? TicketStatus.READY;
         // 1. Fetch from Monday
         const monday = MondayHelper.fromEnv();
         const { item } = await monday.getItemDetails(mondayItemId);
@@ -368,7 +440,6 @@ function createServer(): McpServer {
 
         // 3. Upsert into DB
         const ticketRepo = new TicketRepository();
-        const phaseRepo = new PhaseRepository();
         const existing = await ticketRepo.findByMondayItemId(item.id);
 
         let ticket;
@@ -377,6 +448,7 @@ function createServer(): McpServer {
           ticket = await ticketRepo.update(existing.id, {
             title: item.name,
             mondayMarkdown: markdown,
+            status: ticketStatus,
           });
         } else {
           // Create new ticket linked to Monday
@@ -385,12 +457,7 @@ function createServer(): McpServer {
             mondayItemId: item.id,
             mondayMarkdown: markdown,
             projectId: projectId ?? null,
-          });
-
-          // Auto-create the initial CREATED phase record
-          await phaseRepo.create({
-            ticketId: ticket.id,
-            phaseName: TicketPhase.CREATED,
+            status: ticketStatus,
           });
 
           // Re-fetch with relations

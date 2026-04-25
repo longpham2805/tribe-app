@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { TicketPhase } from "../enum/TicketPhase";
 import { PhaseStatus } from "../enum/PhaseStatus";
 import { CliType } from "../enum/CliType";
+import { TicketStatus } from "../enum/TicketStatus";
 import { Ticket } from "../entity/Ticket";
 import { Phase } from "../entity/Phase";
 import { TicketRepository } from "../repository/TicketRepository";
@@ -123,6 +124,12 @@ export class PhaseHandler {
     if (ticket) emit({ type: "ticket.updated", ticket });
   }
 
+  private assertReadyForProcessing(ticket: Ticket): void {
+    if (ticket.status === TicketStatus.DRAFT) {
+      throw new Error(`Ticket ${ticket.id} is draft and cannot be processed`);
+    }
+  }
+
   private parseShipArtifacts(content: string): { branchName: string | null; pullRequests: PullRequestArtifact[] } {
     const extractPrUrl = (raw: string): string | null => {
       const trimmed = raw.trim();
@@ -228,6 +235,7 @@ export class PhaseHandler {
 
     const ticket = await this.ticketRepo.findById(ticketId);
     if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+    this.assertReadyForProcessing(ticket);
     if (phaseName !== TicketPhase.CREATED) {
       await this.ensureCliAvailable(ticket);
     }
@@ -392,10 +400,37 @@ export class PhaseHandler {
 
   /** Public entry point for external callers (TicketSubscriber, SlotService). */
   async initCreated(ticket: Ticket): Promise<void> {
+    this.assertReadyForProcessing(ticket);
     return this.handleCreated(ticket);
   }
 
+  async publish(ticketId: number): Promise<Ticket> {
+    const ticket = await this.ticketRepo.findById(ticketId);
+    if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+
+    if (ticket.status !== TicketStatus.READY) {
+      await this.ticketRepo.update(ticketId, { status: TicketStatus.READY });
+      ticket.status = TicketStatus.READY;
+    }
+
+    const activePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
+    if (!activePhase) {
+      const createdPhase = ticket.phases?.find((phase) => phase.phaseName === TicketPhase.CREATED);
+      if (createdPhase && !createdPhase.startedAt) {
+        await this.updatePhase(createdPhase.id, { startedAt: new Date() });
+      }
+    }
+
+    await this.handleCreated(ticket);
+    await this.emitTicket(ticketId);
+
+    const updated = await this.ticketRepo.findById(ticketId);
+    if (!updated) throw new Error(`Ticket ${ticketId} not found after publish`);
+    return updated;
+  }
+
   protected async handleCreated(ticket: Ticket): Promise<void> {
+    this.assertReadyForProcessing(ticket);
     log(`handleCreated → ticket #${ticket.id} (uid=${ticket.uid ?? "none"}, slotId=${ticket.slotId ?? "none"})`);
 
     if (ticket.slotId == null) {
