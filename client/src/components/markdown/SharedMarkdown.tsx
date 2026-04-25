@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -6,7 +7,7 @@ interface SharedMarkdownProps {
   compact?: boolean;
 }
 
-export function SharedMarkdown({ content, compact = false }: SharedMarkdownProps) {
+export const SharedMarkdown = memo(function SharedMarkdown({ content, compact = false }: SharedMarkdownProps) {
   const fontSize = compact ? 12 : 14;
   return (
     <div style={{ lineHeight: 1.6, fontSize, color: "inherit", wordBreak: "break-word" }}>
@@ -34,4 +35,4 @@ export function SharedMarkdown({ content, compact = false }: SharedMarkdownProps
       </ReactMarkdown>
     </div>
   );
-}
+});

@@ -414,6 +414,46 @@ export function normalizeActivityEvents(events: unknown[]): ActivityItem[] {
   return events.map((event, index) => normalizeActivityEvent(event, index));
 }
 
+export const ACTIVITY_RENDER_EVENT_LIMIT = 200;
+export const ACTIVITY_RENDER_BYTE_LIMIT = 128 * 1024;
+
+export function estimateEventPayloadBytes(event: unknown): number {
+  try {
+    return JSON.stringify(event)?.length ?? String(event).length;
+  } catch {
+    return String(event).length;
+  }
+}
+
+export function selectRecentActivityEvents(
+  historicalEvents: unknown[],
+  liveEvents: unknown[],
+  maxItems = ACTIVITY_RENDER_EVENT_LIMIT,
+): { events: unknown[]; totalCount: number } {
+  const totalCount = historicalEvents.length + liveEvents.length;
+  if (totalCount <= maxItems) return { events: historicalEvents.concat(liveEvents), totalCount };
+  const liveWindow = liveEvents.slice(-maxItems);
+  const remainingHistory = Math.max(maxItems - liveWindow.length, 0);
+  return { events: [...historicalEvents.slice(-remainingHistory), ...liveWindow], totalCount };
+}
+
+export function getActivityMarkdownEntries(
+  events: unknown[],
+  maxBytes = ACTIVITY_RENDER_BYTE_LIMIT,
+): Array<{ id: string; content: string }> {
+  const entries: Array<{ id: string; content: string }> = [];
+  let totalBytes = 0;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const content = extractEventText(events[index]).trim();
+    if (!content) continue;
+    const nextBytes = totalBytes + content.length;
+    if (entries.length > 0 && nextBytes > maxBytes) break;
+    entries.push({ id: `${normalizeActivityEvent(events[index], index).id}:${index}`, content });
+    totalBytes = nextBytes;
+  }
+  return entries.reverse();
+}
+
 function formatAssistantMarkdown(blocks: AssistantContentBlock[]): string {
   return blocks
     .map((block) => {
