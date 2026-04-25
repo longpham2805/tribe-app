@@ -21,7 +21,7 @@ export const AppHeader = memo(function AppHeader() {
     <header className="header">
       <div className="header-inner">
         <div className="header-brand">
-          <h1 className="logo">Tribe</h1>
+          <img src="/tribe-logo.svg" className="logo" alt="Tribe" />
           <nav className="header-nav">
             {viewButtons.map((viewButton) => (
               <button
