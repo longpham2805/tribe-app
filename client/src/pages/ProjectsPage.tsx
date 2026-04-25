@@ -248,7 +248,7 @@ const ProjectCard = memo(function ProjectCard({
             <input
               ref={logoInputRef}
               type="file"
-              accept=".jpg,.jpeg,.png,.gif,.webp"
+              accept=".jpg,.jpeg,.png,.gif,.webp,.svg"
               style={{ display: "none" }}
               onChange={handleLogoChange}
             />
