@@ -5,7 +5,6 @@ import {
   fetchBoardTickets,
   fetchSlots,
   fetchTicketFiles,
-  fetchTickets,
   respondPhase,
   triggerPhase,
   updateTicket,
@@ -98,7 +97,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [loading, setLoading] = useState(true);
   const [loadingMoreDone, setLoadingMoreDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filterPhase, setFilterPhase] = useState<TicketPhase | "">("");
   const [donePage, setDonePage] = useState(1);
   const [doneTotal, setDoneTotal] = useState(0);
   const [showForm, setShowForm] = useState(false);
@@ -120,7 +118,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
   const newTicketTitleRef = useRef<HTMLInputElement>(null);
   const ticketFileRefreshTimers = useRef<Record<number, number>>({});
-  const isBoardMode = filterPhase === "";
   const fetchAndStoreTicketFiles = useCallback(
     async (ticketId: number) => {
       const files = await fetchTicketFiles(ticketId);
@@ -132,31 +129,20 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const load = useCallback(async () => {
     try {
       setError(null);
-      if (isBoardMode) {
-        const [ticketData, slotData] = await Promise.all([
-          fetchBoardTickets(projectId ?? undefined),
-          fetchSlots(projectId ?? undefined),
-        ]);
-        setTickets([...ticketData.nonDoneTickets, ...ticketData.doneTickets]);
-        setDonePage(ticketData.donePage);
-        setDoneTotal(ticketData.doneTotal);
-        setSlots(slotData);
-      } else {
-        const [ticketData, slotData] = await Promise.all([
-          fetchTickets(filterPhase || undefined, projectId ?? undefined),
-          fetchSlots(projectId ?? undefined),
-        ]);
-        setTickets(ticketData);
-        setDonePage(1);
-        setDoneTotal(0);
-        setSlots(slotData);
-      }
+      const [ticketData, slotData] = await Promise.all([
+        fetchBoardTickets(projectId ?? undefined),
+        fetchSlots(projectId ?? undefined),
+      ]);
+      setTickets([...ticketData.nonDoneTickets, ...ticketData.doneTickets]);
+      setDonePage(ticketData.donePage);
+      setDoneTotal(ticketData.doneTotal);
+      setSlots(slotData);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [filterPhase, isBoardMode, projectId]);
+  }, [projectId]);
 
   useEffect(() => {
     setLoading(true);
@@ -300,7 +286,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     for (const ticket of tickets) groups[getTicketGroup(ticket)].push(ticket);
     return groups;
   }, [tickets, getTicketGroup]);
-  const doneHasMore = isBoardMode && ticketsByGroup.DONE.length < doneTotal;
+  const doneHasMore = ticketsByGroup.DONE.length < doneTotal;
 
   const slotNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -481,7 +467,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   );
 
   const handleLoadMoreDone = useCallback(async () => {
-    if (!isBoardMode || loadingMoreDone || !doneHasMore) return;
+    if (loadingMoreDone || !doneHasMore) return;
 
     setLoadingMoreDone(true);
     try {
@@ -501,7 +487,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     } finally {
       setLoadingMoreDone(false);
     }
-  }, [doneHasMore, donePage, getTicketGroup, isBoardMode, loadingMoreDone, projectId]);
+  }, [doneHasMore, donePage, getTicketGroup, loadingMoreDone, projectId]);
 
   return (
     <>
@@ -572,21 +558,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
                 Import from Monday
               </button>
             )}
-          </div>
-          <div className="filter-tabs">
-            <button className={`tab ${filterPhase === "" ? "active" : ""}`} onClick={() => setFilterPhase("")}>
-              All
-            </button>
-            {PHASES.map((phase) => (
-              <button
-                key={phase}
-                className={`tab ${filterPhase === phase ? "active" : ""}`}
-                onClick={() => setFilterPhase(phase)}
-                style={filterPhase === phase ? { borderColor: PHASE_COLORS[phase] } : {}}
-              >
-                {PHASE_LABELS[phase]}
-              </button>
-            ))}
           </div>
           <span className="count">
             {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
