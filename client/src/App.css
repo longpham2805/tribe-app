@@ -462,10 +462,26 @@
   justify-content: space-between;
 }
 
+.ticket-card .ticket-header {
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
 .ticket-meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.ticket-card .ticket-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+  row-gap: 0.35rem;
+  column-gap: 0.4rem;
+}
+
+.ticket-card .ticket-header > .ticket-date {
+  flex: 0 0 auto;
 }
 
 .ticket-id {
@@ -483,6 +499,52 @@
   text-transform: uppercase;
 }
 
+.ticket-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.1;
+  vertical-align: middle;
+}
+
+.ticket-tag-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: 0 0 1.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ticket-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-tag--slot .ticket-tag-label {
+  max-width: 9rem;
+}
+
+.ticket-tag--running .ticket-tag-label {
+  max-width: 10rem;
+}
+
+.ticket-tag--cli .ticket-tag-icon {
+  font-size: 0.52rem;
+}
+
 .ticket-running-badge {
   display: inline-flex;
   align-items: center;
@@ -495,6 +557,29 @@
   border-radius: 999px;
   background: currentColor;
   animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.ticket-running-dot.ticket-tag-icon {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex-basis: 0.45rem;
+  padding: 0;
+  background: currentColor;
+}
+
+@media (max-width: 420px) {
+  .ticket-card .ticket-header {
+    align-items: flex-start;
+  }
+
+  .ticket-card .ticket-date {
+    padding-top: 0.1rem;
+  }
+
+  .ticket-tag--slot .ticket-tag-label,
+  .ticket-tag--running .ticket-tag-label {
+    max-width: 7rem;
+  }
 }
 
 .btn-delete {
