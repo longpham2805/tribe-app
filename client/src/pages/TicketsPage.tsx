@@ -334,7 +334,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
   const handleDelete = useCallback(
     async (ticketId: number) => {
-      if (!confirm("Delete this ticket?")) return;
+      if (!confirm("Remove this ticket?")) return;
       try {
         await deleteTicket(ticketId);
         if (selectedTicketId === ticketId) {
