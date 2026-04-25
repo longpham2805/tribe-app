@@ -400,6 +400,44 @@
   color: #ef4444;
 }
 
+.ticket-remove-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.ticket-remove-button:hover {
+  color: #fecaca;
+  border-color: #b91c1c;
+  background: rgba(127, 29, 29, 0.12);
+}
+
+.ticket-remove-button:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.ticket-remove-button__icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+}
+
 .ticket-title {
   font-size: 0.95rem;
   font-weight: 600;
