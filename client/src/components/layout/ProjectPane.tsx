@@ -45,6 +45,7 @@ export const ProjectPane = memo(function ProjectPane({
     running: !!project.hasRunningTickets,
     runningCount: project.runningTicketCount ?? 0,
     initial: getProjectInitial(project.name),
+    logoPath: project.logoPath,
     ...getProjectPalette(project),
   }));
 
@@ -90,7 +91,16 @@ export const ProjectPane = memo(function ProjectPane({
               }
             >
               <div className="project-pane-card__header">
-                <span className="project-pane-card__title" aria-hidden="true">{item.initial}</span>
+                {item.logoPath ? (
+                  <img
+                    src={`/api/uploads/projects/${item.id}/logo`}
+                    alt=""
+                    className="project-pane-card__logo"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <span className="project-pane-card__title" aria-hidden="true">{item.initial}</span>
+                )}
               </div>
 
               {item.running ? (

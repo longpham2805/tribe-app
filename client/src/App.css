@@ -202,6 +202,13 @@
   text-transform: uppercase;
 }
 
+.project-pane-card__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
 .project-pane-card__status {
   display: inline-flex;
   align-items: center;
