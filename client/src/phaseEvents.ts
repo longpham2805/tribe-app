@@ -226,7 +226,7 @@ function normalizeItemEvent(event: UnknownRecord, index: number): ActivityItem {
       timestamp: asString(event.at),
       actor: "Codex",
       title: status ? `Agent message ${status}` : "Agent message",
-      summary: text ? truncate(text, 160) : undefined,
+      summary: text ?? undefined,
       detail: item ? sanitizeRecordDetail(item, ["text"]) : undefined,
       raw: event,
       severity: inferSeverity(event),
