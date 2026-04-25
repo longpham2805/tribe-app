@@ -3,6 +3,7 @@ import { AppDataSource } from "../data-source";
 import { Ticket } from "../entity/Ticket";
 import { TicketPhase } from "../enum/TicketPhase";
 import { CliType } from "../enum/CliType";
+import { TicketStatus } from "../enum/TicketStatus";
 
 export interface BoardTicketsPage {
   nonDoneTickets: Ticket[];
@@ -91,6 +92,7 @@ export class TicketRepository {
     mondayMarkdown?: string;
     projectId?: number | null;
     cliType?: CliType;
+    status?: TicketStatus;
   }): Promise<Ticket> {
     const ticket = this.repo.create({
       title: data.title,
@@ -100,6 +102,7 @@ export class TicketRepository {
       mondayMarkdown: data.mondayMarkdown ?? null,
       projectId: data.projectId ?? null,
       cliType: data.cliType ?? CliType.CLAUDE,
+      status: data.status ?? TicketStatus.READY,
       currentPhase: TicketPhase.CREATED,
     });
     return this.repo.save(ticket);
@@ -122,6 +125,7 @@ export class TicketRepository {
       branchName?: string | null;
       pullRequests?: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
       isDone?: boolean;
+      status?: TicketStatus;
     }
   ): Promise<Ticket | null> {
     const ticket = await this.findById(id);
@@ -137,6 +141,7 @@ export class TicketRepository {
     if (data.branchName !== undefined) ticket.branchName = data.branchName;
     if (data.pullRequests !== undefined) ticket.pullRequests = data.pullRequests;
     if (data.isDone !== undefined) ticket.isDone = data.isDone;
+    if (data.status !== undefined) ticket.status = data.status;
 
     return this.repo.save(ticket);
   }
@@ -162,6 +167,7 @@ export class TicketRepository {
     return this.repo.findOne({
       where: {
         waitingForSlot: true,
+        status: TicketStatus.READY,
         ...(projectId != null ? { projectId } : {}),
         ...(opts?.cliTypes ? { cliType: In(opts.cliTypes) } : {}),
       },

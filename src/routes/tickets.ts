@@ -3,11 +3,13 @@ import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { TicketPhase } from "../enum/TicketPhase";
 import { CliType } from "../enum/CliType";
+import { TicketStatus } from "../enum/TicketStatus";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { pickCliForNewTicket } from "../cli";
 import { AppStateRepository } from "../repository/AppStateRepository";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
+const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
 const router = Router();
 
 // GET /api/tickets/board?projectId=1&donePage=1
@@ -88,10 +90,26 @@ router.get("/:id", async (req: Request, res: Response) => {
 
 const CLI_TYPE_VALUES = Object.values(CliType) as string[];
 
-// POST /api/tickets  { title, description?, projectId?, cliType? }
+function parseTicketStatus(value: unknown, fallback = TicketStatus.READY): TicketStatus | null {
+  if (value === undefined) return fallback;
+  return typeof value === "string" && TICKET_STATUS_VALUES.includes(value)
+    ? (value as TicketStatus)
+    : null;
+}
+
+function hasProcessingStarted(ticket: { uid: string | null; slotId: number | null; waitingForSlot: boolean; phases?: Array<{ startedAt: Date | null; completedAt: Date | null }> }): boolean {
+  return (
+    ticket.uid != null ||
+    ticket.slotId != null ||
+    ticket.waitingForSlot ||
+    Boolean(ticket.phases?.some((phase) => phase.startedAt || phase.completedAt))
+  );
+}
+
+// POST /api/tickets  { title, description?, projectId?, cliType?, status? }
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { title, description, projectId, cliType: cliTypeRaw } = req.body;
+    const { title, description, projectId, cliType: cliTypeRaw, status: statusRaw } = req.body;
     if (!title || typeof title !== "string") {
       res.status(400).json({ error: "title is required" });
       return;
@@ -102,42 +120,55 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
-    const ticketRepo = new TicketRepository();
-    const appState = await new AppStateRepository().get();
-    if (appState.availableCliTypes.length === 0) {
-      res.status(409).json({ error: "No CLI is currently available" });
-      return;
-    }
-    if (cliTypeRaw !== undefined && !appState.availableCliTypes.includes(cliTypeRaw as CliType)) {
-      res.status(409).json({ error: `${cliTypeRaw} is currently unavailable` });
+    const status = parseTicketStatus(statusRaw);
+    if (!status) {
+      res.status(400).json({ error: `status must be one of: ${TICKET_STATUS_VALUES.join(", ")}` });
       return;
     }
 
-    const cliType = cliTypeRaw
-      ? (cliTypeRaw as CliType)
-      : await pickCliForNewTicket(ticketRepo, appState.availableCliTypes);
+    const ticketRepo = new TicketRepository();
+    let cliType = cliTypeRaw ? (cliTypeRaw as CliType) : CliType.CLAUDE;
+
+    if (status === TicketStatus.READY) {
+      const appState = await new AppStateRepository().get();
+      if (appState.availableCliTypes.length === 0) {
+        res.status(409).json({ error: "No CLI is currently available" });
+        return;
+      }
+      if (cliTypeRaw !== undefined && !appState.availableCliTypes.includes(cliTypeRaw as CliType)) {
+        res.status(409).json({ error: `${cliTypeRaw} is currently unavailable` });
+        return;
+      }
+      cliType = cliTypeRaw
+        ? (cliTypeRaw as CliType)
+        : await pickCliForNewTicket(ticketRepo, appState.availableCliTypes);
+    }
 
     const ticket = await ticketRepo.create({
       title,
       description,
       projectId: typeof projectId === "number" ? projectId : null,
       cliType,
+      status,
     });
 
-    // Run CREATED phase handler now that the insert transaction is committed,
-    // so the ticket row is no longer locked and slot assignment can succeed.
-    const handler = new PhaseHandler();
-    await handler.initCreated(ticket);
+    if (status === TicketStatus.READY) {
+      // Run CREATED phase handler now that the insert transaction is committed,
+      // so the ticket row is no longer locked and slot assignment can succeed.
+      const handler = new PhaseHandler();
+      await handler.initCreated(ticket);
+    }
 
     const full = await ticketRepo.findById(ticket.id);
     res.status(201).json(full);
   } catch (err: any) {
-    const status = err.message.includes("No CLI") ? 409 : 500;
-    res.status(status).json({ error: err.message });
+    const msg = err.message ?? "";
+    const status = msg.includes("No CLI") || msg.includes("currently unavailable") || msg.includes("is draft") ? 409 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 
-// PATCH /api/tickets/:id  { title?, description?, currentPhase? }
+// PATCH /api/tickets/:id  { title?, description?, currentPhase?, status? }
 router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const ticketRepo = new TicketRepository();
@@ -154,11 +185,39 @@ router.patch("/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const { title, description, currentPhase } = req.body;
+    const { title, description, currentPhase, status: statusRaw } = req.body;
 
     if (currentPhase && !PHASE_VALUES.includes(currentPhase)) {
       res.status(400).json({ error: `Invalid phase. Must be one of: ${PHASE_VALUES.join(", ")}` });
       return;
+    }
+
+    const nextStatus = parseTicketStatus(statusRaw, existing.status);
+    if (!nextStatus) {
+      res.status(400).json({ error: `status must be one of: ${TICKET_STATUS_VALUES.join(", ")}` });
+      return;
+    }
+
+    if (existing.status === TicketStatus.DRAFT && currentPhase && currentPhase !== existing.currentPhase) {
+      res.status(409).json({ error: `Ticket ${id} is draft and cannot be processed` });
+      return;
+    }
+
+    if (existing.status === TicketStatus.READY && nextStatus === TicketStatus.DRAFT && hasProcessingStarted(existing)) {
+      res.status(409).json({ error: `Ticket ${id} has already started processing and cannot be moved to draft` });
+      return;
+    }
+
+    if (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY) {
+      const appState = await new AppStateRepository().get();
+      if (appState.availableCliTypes.length === 0) {
+        res.status(409).json({ error: "No CLI is currently available" });
+        return;
+      }
+      if (!appState.availableCliTypes.includes(existing.cliType)) {
+        res.status(409).json({ error: `${existing.cliType} is currently unavailable` });
+        return;
+      }
     }
 
     // If phase is changing, complete the active phase and activate the pending one
@@ -177,12 +236,24 @@ router.patch("/:id", async (req: Request, res: Response) => {
       title,
       description,
       currentPhase: currentPhase as TicketPhase | undefined,
+      status: nextStatus === existing.status || (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY)
+        ? undefined
+        : nextStatus,
     });
+
+    if (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY) {
+      const handler = new PhaseHandler();
+      const full = await handler.publish(id);
+      res.json(full);
+      return;
+    }
 
     const full = await ticketRepo.findById(id);
     res.json(full);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const msg = err.message ?? "";
+    const status = msg.includes("No CLI") || msg.includes("currently unavailable") || msg.includes("is draft") ? 409 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 
@@ -258,7 +329,7 @@ router.post("/:ticketId/trigger-phase", async (req: Request, res: Response) => {
     const msg = err.message ?? "";
     let status = 500;
     if (msg.includes("not found")) status = 404;
-    else if (msg.includes("currently unavailable") || msg.includes("No CLI")) status = 409;
+    else if (msg.includes("currently unavailable") || msg.includes("No CLI") || msg.includes("is draft")) status = 409;
     res.status(status).json({ error: err.message });
   }
 });

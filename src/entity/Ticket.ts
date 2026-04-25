@@ -10,6 +10,7 @@ import {
 } from "typeorm";
 import { TicketPhase } from "../enum/TicketPhase";
 import { CliType } from "../enum/CliType";
+import { TicketStatus } from "../enum/TicketStatus";
 import { Phase } from "./Phase";
 import { Slot } from "./Slot";
 import { Project } from "./Project";
@@ -33,6 +34,9 @@ export class Ticket {
 
   @Column({ type: "enum", enum: TicketPhase, default: TicketPhase.CREATED })
   currentPhase!: TicketPhase;
+
+  @Column({ type: "enum", enum: TicketStatus, default: TicketStatus.READY })
+  status!: TicketStatus;
 
   @Column({ type: "enum", enum: CliType, default: CliType.CLAUDE })
   cliType!: CliType;

@@ -4,8 +4,17 @@ import { ProjectRepository } from "../repository/ProjectRepository";
 import { MondayHelper } from "../monday/MondayHelper";
 import { formatItemMarkdown } from "../monday/formatItemMarkdown";
 import { runTicketImportedHooks } from "../hooks/registry";
+import { TicketStatus } from "../enum/TicketStatus";
 
 const router = Router();
+const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
+
+function parseTicketStatus(value: unknown, fallback = TicketStatus.READY): TicketStatus | null {
+  if (value === undefined) return fallback;
+  return typeof value === "string" && TICKET_STATUS_VALUES.includes(value)
+    ? (value as TicketStatus)
+    : null;
+}
 
 function parseBoardId(boardId: string | undefined): number | undefined {
   if (!boardId) return undefined;
@@ -63,12 +72,17 @@ router.get("/not-started", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/monday/import  { mondayItemId: string, projectId?: number }
+// POST /api/monday/import  { mondayItemId: string, projectId?: number, status?: "DRAFT" | "READY" }
 router.post("/import", async (req: Request, res: Response) => {
   try {
-    const { mondayItemId, clues, projectId } = req.body;
+    const { mondayItemId, clues, projectId, status: statusRaw } = req.body;
     if (!mondayItemId || typeof mondayItemId !== "string") {
       res.status(400).json({ error: "mondayItemId (string) is required — numeric ID or Monday URL" });
+      return;
+    }
+    const status = parseTicketStatus(statusRaw);
+    if (!status) {
+      res.status(400).json({ error: `status must be one of: ${TICKET_STATUS_VALUES.join(", ")}` });
       return;
     }
     const description = clues && typeof clues === "string" && clues.trim() ? clues.trim() : undefined;
@@ -96,6 +110,7 @@ router.post("/import", async (req: Request, res: Response) => {
         mondayItemId: item.id,
         mondayBoardId,
         mondayMarkdown: markdown,
+        status,
         ...(description !== undefined ? { description } : {}),
       });
       action = "updated";
@@ -107,13 +122,14 @@ router.post("/import", async (req: Request, res: Response) => {
         mondayMarkdown: markdown,
         description,
         projectId: resolvedProjectId,
+        status,
       });
 
       ticket = await ticketRepo.findById(ticket.id);
       action = "created";
     }
 
-    if (ticket) {
+    if (ticket && ticket.status === TicketStatus.READY) {
       await runTicketImportedHooks(ticket, item);
     }
 
