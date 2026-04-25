@@ -45,18 +45,24 @@ export const AppHeader = memo(function AppHeader() {
               {appState.autoTriggerEnabled ? "Auto" : "Paused"}
             </button>
             <div className="cli-toggles" aria-label="Available CLIs">
-              {CLI_TYPES.map((cliType) => (
-                <label key={cliType.key} className="cli-toggle">
-                  <input
-                    type="checkbox"
-                    checked={appState.availableCliTypes.includes(cliType.key)}
-                    onChange={(event) =>
-                      void setCliAvailable(cliType.key, event.currentTarget.checked).catch(console.error)
-                    }
-                  />
-                  <span>{cliType.label}</span>
-                </label>
-              ))}
+              {CLI_TYPES.map((cliType) => {
+                const isAvailable = appState.availableCliTypes.includes(cliType.key);
+
+                return (
+                  <button
+                    key={cliType.key}
+                    type="button"
+                    className={`cli-toggle ${isAvailable ? "cli-toggle--selected" : ""}`}
+                    aria-pressed={isAvailable}
+                    aria-label={`${cliType.label} CLI ${isAvailable ? "available" : "unavailable"}`}
+                    title={`${cliType.label} CLI ${isAvailable ? "available" : "unavailable"}`}
+                    onClick={() => void setCliAvailable(cliType.key, !isAvailable).catch(console.error)}
+                  >
+                    <span className="cli-toggle__indicator" aria-hidden="true" />
+                    <span>{cliType.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
