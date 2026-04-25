@@ -157,7 +157,9 @@ router.post("/", async (req: Request, res: Response) => {
       // Run CREATED phase handler now that the insert transaction is committed,
       // so the ticket row is no longer locked and slot assignment can succeed.
       const handler = new PhaseHandler();
-      await handler.initCreated(ticket);
+      handler.initCreated(ticket).catch((err) => {
+        console.error(`initCreated error for ticket #${ticket.id}: ${err?.message ?? err}`);
+      });
     }
 
     const full = await ticketRepo.findById(ticket.id);
