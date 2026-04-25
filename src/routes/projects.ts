@@ -3,6 +3,7 @@ import { ProjectRepository } from "../repository/ProjectRepository";
 
 const router = Router();
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+const MAX_PROJECT_CONTEXT_FIELD_CHARS = 4000;
 
 type ProjectPayload = {
   name?: unknown;
@@ -12,6 +13,9 @@ type ProjectPayload = {
   mondayDevPeople?: unknown;
   primaryColor?: unknown;
   actionColor?: unknown;
+  introduction?: unknown;
+  rules?: unknown;
+  techStack?: unknown;
 };
 
 function getErrorMessage(error: unknown): string {
@@ -66,6 +70,68 @@ function parseProjectColors(
   };
 }
 
+type ProjectAgentContextPayload = {
+  introduction: string | null | undefined;
+  rules: string | null | undefined;
+  techStack: string | null | undefined;
+  error?: string;
+};
+
+function normalizeProjectContextField(
+  value: unknown,
+  fieldName: "introduction" | "rules" | "techStack",
+): { value: string | null | undefined; error?: string } {
+  if (value === undefined) return { value: undefined };
+  if (value === null) return { value: null };
+  if (typeof value !== "string") {
+    return { value: undefined, error: `${fieldName} must be a string` };
+  }
+
+  const normalized = value.trim();
+  if (!normalized) return { value: null };
+  if (normalized.length > MAX_PROJECT_CONTEXT_FIELD_CHARS) {
+    return {
+      value: undefined,
+      error: `${fieldName} must be ${MAX_PROJECT_CONTEXT_FIELD_CHARS} characters or fewer`,
+    };
+  }
+
+  return { value: normalized };
+}
+
+function parseProjectAgentContext(
+  payload: ProjectPayload,
+  routeName: string,
+): ProjectAgentContextPayload {
+  const introduction = normalizeProjectContextField(payload.introduction, "introduction");
+  const rules = normalizeProjectContextField(payload.rules, "rules");
+  const techStack = normalizeProjectContextField(payload.techStack, "techStack");
+  const errors = [introduction.error, rules.error, techStack.error].filter(Boolean) as string[];
+
+  if (errors.length > 0) {
+    console.warn("Rejected project context payload", {
+      route: routeName,
+      fields: [
+        introduction.error ? "introduction" : null,
+        rules.error ? "rules" : null,
+        techStack.error ? "techStack" : null,
+      ].filter(Boolean),
+    });
+    return {
+      introduction: undefined,
+      rules: undefined,
+      techStack: undefined,
+      error: errors[0],
+    };
+  }
+
+  return {
+    introduction: introduction.value,
+    rules: rules.value,
+    techStack: techStack.value,
+  };
+}
+
 // GET /api/projects
 router.get("/", async (_req: Request, res: Response) => {
   try {
@@ -111,6 +177,11 @@ router.post("/", async (req: Request, res: Response) => {
       res.status(400).json({ error: colors.error });
       return;
     }
+    const agentContext = parseProjectAgentContext(payload, "POST /api/projects");
+    if (agentContext.error) {
+      res.status(400).json({ error: agentContext.error });
+      return;
+    }
     const repo = new ProjectRepository();
     const project = await repo.create({
       name,
@@ -123,6 +194,9 @@ router.post("/", async (req: Request, res: Response) => {
       mondayDevPeople: Array.isArray(mondayDevPeople) ? mondayDevPeople as string[] : undefined,
       primaryColor: colors.primaryColor,
       actionColor: colors.actionColor,
+      introduction: agentContext.introduction,
+      rules: agentContext.rules,
+      techStack: agentContext.techStack,
     });
     res.status(201).json(project);
   } catch (error: unknown) {
@@ -146,6 +220,11 @@ router.patch("/:id", async (req: Request, res: Response) => {
       res.status(400).json({ error: colors.error });
       return;
     }
+    const agentContext = parseProjectAgentContext(payload, "PATCH /api/projects/:id");
+    if (agentContext.error) {
+      res.status(400).json({ error: agentContext.error });
+      return;
+    }
     const updated = await repo.update(id, {
       name: typeof name === "string" ? name : undefined,
       slug: typeof slug === "string" || slug == null ? slug : undefined,
@@ -157,6 +236,9 @@ router.patch("/:id", async (req: Request, res: Response) => {
       mondayDevPeople: Array.isArray(mondayDevPeople) ? mondayDevPeople as string[] : undefined,
       primaryColor: colors.primaryColor,
       actionColor: colors.actionColor,
+      introduction: agentContext.introduction,
+      rules: agentContext.rules,
+      techStack: agentContext.techStack,
     });
     if (!updated) {
       res.status(404).json({ error: `Project ${id} not found` });

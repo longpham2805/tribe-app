@@ -13,3 +13,4 @@ const AGENTS: Partial<Record<TicketPhase, BaseAgent>> = {
 export const getAgent = (phase: TicketPhase): BaseAgent | null => AGENTS[phase] ?? null;
 
 export { BaseAgent, MARKER_REGEX, MARKER_TRAILER } from "./BaseAgent";
+export type { ProjectAgentContext } from "./BaseAgent";

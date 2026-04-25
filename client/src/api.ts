@@ -232,6 +232,9 @@ export async function createProject(data: {
   mondayDevPeople?: string[] | null;
   primaryColor?: string | null;
   actionColor?: string | null;
+  introduction?: string | null;
+  rules?: string | null;
+  techStack?: string | null;
 }): Promise<Project> {
   const res = await fetch(`${BASE}/projects`, {
     method: "POST",
@@ -255,6 +258,9 @@ export async function updateProject(
     mondayDevPeople?: string[] | null;
     primaryColor?: string | null;
     actionColor?: string | null;
+    introduction?: string | null;
+    rules?: string | null;
+    techStack?: string | null;
   },
 ): Promise<Project> {
   const res = await fetch(`${BASE}/projects/${id}`, {

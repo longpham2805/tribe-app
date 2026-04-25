@@ -35,6 +35,15 @@ export class Project {
   @Column({ type: "varchar", length: 7, nullable: true })
   actionColor!: string | null;
 
+  @Column({ type: "text", nullable: true })
+  introduction!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  rules!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  techStack!: string | null;
+
   @OneToMany(() => Ticket, (t) => t.project)
   tickets!: Ticket[];
 

@@ -50,6 +50,9 @@ export interface Project {
   mondayDevPeople: string[] | null;
   primaryColor: string | null;
   actionColor: string | null;
+  introduction: string | null;
+  rules: string | null;
+  techStack: string | null;
   ticketCount?: number;
   runningTicketCount?: number;
   hasRunningTickets?: boolean;

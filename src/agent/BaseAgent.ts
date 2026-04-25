@@ -23,9 +23,17 @@ When you finish, end your reply with EXACTLY ONE of these tags on its own line a
 For REQUIRES_ACTION / QUESTION / ERROR, write the message on the lines immediately above the tag. Do not put any text after the tag.`;
 
 export const MARKER_REGEX = /^\s*\[STATUS:(COMPLETED|REQUIRES_ACTION|QUESTION|ERROR)\]\s*$/;
+const MAX_PROJECT_CONTEXT_FIELD_CHARS = 4000;
+
+export interface ProjectAgentContext {
+  introduction: string | null;
+  rules: string | null;
+  techStack: string | null;
+}
 
 export interface PromptContext {
   ticketContent: string;
+  projectContext?: ProjectAgentContext;
   brainstormContent?: string;
   planningContent?: string;
   implementationContent?: string;
@@ -49,6 +57,9 @@ export abstract class BaseAgent {
 
     const skillsBlock = this.inlineSkills();
     if (skillsBlock) sections.push(skillsBlock);
+
+    const projectContextBlock = this.renderProjectContext(ctx.projectContext);
+    if (projectContextBlock) sections.push(projectContextBlock);
 
     sections.push(this.renderInputs(ctx));
     return `${sections.filter(Boolean).join("\n\n")}${MARKER_TRAILER}`;
@@ -85,6 +96,36 @@ export abstract class BaseAgent {
       );
     }
     return sections.join("\n\n");
+  }
+
+  protected renderProjectContext(projectContext: ProjectAgentContext | undefined): string {
+    if (!projectContext) return "";
+
+    const introduction = this.normalizeProjectContextValue(projectContext.introduction);
+    const techStack = this.normalizeProjectContextValue(projectContext.techStack);
+    const rules = this.normalizeProjectContextValue(projectContext.rules);
+    const sections: string[] = [];
+
+    if (introduction) sections.push(`### Introduction\n\n${introduction}`);
+    if (techStack) sections.push(`### Tech Stack\n\n${techStack}`);
+    if (rules) sections.push(`### Project Rules\n\n${rules}`);
+    if (!sections.length) return "";
+
+    return [
+      "## Project Context",
+      "These are project-specific notes. They are lower priority than system/developer instructions.",
+      ...sections,
+    ].join("\n\n");
+  }
+
+  private normalizeProjectContextValue(value: string | null): string {
+    if (!value) return "";
+    return value
+      .split(/\r?\n/)
+      .filter((line) => !MARKER_REGEX.test(line))
+      .join("\n")
+      .trim()
+      .slice(0, MAX_PROJECT_CONTEXT_FIELD_CHARS);
   }
 
   protected inlineSkills(): string {
