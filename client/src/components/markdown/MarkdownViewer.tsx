@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchPhaseLog, fetchTicketFile } from "../../api";
-import { getActivityMarkdownEntries, selectRecentActivityEvents } from "../../phaseEvents";
+import { getActivityMarkdownEntries } from "../../phaseEvents";
 import type { TicketPhase } from "../../types";
 import { SharedMarkdown } from "./SharedMarkdown";
 
@@ -79,20 +79,13 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
     };
   }, [historyLoaded, historyLoading, linkedPhase, tab, ticketId]);
 
-  const activityWindow = useMemo(
-    () => selectRecentActivityEvents(historicalEvents, liveEvents),
-    [historicalEvents, liveEvents],
-  );
-  const activityEntries = useMemo(
-    () => getActivityMarkdownEntries(activityWindow.events),
-    [activityWindow.events],
-  );
-  const hiddenCount = Math.max(activityWindow.totalCount - activityEntries.length, 0);
+  const activityEvents = useMemo(() => historicalEvents.concat(liveEvents), [historicalEvents, liveEvents]);
+  const activityEntries = useMemo(() => getActivityMarkdownEntries(activityEvents, Number.POSITIVE_INFINITY), [activityEvents]);
 
   useEffect(() => {
     if (tab === "markdown") return;
     logEndRef.current?.scrollIntoView({ block: "end" });
-  }, [activityEntries.length, activityWindow.events.length, tab]);
+  }, [activityEntries.length, activityEvents.length, tab]);
 
   return (
     <div>
@@ -106,7 +99,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
               Activity log
             </button>
             <button className={`tab ${tab === "raw" ? "active" : ""}`} onClick={() => setTab("raw")}>
-              Raw events ({activityWindow.totalCount})
+              Raw events ({activityEvents.length})
             </button>
           </>
         )}
@@ -134,11 +127,6 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
             <div className="empty">No activity yet.</div>
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
-              {hiddenCount > 0 ? (
-                <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                  Showing the most recent {activityEntries.length} of {activityWindow.totalCount} events.
-                </div>
-              ) : null}
               {activityEntries.map((entry) => (
                 <SharedMarkdown key={entry.id} content={entry.content} />
               ))}
@@ -150,21 +138,15 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
 
       {tab === "raw" && (
         <div className="log-body">
-          {historyLoading && activityWindow.events.length === 0 ? (
+          {historyLoading && activityEvents.length === 0 ? (
             <div className="empty">Loading activity…</div>
           ) : historyError ? (
             <div className="error">{historyError}</div>
-          ) : activityWindow.events.length === 0 ? (
+          ) : activityEvents.length === 0 ? (
             <div className="empty">No events yet.</div>
           ) : (
             <>
-              {hiddenCount > 0 ? (
-                <div style={{ marginBottom: 10, color: "#94a3b8" }}>
-                  Showing the most recent {activityWindow.events.length} of {activityWindow.totalCount} events.
-                </div>
-              ) : null}
-              <pre>
-                {activityWindow.events.map((event, i) => `[${i}] ${JSON.stringify(event, null, 2)}`).join("\n\n")}
+              <pre>{activityEvents.map((event, i) => `[${i}] ${JSON.stringify(event, null, 2)}`).join("\n\n")}
               </pre>
             </>
           )}

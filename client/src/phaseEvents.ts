@@ -55,9 +55,8 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function truncate(value: string, max = 120): string {
-  const compact = value.replace(/\s+/g, " ").trim();
-  return compact.length <= max ? compact : `${compact.slice(0, max - 1)}…`;
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function toTitleCase(value: string): string {
@@ -112,7 +111,7 @@ function summarizeToolInput(input: unknown): string | undefined {
   const filePath = asString(input.file_path);
   if (filePath) return `\`${filePath.replace(/.*\//, "")}\``;
   const command = asString(input.command);
-  if (command) return `\`${truncate(command, 60)}\``;
+  if (command) return `\`${normalizeWhitespace(command)}\``;
   const pattern = asString(input.pattern);
   const path = asString(input.path);
   if (pattern && path) return `\`${pattern}\` in \`${path}\``;
@@ -137,7 +136,7 @@ function summarizeAssistantBlocks(blocks: AssistantContentBlock[]): string | und
   for (const block of blocks) {
     if (block.type === "text") {
       const text = asString(block.text);
-      if (text) summaries.push(truncate(text, 300));
+      if (text) summaries.push(text.trim());
       continue;
     }
     if (block.type === "thinking") {
@@ -243,9 +242,9 @@ function normalizeItemEvent(event: UnknownRecord, index: number): ActivityItem {
       actor: "Command",
       title: status ? `Command ${status}` : "Command execution",
       summary: command
-        ? truncate(command, 160)
+        ? normalizeWhitespace(command)
         : aggregatedOutput
-          ? truncate(aggregatedOutput, 160)
+          ? normalizeWhitespace(aggregatedOutput)
           : undefined,
       detail: item ? sanitizeRecordDetail(item, ["command", "aggregated_output"]) : undefined,
       raw: event,
@@ -261,7 +260,7 @@ function normalizeItemEvent(event: UnknownRecord, index: number): ActivityItem {
     title: status
       ? `${toTitleCase(itemType ?? "item")} ${status}`
       : toTitleCase(itemType ?? "item"),
-    summary: item ? truncate(JSON.stringify(sanitizeDetail(item)), 160) : undefined,
+    summary: item ? JSON.stringify(sanitizeDetail(item)) : undefined,
     detail: item ? sanitizeRecordDetail(item) : undefined,
     raw: event,
     severity: inferSeverity(event),
@@ -344,7 +343,7 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
       timestamp,
       actor: "You",
       title: "User message",
-      summary: text ? truncate(text, 160) : undefined,
+      summary: text?.trim() || undefined,
       detail: sanitizeRecordDetail(event, ["type", "at", "text"]),
       raw: event,
       severity,
@@ -358,7 +357,7 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
       kind: "raw",
       timestamp,
       title: "Raw output",
-      summary: text ? truncate(text, 160) : undefined,
+      summary: text ? text.trim() : undefined,
       detail: sanitizeRecordDetail(event, ["type", "at", "text"]),
       raw: event,
       severity,
@@ -372,7 +371,7 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
       kind: "result",
       timestamp,
       title: "Result",
-      summary: result ? truncate(result, 160) : undefined,
+      summary: result ? result.trim() : undefined,
       detail: sanitizeRecordDetail(event, ["type", "at", "result"]),
       raw: event,
       severity,

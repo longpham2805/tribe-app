@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog } from "../../api";
-import {
-  ACTIVITY_RENDER_BYTE_LIMIT,
-  ACTIVITY_RENDER_EVENT_LIMIT,
-  estimateEventPayloadBytes,
-  getActivityMarkdownEntries,
-  selectRecentActivityEvents,
-} from "../../phaseEvents";
+import { estimateEventPayloadBytes, getActivityMarkdownEntries } from "../../phaseEvents";
 import type { PhaseStatus, TicketPhase } from "../../types";
 import { SharedMarkdown } from "../markdown/SharedMarkdown";
 
@@ -52,21 +46,13 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Phase
     setUserToggled(false);
   }, [ticketId, phaseName]);
 
-  const activityWindow = useMemo(
-    () => selectRecentActivityEvents(historicalEvents, liveEvents),
-    [historicalEvents, liveEvents],
-  );
-  const activityEntries = useMemo(
-    () => getActivityMarkdownEntries(activityWindow.events),
-    [activityWindow.events],
-  );
+  const allEvents = useMemo(() => historicalEvents.concat(liveEvents), [historicalEvents, liveEvents]);
+  const activityEntries = useMemo(() => getActivityMarkdownEntries(allEvents, Number.POSITIVE_INFINITY), [allEvents]);
   const totalPayloadBytes = useMemo(
     () => historicalPayloadBytes + liveEvents.reduce((total, event) => total + estimateEventPayloadBytes(event), 0),
     [historicalPayloadBytes, liveEvents],
   );
-  const hiddenCount = Math.max(activityWindow.totalCount - activityEntries.length, 0);
-  const isHeavyActivity =
-    activityWindow.totalCount > ACTIVITY_RENDER_EVENT_LIMIT || totalPayloadBytes > ACTIVITY_RENDER_BYTE_LIMIT;
+  const isHeavyActivity = totalPayloadBytes > 512 * 1024;
 
   useEffect(() => {
     if (userToggled) return;
@@ -91,7 +77,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Phase
         }}
         style={{ fontSize: 11 }}
       >
-        Activity ({activityWindow.totalCount})
+        Activity ({allEvents.length})
       </button>
       {expanded && (
         <div
@@ -110,12 +96,6 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Phase
             <div style={{ fontSize: 11, color: "#64748b" }}>No events yet.</div>
           ) : (
             <div style={{ color: "#cbd5e1", display: "grid", gap: 12 }}>
-              {hiddenCount > 0 ? (
-                <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                  Showing the most recent {activityEntries.length} of {activityWindow.totalCount} events to keep this
-                  pane responsive.
-                </div>
-              ) : null}
               {activityEntries.map((entry) => (
                 <SharedMarkdown key={entry.id} content={entry.content} compact />
               ))}
