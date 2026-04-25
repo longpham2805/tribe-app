@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchTickets } from "../api";
 import type { PaletteAction, ShortcutIntent } from "../context/AppContext";
-import type { Ticket } from "../types";
+import type { Project, Ticket } from "../types";
 import "./CommandPalette.css";
 
 type CommandPaletteProps = {
@@ -10,13 +10,17 @@ type CommandPaletteProps = {
   onAction: (intent: NonNullable<ShortcutIntent>) => void;
   projectId: number | null;
   contextActions: PaletteAction[];
+  projects: Project[];
 };
 
 const STATIC_ACTIONS = [
   { id: "new-ticket", label: "Add new ticket", icon: "+", intent: { type: "new-ticket" } as const },
+  { id: "nav-tickets", label: "Go to Tickets", icon: "🎫", intent: { type: "navigate", view: "tickets" } as const },
+  { id: "nav-slots", label: "Go to Slots", icon: "⏱", intent: { type: "navigate", view: "slots" } as const },
+  { id: "nav-projects", label: "Go to Projects", icon: "📁", intent: { type: "navigate", view: "projects" } as const },
 ];
 
-export function CommandPalette({ open, onClose, onAction, projectId, contextActions }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, onAction, projectId, contextActions, projects }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selected, setSelected] = useState(0);
@@ -49,8 +53,9 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
   const q = query.toLowerCase();
   const filteredContext = contextActions.filter((a) => a.label.toLowerCase().includes(q));
   const filteredStatic = STATIC_ACTIONS.filter((a) => a.label.toLowerCase().includes(q));
+  const filteredProjects = projects.filter((p) => p.name.toLowerCase().includes(q));
   const filteredTickets = tickets.filter((t) => t.title.toLowerCase().includes(q));
-  const totalItems = filteredContext.length + filteredStatic.length + filteredTickets.length;
+  const totalItems = filteredContext.length + filteredStatic.length + filteredProjects.length + filteredTickets.length;
 
   const handleSelect = (idx: number) => {
     if (idx < filteredContext.length) {
@@ -58,13 +63,20 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
       onClose();
       return;
     }
-    const staticIdx = idx - filteredContext.length;
-    if (staticIdx < filteredStatic.length) {
-      onAction(filteredStatic[staticIdx].intent);
-    } else {
-      const ticket = filteredTickets[staticIdx - filteredStatic.length];
-      if (ticket) onAction({ type: "open-ticket", ticketId: ticket.id });
+    const afterContext = idx - filteredContext.length;
+    if (afterContext < filteredStatic.length) {
+      onAction(filteredStatic[afterContext].intent);
+      onClose();
+      return;
     }
+    const afterStatic = afterContext - filteredStatic.length;
+    if (afterStatic < filteredProjects.length) {
+      onAction({ type: "switch-project", projectId: filteredProjects[afterStatic].id });
+      onClose();
+      return;
+    }
+    const ticket = filteredTickets[afterStatic - filteredProjects.length];
+    if (ticket) onAction({ type: "open-ticket", ticketId: ticket.id });
     onClose();
   };
 
@@ -143,11 +155,33 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
             </div>
           )}
 
+          {filteredProjects.length > 0 && (
+            <div className="cmd-section">
+              <div className="cmd-section-label">Projects</div>
+              {filteredProjects.map((project, i) => {
+                const globalIdx = filteredContext.length + filteredStatic.length + i;
+                return (
+                  <button
+                    key={project.id}
+                    className={`cmd-item${selected === globalIdx ? " cmd-item--selected" : ""}`}
+                    onClick={() => handleSelect(globalIdx)}
+                    onMouseEnter={() => setSelected(globalIdx)}
+                    type="button"
+                  >
+                    <span className="cmd-item-icon">📁</span>
+                    <span className="cmd-item-label">{project.name}</span>
+                    <kbd className="cmd-item-shortcut">↩</kbd>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {filteredTickets.length > 0 && (
             <div className="cmd-section">
               <div className="cmd-section-label">Tickets</div>
               {filteredTickets.map((ticket, i) => {
-                const globalIdx = filteredContext.length + filteredStatic.length + i;
+                const globalIdx = filteredContext.length + filteredStatic.length + filteredProjects.length + i;
                 return (
                   <button
                     key={ticket.id}

@@ -10,7 +10,7 @@ import { TicketsPage } from "./pages/TicketsPage";
 import "./App.css";
 
 export default function App() {
-  const { view, projects, selectedProjectId, setSelectedProjectId, canImportFromMonday, loadProjects, setShortcutIntent, paletteContextActions } = useAppContext();
+  const { view, setView, projects, selectedProjectId, setSelectedProjectId, canImportFromMonday, loadProjects, setShortcutIntent, paletteContextActions } = useAppContext();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -25,7 +25,13 @@ export default function App() {
   }, []);
 
   const handlePaletteAction = (intent: NonNullable<ShortcutIntent>) => {
-    setShortcutIntent(intent);
+    if (intent.type === "navigate") {
+      setView(intent.view);
+    } else if (intent.type === "switch-project") {
+      setSelectedProjectId(intent.projectId);
+    } else {
+      setShortcutIntent(intent);
+    }
     setCommandPaletteOpen(false);
   };
 
@@ -53,6 +59,7 @@ export default function App() {
         onAction={handlePaletteAction}
         projectId={selectedProjectId}
         contextActions={paletteContextActions}
+        projects={projects}
       />
     </div>
   );
