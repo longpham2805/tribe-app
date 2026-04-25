@@ -18,6 +18,9 @@ export const SharedMarkdown = memo(function SharedMarkdown({ content, compact = 
           ul: ({ children }) => <ul style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ul>,
           ol: ({ children }) => <ol style={{ margin: "0 0 10px", paddingLeft: 20 }}>{children}</ol>,
           li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
+          img: ({ alt, src, title }) => (
+            <img src={src} alt={alt} title={title} style={{ maxWidth: "100%", height: "auto" }} />
+          ),
           table: ({ children }) => (
             <div style={{ overflowX: "auto", margin: "0 0 10px" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>{children}</table>

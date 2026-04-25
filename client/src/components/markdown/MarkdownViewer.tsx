@@ -119,7 +119,16 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents }: Ma
           ) : error ? (
             <div className="error">{error}</div>
           ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || "_(empty)_"}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                img: ({ alt, src, title }) => (
+                  <img src={src} alt={alt} title={title} style={{ maxWidth: "100%", height: "auto" }} />
+                ),
+              }}
+            >
+              {content || "_(empty)_"}
+            </ReactMarkdown>
           )}
         </div>
       )}
