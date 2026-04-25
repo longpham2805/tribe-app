@@ -9,7 +9,9 @@ import {
   respondPhase,
   triggerPhase,
   updateTicket,
+  uploadTicketImage,
 } from "../api";
+import { ImageDropZone } from "../components/tickets/ImageDropZone";
 import { MondayPicker } from "../components/tickets/MondayPicker";
 import { TicketDetailModal } from "../components/tickets/TicketDetailModal";
 import { TicketSummaryCard } from "../components/tickets/TicketSummaryCard";
@@ -105,6 +107,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [newDesc, setNewDesc] = useState("");
   const [newCliType, setNewCliType] = useState<CliType | "">("");
   const [creating, setCreating] = useState(false);
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
   const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
   const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
@@ -321,24 +324,36 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       if (!newTitle.trim()) return;
       setCreating(true);
       try {
-        await createTicket({
+        const ticket = await createTicket({
           title: newTitle.trim(),
           description: newDesc.trim() || undefined,
           projectId,
           cliType: newCliType || undefined,
         });
+        const imageErrors: string[] = [];
+        for (const file of pendingImages) {
+          try {
+            await uploadTicketImage(ticket.id, file);
+          } catch {
+            imageErrors.push(file.name);
+          }
+        }
         setNewTitle("");
         setNewDesc("");
         setNewCliType("");
+        setPendingImages([]);
         setShowForm(false);
         await load();
+        if (imageErrors.length > 0) {
+          setError(`Ticket #${ticket.id} created. Failed to upload: ${imageErrors.join(", ")}. Retry via the ticket detail.`);
+        }
       } catch (e: any) {
         setError(e.message);
       } finally {
         setCreating(false);
       }
     },
-    [newTitle, newDesc, newCliType, projectId, load],
+    [newTitle, newDesc, newCliType, pendingImages, projectId, load],
   );
 
   const handleTriggerPhase = useCallback(
@@ -477,6 +492,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
               onChange={(e) => setNewDesc(e.target.value)}
               rows={3}
             />
+            <ImageDropZone
+              files={pendingImages}
+              onChange={setPendingImages}
+              disabled={creating}
+            />
             <select
               className="input"
               value={newCliType}
@@ -508,7 +528,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
         <div className="toolbar" style={{ justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
+            <button className="btn btn-primary" onClick={() => { setShowForm((prev) => { if (prev) setPendingImages([]); return !prev; }); }}>
               {showForm ? "Cancel" : "+ New Ticket"}
             </button>
             {canImportFromMonday && (
