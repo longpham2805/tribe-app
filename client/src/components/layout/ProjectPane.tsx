@@ -55,6 +55,7 @@ export const ProjectPane = memo(function ProjectPane({
           const isActive = selectedProjectId === item.id;
           const className = [
             "ticket-card",
+            "ticket-card--interactive",
             "project-pane-card",
             isActive ? "project-pane-card--active" : "",
             item.running ? "ticket-card--running project-pane-card--running" : "",
