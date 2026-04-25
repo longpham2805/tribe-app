@@ -64,6 +64,15 @@ export interface Ticket {
   phases: Phase[];
 }
 
+export interface BoardTicketsResponse {
+  nonDoneTickets: Ticket[];
+  doneTickets: Ticket[];
+  donePage: number;
+  donePageSize: number;
+  doneTotal: number;
+  doneHasMore: boolean;
+}
+
 export interface MondayNotStartedItem {
   id: string;
   name: string;

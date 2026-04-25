@@ -1,8 +1,20 @@
-import { Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 import { AppDataSource } from "../data-source";
 import { Ticket } from "../entity/Ticket";
 import { TicketPhase } from "../enum/TicketPhase";
 import { CliType } from "../enum/CliType";
+import { PhaseStatus } from "../enum/PhaseStatus";
+
+export interface BoardTicketsPage {
+  nonDoneTickets: Ticket[];
+  doneTickets: Ticket[];
+  donePage: number;
+  donePageSize: number;
+  doneTotal: number;
+  doneHasMore: boolean;
+}
+
+const DONE_PAGE_SIZE = 10;
 
 export class TicketRepository {
   private repo: Repository<Ticket>;
@@ -32,6 +44,83 @@ export class TicketRepository {
       relations: ["phases"],
       order: { createdAt: "DESC" },
     });
+  }
+
+  async findBoardTickets(opts?: { projectId?: number; donePage?: number }): Promise<BoardTicketsPage> {
+    const donePage = Math.max(opts?.donePage ?? 1, 1);
+    const offset = (donePage - 1) * DONE_PAGE_SIZE;
+    const doneJoin = {
+      shipPhase: TicketPhase.SHIP,
+      completedStatus: PhaseStatus.COMPLETED,
+    };
+
+    const nonDoneIdsQuery = this.repo
+      .createQueryBuilder("ticket")
+      .leftJoin(
+        "ticket.phases",
+        "donePhase",
+        "donePhase.phaseName = :shipPhase AND donePhase.status = :completedStatus",
+        doneJoin,
+      )
+      .where("donePhase.id IS NULL")
+      .select("ticket.id", "id")
+      .distinct(true)
+      .orderBy("ticket.createdAt", "DESC")
+      .addOrderBy("ticket.id", "DESC");
+
+    const doneIdsQuery = this.repo
+      .createQueryBuilder("ticket")
+      .innerJoin(
+        "ticket.phases",
+        "donePhase",
+        "donePhase.phaseName = :shipPhase AND donePhase.status = :completedStatus",
+        doneJoin,
+      )
+      .select("ticket.id", "id")
+      .distinct(true)
+      .orderBy("ticket.createdAt", "DESC")
+      .addOrderBy("ticket.id", "DESC")
+      .offset(offset)
+      .limit(DONE_PAGE_SIZE);
+
+    const doneCountQuery = this.repo
+      .createQueryBuilder("ticket")
+      .innerJoin(
+        "ticket.phases",
+        "donePhase",
+        "donePhase.phaseName = :shipPhase AND donePhase.status = :completedStatus",
+        doneJoin,
+      )
+      .select("COUNT(DISTINCT ticket.id)", "count");
+
+    if (opts?.projectId != null) {
+      nonDoneIdsQuery.andWhere("ticket.projectId = :projectId", { projectId: opts.projectId });
+      doneIdsQuery.where("ticket.projectId = :projectId", { projectId: opts.projectId });
+      doneCountQuery.where("ticket.projectId = :projectId", { projectId: opts.projectId });
+    }
+
+    const [nonDoneIdsRaw, doneIdsRaw, doneCountRaw] = await Promise.all([
+      nonDoneIdsQuery.getRawMany<{ id: number }>(),
+      doneIdsQuery.getRawMany<{ id: number }>(),
+      doneCountQuery.getRawOne<{ count: string }>(),
+    ]);
+
+    const nonDoneIds = nonDoneIdsRaw.map((row) => Number(row.id));
+    const doneIds = doneIdsRaw.map((row) => Number(row.id));
+    const doneTotal = Number(doneCountRaw?.count ?? 0);
+    const [nonDoneTickets, doneTickets] = await Promise.all([
+      this.findByIds(nonDoneIds),
+      this.findByIds(doneIds),
+    ]);
+
+    return {
+      nonDoneTickets,
+      doneTickets,
+      donePage,
+      donePageSize: DONE_PAGE_SIZE,
+      doneTotal,
+      doneHasMore: offset + doneTickets.length < doneTotal,
+    };
   }
 
   async findByMondayItemId(mondayItemId: string): Promise<Ticket | null> {
@@ -122,5 +211,19 @@ export class TicketRepository {
   async delete(id: number): Promise<boolean> {
     const result = await this.repo.delete(id);
     return (result.affected ?? 0) > 0;
+  }
+
+  private async findByIds(ids: number[]): Promise<Ticket[]> {
+    if (ids.length === 0) return [];
+
+    const tickets = await this.repo.find({
+      where: { id: In(ids) },
+      relations: ["phases"],
+    });
+    const ticketsById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
+    return ids.flatMap((id) => {
+      const ticket = ticketsById.get(id);
+      return ticket ? [ticket] : [];
+    });
   }
 }

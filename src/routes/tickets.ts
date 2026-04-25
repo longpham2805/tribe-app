@@ -9,6 +9,36 @@ import { pickCliForNewTicket } from "../cli";
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const router = Router();
 
+// GET /api/tickets/board?projectId=1&donePage=1
+router.get("/board", async (req: Request, res: Response) => {
+  try {
+    const repo = new TicketRepository();
+    const { projectId: projectIdRaw, donePage: donePageRaw } = req.query;
+
+    const projectId = projectIdRaw ? parseInt(projectIdRaw as string, 10) : undefined;
+    const donePage = donePageRaw ? parseInt(donePageRaw as string, 10) : 1;
+
+    if (projectIdRaw && isNaN(projectId as number)) {
+      res.status(400).json({ error: "Invalid projectId" });
+      return;
+    }
+
+    if (isNaN(donePage) || donePage < 1) {
+      res.status(400).json({ error: "donePage must be a positive integer" });
+      return;
+    }
+
+    const boardTickets = await repo.findBoardTickets({
+      ...(projectId != null ? { projectId } : {}),
+      donePage,
+    });
+
+    res.json(boardTickets);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/tickets?phase=CREATED&projectId=1
 router.get("/", async (req: Request, res: Response) => {
   try {

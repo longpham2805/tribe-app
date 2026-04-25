@@ -2,6 +2,7 @@ import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useS
 import {
   createTicket,
   deleteTicket,
+  fetchBoardTickets,
   fetchSlots,
   fetchTicketFiles,
   fetchTickets,
@@ -31,16 +32,22 @@ type TicketsPageProps = {
   canImportFromMonday: boolean;
 };
 
+function sortTicketsByNewest(tickets: Ticket[]): Ticket[] {
+  return [...tickets].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || right.id - left.id);
+}
+
 const TicketGroupSection = memo(function TicketGroupSection({
   group,
   tickets,
   getSlotName,
   onOpenTicket,
+  action,
 }: {
   group: TicketGroup;
   tickets: Ticket[];
   getSlotName: (slotId: number | null) => string | null;
   onOpenTicket: (ticketId: number) => void;
+  action?: { label: string; disabled?: boolean; onClick: () => void } | null;
 }) {
   if (tickets.length === 0) return null;
 
@@ -67,6 +74,13 @@ const TicketGroupSection = memo(function TicketGroupSection({
           />
         ))}
       </div>
+      {action && (
+        <div className="ticket-group-action">
+          <button className="btn ticket-group-load-more" onClick={action.onClick} disabled={action.disabled}>
+            {action.label}
+          </button>
+        </div>
+      )}
     </section>
   );
 });
@@ -76,8 +90,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMoreDone, setLoadingMoreDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterPhase, setFilterPhase] = useState<TicketPhase | "">("");
+  const [donePage, setDonePage] = useState(1);
+  const [doneTotal, setDoneTotal] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [showMondayPicker, setShowMondayPicker] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -94,22 +111,36 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
 
   const ticketFileRefreshTimers = useRef<Record<number, number>>({});
+  const isBoardMode = filterPhase === "";
 
   const load = useCallback(async () => {
     try {
       setError(null);
-      const [ticketData, slotData] = await Promise.all([
-        fetchTickets(filterPhase || undefined, projectId ?? undefined),
-        fetchSlots(projectId ?? undefined),
-      ]);
-      setTickets(ticketData);
-      setSlots(slotData);
+      if (isBoardMode) {
+        const [ticketData, slotData] = await Promise.all([
+          fetchBoardTickets(projectId ?? undefined),
+          fetchSlots(projectId ?? undefined),
+        ]);
+        setTickets([...ticketData.nonDoneTickets, ...ticketData.doneTickets]);
+        setDonePage(ticketData.donePage);
+        setDoneTotal(ticketData.doneTotal);
+        setSlots(slotData);
+      } else {
+        const [ticketData, slotData] = await Promise.all([
+          fetchTickets(filterPhase || undefined, projectId ?? undefined),
+          fetchSlots(projectId ?? undefined),
+        ]);
+        setTickets(ticketData);
+        setDonePage(1);
+        setDoneTotal(0);
+        setSlots(slotData);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [filterPhase, projectId]);
+  }, [filterPhase, isBoardMode, projectId]);
 
   useEffect(() => {
     setLoading(true);
@@ -224,6 +255,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     for (const ticket of tickets) groups[getTicketGroup(ticket)].push(ticket);
     return groups;
   }, [tickets, getTicketGroup]);
+  const doneHasMore = isBoardMode && ticketsByGroup.DONE.length < doneTotal;
 
   const slotNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -352,6 +384,29 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     [responseDraft, tickets, load],
   );
 
+  const handleLoadMoreDone = useCallback(async () => {
+    if (!isBoardMode || loadingMoreDone || !doneHasMore) return;
+
+    setLoadingMoreDone(true);
+    try {
+      setError(null);
+      const boardData = await fetchBoardTickets(projectId ?? undefined, donePage + 1);
+      setTickets((prev) => {
+        const loadedDoneTickets = prev.filter((ticket) => getTicketGroup(ticket) === "DONE");
+        const doneTickets = sortTicketsByNewest([...loadedDoneTickets, ...boardData.doneTickets]).filter(
+          (ticket, index, all) => all.findIndex((candidate) => candidate.id === ticket.id) === index,
+        );
+        return [...boardData.nonDoneTickets, ...doneTickets];
+      });
+      setDonePage(boardData.donePage);
+      setDoneTotal(boardData.doneTotal);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoadingMoreDone(false);
+    }
+  }, [doneHasMore, donePage, getTicketGroup, isBoardMode, loadingMoreDone, projectId]);
+
   return (
     <>
       <div
@@ -443,6 +498,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
                 tickets={ticketsByGroup[group]}
                 getSlotName={getSlotName}
                 onOpenTicket={openTicket}
+                action={group === "DONE" && doneHasMore ? {
+                  label: loadingMoreDone ? "Loading..." : "Load more",
+                  disabled: loadingMoreDone,
+                  onClick: handleLoadMoreDone,
+                } : null}
               />
             ))}
           </div>
