@@ -9,9 +9,13 @@ type EditState = {
   mondayDevPeople: string;
   primaryColor: string;
   actionColor: string;
+  introduction: string;
+  rules: string;
+  techStack: string;
 };
 
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+const MAX_PROJECT_CONTEXT_FIELD_CHARS = 4000;
 
 type ProjectsPageProps = {
   onProjectsChanged?: () => void;
@@ -25,6 +29,9 @@ function toEditState(project: Project): EditState {
     mondayDevPeople: (project.mondayDevPeople ?? []).join(", "),
     primaryColor: project.primaryColor ?? "",
     actionColor: project.actionColor ?? "",
+    introduction: project.introduction ?? "",
+    rules: project.rules ?? "",
+    techStack: project.techStack ?? "",
   };
 }
 
@@ -48,6 +55,11 @@ function normalizeHexColorInput(raw: string, fieldLabel: string): string | null 
     throw new Error(`${fieldLabel} must be in #RRGGBB format`);
   }
   return normalized;
+}
+
+function normalizeProjectContextInput(raw: string): string | null {
+  const normalized = raw.trim();
+  return normalized || null;
 }
 
 const ProjectCard = memo(function ProjectCard({
@@ -132,6 +144,30 @@ const ProjectCard = memo(function ProjectCard({
             maxLength={7}
             onChange={(e) => onChangeEdit(project.id, "actionColor", e.target.value)}
           />
+          <textarea
+            className="input"
+            value={editData.introduction}
+            placeholder="Project introduction"
+            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+            rows={3}
+            onChange={(e) => onChangeEdit(project.id, "introduction", e.target.value)}
+          />
+          <textarea
+            className="input"
+            value={editData.techStack}
+            placeholder="Tech stack"
+            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+            rows={3}
+            onChange={(e) => onChangeEdit(project.id, "techStack", e.target.value)}
+          />
+          <textarea
+            className="input"
+            value={editData.rules}
+            placeholder="Project rules"
+            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+            rows={4}
+            onChange={(e) => onChangeEdit(project.id, "rules", e.target.value)}
+          />
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => onSave(project.id)}>
               Save
@@ -165,6 +201,18 @@ const ProjectCard = memo(function ProjectCard({
               Action color:{" "}
               <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.actionColor ?? "-"}</span>
             </div>
+            <div>
+              Introduction:{" "}
+              <span style={{ color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{project.introduction ?? "-"}</span>
+            </div>
+            <div>
+              Tech stack:{" "}
+              <span style={{ color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{project.techStack ?? "-"}</span>
+            </div>
+            <div>
+              Project rules:{" "}
+              <span style={{ color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{project.rules ?? "-"}</span>
+            </div>
           </div>
         </div>
       )}
@@ -184,6 +232,9 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
     mondayDevPeople: "",
     primaryColor: "",
     actionColor: "",
+    introduction: "",
+    rules: "",
+    techStack: "",
   });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Record<number, EditState>>({});
@@ -218,6 +269,9 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
           mondayDevPeople: parsePeople(newForm.mondayDevPeople),
           primaryColor,
           actionColor,
+          introduction: normalizeProjectContextInput(newForm.introduction),
+          rules: normalizeProjectContextInput(newForm.rules),
+          techStack: normalizeProjectContextInput(newForm.techStack),
         });
         setNewForm({
           name: "",
@@ -226,6 +280,9 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
           mondayDevPeople: "",
           primaryColor: "",
           actionColor: "",
+          introduction: "",
+          rules: "",
+          techStack: "",
         });
         setShowForm(false);
         await load();
@@ -269,6 +326,9 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
           mondayDevPeople: parsePeople(data.mondayDevPeople),
           primaryColor,
           actionColor,
+          introduction: normalizeProjectContextInput(data.introduction),
+          rules: normalizeProjectContextInput(data.rules),
+          techStack: normalizeProjectContextInput(data.techStack),
         });
         cancelEdit(projectId);
         await load();
@@ -345,6 +405,30 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
             value={newForm.actionColor}
             maxLength={7}
             onChange={(e) => setNewForm((prev) => ({ ...prev, actionColor: e.target.value }))}
+          />
+          <textarea
+            className="input"
+            placeholder="Project introduction"
+            value={newForm.introduction}
+            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+            rows={3}
+            onChange={(e) => setNewForm((prev) => ({ ...prev, introduction: e.target.value }))}
+          />
+          <textarea
+            className="input"
+            placeholder="Tech stack"
+            value={newForm.techStack}
+            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+            rows={3}
+            onChange={(e) => setNewForm((prev) => ({ ...prev, techStack: e.target.value }))}
+          />
+          <textarea
+            className="input"
+            placeholder="Project rules"
+            value={newForm.rules}
+            maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+            rows={4}
+            onChange={(e) => setNewForm((prev) => ({ ...prev, rules: e.target.value }))}
           />
           <button className="btn btn-primary" type="submit" disabled={creating}>
             {creating ? "Creating..." : "Create Project"}

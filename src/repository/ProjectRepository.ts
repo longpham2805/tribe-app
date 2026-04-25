@@ -20,10 +20,26 @@ type ProjectActivityRow = {
   project_mondayDevPeople: string[] | string | null;
   project_primaryColor: string | null;
   project_actionColor: string | null;
+  project_introduction: string | null;
+  project_rules: string | null;
+  project_techStack: string | null;
   project_createdAt: Date | string;
   project_updatedAt: Date | string;
   ticketCount?: number | string;
   runningTicketCount?: number | string;
+};
+
+type ProjectWriteData = {
+  name?: string;
+  slug?: string | null;
+  mondayBoardIds?: number[] | null;
+  mondayDefaultPersonId?: string | null;
+  mondayDevPeople?: string[] | null;
+  primaryColor?: string | null;
+  actionColor?: string | null;
+  introduction?: string | null;
+  rules?: string | null;
+  techStack?: string | null;
 };
 
 export class ProjectRepository {
@@ -108,6 +124,9 @@ export class ProjectRepository {
         : JSON.parse(String(raw.project_mondayDevPeople)) as string[];
     project.primaryColor = raw.project_primaryColor == null ? null : String(raw.project_primaryColor);
     project.actionColor = raw.project_actionColor == null ? null : String(raw.project_actionColor);
+    project.introduction = raw.project_introduction == null ? null : String(raw.project_introduction);
+    project.rules = raw.project_rules == null ? null : String(raw.project_rules);
+    project.techStack = raw.project_techStack == null ? null : String(raw.project_techStack);
     project.createdAt = new Date(String(raw.project_createdAt));
     project.updatedAt = new Date(String(raw.project_updatedAt));
     const ticketCount = Number(raw.ticketCount ?? 0);
@@ -121,15 +140,7 @@ export class ProjectRepository {
     };
   }
 
-  async create(data: {
-    name: string;
-    slug?: string | null;
-    mondayBoardIds?: number[] | null;
-    mondayDefaultPersonId?: string | null;
-    mondayDevPeople?: string[] | null;
-    primaryColor?: string | null;
-    actionColor?: string | null;
-  }): Promise<Project> {
+  async create(data: ProjectWriteData & { name: string }): Promise<Project> {
     const project = this.repo.create({
       name: data.name,
       slug: data.slug ?? null,
@@ -138,21 +149,16 @@ export class ProjectRepository {
       mondayDevPeople: data.mondayDevPeople ?? null,
       primaryColor: data.primaryColor ?? null,
       actionColor: data.actionColor ?? null,
+      introduction: data.introduction ?? null,
+      rules: data.rules ?? null,
+      techStack: data.techStack ?? null,
     });
     return this.repo.save(project);
   }
 
   async update(
     id: number,
-    data: {
-      name?: string;
-      slug?: string | null;
-      mondayBoardIds?: number[] | null;
-      mondayDefaultPersonId?: string | null;
-      mondayDevPeople?: string[] | null;
-      primaryColor?: string | null;
-      actionColor?: string | null;
-    },
+    data: ProjectWriteData,
   ): Promise<Project | null> {
     const project = await this.findById(id);
     if (!project) return null;
@@ -164,6 +170,9 @@ export class ProjectRepository {
     if (data.mondayDevPeople !== undefined) project.mondayDevPeople = data.mondayDevPeople;
     if (data.primaryColor !== undefined) project.primaryColor = data.primaryColor;
     if (data.actionColor !== undefined) project.actionColor = data.actionColor;
+    if (data.introduction !== undefined) project.introduction = data.introduction;
+    if (data.rules !== undefined) project.rules = data.rules;
+    if (data.techStack !== undefined) project.techStack = data.techStack;
 
     return this.repo.save(project);
   }

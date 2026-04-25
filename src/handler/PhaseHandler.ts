@@ -11,11 +11,12 @@ import { Phase } from "../entity/Phase";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { SlotRepository } from "../repository/SlotRepository";
+import { ProjectRepository } from "../repository/ProjectRepository";
 import { AppStateRepository } from "../repository/AppStateRepository";
 import { SlotService } from "../service/SlotService";
 import { getTicketDir, getLogDir, getLogFile, getStderrFile } from "../lib/paths";
 import { emit } from "../lib/events";
-import { getAgent, MARKER_TRAILER, MARKER_REGEX } from "../agent";
+import { getAgent, MARKER_TRAILER, MARKER_REGEX, type ProjectAgentContext } from "../agent";
 import { runPhaseCompletedHooks, runPhaseEnteredHooks } from "../hooks/registry";
 import { getAdapter } from "../cli";
 
@@ -498,7 +499,8 @@ export class PhaseHandler {
 
     const agent = getAgent(TicketPhase.PLANNING);
     if (!agent) throw new Error("No agent configured for PLANNING");
-    const prompt = agent.buildPrompt({ ticketContent });
+    const projectContext = await this.loadProjectAgentContext(ticket);
+    const prompt = agent.buildPrompt({ ticketContent, projectContext });
 
     await this.runPhase(ticket, TicketPhase.PLANNING, slotRoot, tmpDir, prompt, "planning.md");
   }
@@ -524,8 +526,10 @@ export class PhaseHandler {
 
     const agent = getAgent(TicketPhase.IMPLEMENTATION);
     if (!agent) throw new Error("No agent configured for IMPLEMENTATION");
+    const projectContext = await this.loadProjectAgentContext(ticket);
     const prompt = agent.buildPrompt({
       ticketContent,
+      projectContext,
       planningContent,
       checklistOutputPath: join(tmpDir, "implementation-testing-checklist.md"),
     });
@@ -546,7 +550,8 @@ export class PhaseHandler {
     const agent = getAgent(TicketPhase.SHIP);
     if (!agent) throw new Error("No agent configured for SHIP");
     const shipOutputPath = join(tmpDir, "ship.md");
-    const prompt = agent.buildPrompt({ ticketContent, implementationContent, shipOutputPath });
+    const projectContext = await this.loadProjectAgentContext(ticket);
+    const prompt = agent.buildPrompt({ ticketContent, projectContext, implementationContent, shipOutputPath });
 
     const activePhase = await this.phaseRepo.findActiveByTicketId(ticket.id);
     await this.runPhase(ticket, TicketPhase.SHIP, slotRoot, tmpDir, prompt, "ship.md");
@@ -562,6 +567,22 @@ export class PhaseHandler {
   }
 
   // ── Shared phase runner ───────────────────────────────────────────
+
+  private async loadProjectAgentContext(ticket: Ticket): Promise<ProjectAgentContext | undefined> {
+    if (ticket.projectId == null) return undefined;
+
+    const project = await new ProjectRepository().findById(ticket.projectId);
+    if (!project) {
+      log(`WARN: project ${ticket.projectId} not found for ticket #${ticket.id}`);
+      return undefined;
+    }
+
+    return {
+      introduction: project.introduction,
+      rules: project.rules,
+      techStack: project.techStack,
+    };
+  }
 
   private async runPhase(
     ticket: Ticket,
