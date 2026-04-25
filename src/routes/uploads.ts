@@ -1,10 +1,12 @@
 import { randomUUID } from "crypto";
-import { existsSync } from "fs";
+import { existsSync, readdirSync } from "fs";
+import { basename, join } from "path";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { TicketRepository } from "../repository/TicketRepository";
 import { saveGlobalImage, saveTicketImage } from "../lib/fileStorage";
+import { getGlobalImagesDir } from "../lib/paths";
 
 const router = Router();
 
@@ -65,16 +67,25 @@ router.get("/projects/:id/logo", async (req: Request, res: Response) => {
       res.status(404).json({ error: `Project ${id} not found` });
       return;
     }
-    if (!project.logoPath) {
-      res.status(404).json({ error: "No logo set for this project" });
-      return;
-    }
-    if (!existsSync(project.logoPath)) {
-      res.status(404).json({ error: "Logo file not found on disk" });
-      return;
+    let logoPath = project.logoPath;
+    if (!logoPath || !existsSync(logoPath)) {
+      // Backfill broken/missing stored path by scanning the global images directory.
+      const dir = getGlobalImagesDir();
+      const prefix = `project-${id}.`;
+      const candidate = existsSync(dir)
+        ? readdirSync(dir).find((name) => name.startsWith(prefix))
+        : undefined;
+
+      if (!candidate) {
+        res.status(404).json({ error: "No logo set for this project" });
+        return;
+      }
+
+      logoPath = join(dir, candidate);
+      await repo.update(id, { logoPath });
     }
 
-    res.sendFile(project.logoPath);
+    res.sendFile(logoPath, { dotfiles: "allow" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -109,11 +120,13 @@ router.post("/tickets/:id/images", imageUpload.single("file"), async (req: Reque
     }
 
     const imagePath = await saveTicketImage(uid, file.buffer, file.originalname);
-    const imageRef = `\n\n![${file.originalname}](${imagePath})`;
+    const imageName = basename(imagePath);
+    const imageUrl = `/api/uploads/tickets/${id}/images/${encodeURIComponent(imageName)}`;
+    const imageRef = `\n\n![${file.originalname}](${imageUrl})`;
     const newDescription = (ticket.description ?? "") + imageRef;
     await ticketRepo.update(id, { description: newDescription });
 
-    res.json({ path: imagePath, description: newDescription });
+    res.json({ path: imageUrl, description: newDescription });
   } catch (err: any) {
     const status = err.message?.includes("not allowed") ? 400 : 500;
     res.status(status).json({ error: err.message });
@@ -129,7 +142,6 @@ router.get("/tickets/:id/images/:name", async (req: Request, res: Response) => {
       return;
     }
 
-    const { basename } = await import("path");
     const name = req.params.name as string;
     if (name !== basename(name)) {
       res.status(400).json({ error: "Invalid file name" });
@@ -151,7 +163,7 @@ router.get("/tickets/:id/images/:name", async (req: Request, res: Response) => {
       return;
     }
 
-    res.sendFile(filePath);
+    res.sendFile(filePath, { dotfiles: "allow" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

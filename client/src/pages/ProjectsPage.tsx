@@ -203,7 +203,7 @@ const ProjectCard = memo(function ProjectCard({
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             {project.logoPath && (
               <img
-                src={`/api/uploads/projects/${project.id}/logo`}
+                src={`/api/uploads/projects/${project.id}/logo?v=${new Date(project.updatedAt).getTime()}`}
                 alt={`${project.name} logo`}
                 style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }}
               />

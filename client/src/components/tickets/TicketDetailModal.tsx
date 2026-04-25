@@ -3,6 +3,7 @@ import { uploadTicketImage } from "../../api";
 import { extractPullRequestUrl, getPullRequestLinkLabel } from "../../constants/ticket";
 import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
+import { SharedMarkdown } from "../markdown/SharedMarkdown";
 import { Modal } from "../ui/Modal";
 import { PhaseLiveFeed } from "./PhaseLiveFeed";
 
@@ -40,6 +41,20 @@ interface TicketDetailModalProps {
   pausedStatuses: readonly PhaseStatus[];
   phases: readonly TicketPhase[];
   savingContent: boolean;
+}
+
+function normalizeTicketDescriptionImages(description: string, ticketId: number): string {
+  return description.replace(/!\[([^\]]*)\]\(([^)\s]*\/\.tribe\/[^)\s]*\/images\/([^)\s]+))\)/g, (_match, alt, _legacyUrl, fileName) => {
+    const decodedName = (() => {
+      try {
+        return decodeURIComponent(fileName);
+      } catch {
+        return fileName;
+      }
+    })();
+    const normalizedUrl = `/api/uploads/tickets/${ticketId}/images/${encodeURIComponent(decodedName)}`;
+    return `![${alt}](${normalizedUrl})`;
+  });
 }
 
 export function TicketDetailModal({
@@ -284,7 +299,9 @@ export function TicketDetailModal({
           </div>
         </form>
       ) : ticket.description ? (
-        <p className="ticket-desc">{ticket.description}</p>
+        <div className="ticket-desc">
+          <SharedMarkdown content={normalizeTicketDescriptionImages(ticket.description, ticket.id)} />
+        </div>
       ) : null}
 
       <div style={{ marginBottom: 12 }}>
