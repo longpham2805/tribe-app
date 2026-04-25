@@ -1,4 +1,13 @@
-import type { Ticket, TicketPhase, CliType, Slot, TicketFile, MondayNotStartedItem, Project } from "./types";
+import type {
+  BoardTicketsResponse,
+  Ticket,
+  TicketPhase,
+  CliType,
+  Slot,
+  TicketFile,
+  MondayNotStartedItem,
+  Project,
+} from "./types";
 
 const BASE = "/api";
 
@@ -9,6 +18,14 @@ export async function fetchTickets(phase?: TicketPhase, projectId?: number): Pro
   const query = params.toString();
   const res = await fetch(query ? `${BASE}/tickets?${query}` : `${BASE}/tickets`);
   if (!res.ok) throw new Error("Failed to fetch tickets");
+  return res.json();
+}
+
+export async function fetchBoardTickets(projectId?: number, donePage = 1): Promise<BoardTicketsResponse> {
+  const params = new URLSearchParams({ donePage: String(donePage) });
+  if (projectId != null) params.set("projectId", String(projectId));
+  const res = await fetch(`${BASE}/tickets/board?${params.toString()}`);
+  if (!res.ok) throw new Error("Failed to fetch board tickets");
   return res.json();
 }
 
