@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useState } from "react";
-import { createProject, deleteProject, fetchProjects, updateProject } from "../api";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { createProject, deleteProject, fetchProjects, updateProject, uploadProjectLogo } from "../api";
 import type { Project } from "../types";
 
 type EditState = {
@@ -70,6 +70,7 @@ const ProjectCard = memo(function ProjectCard({
   onCancelEdit,
   onChangeEdit,
   onSave,
+  onLogoUploaded,
 }: {
   project: Project;
   editData?: EditState;
@@ -78,8 +79,28 @@ const ProjectCard = memo(function ProjectCard({
   onCancelEdit: (projectId: number) => void;
   onChangeEdit: (projectId: number, field: keyof EditState, value: string) => void;
   onSave: (projectId: number) => void;
+  onLogoUploaded: (projectId: number) => void;
 }) {
   const isEditing = !!editData;
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+
+  const handleLogoChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    setLogoError(null);
+    try {
+      await uploadProjectLogo(project.id, file);
+      onLogoUploaded(project.id);
+    } catch (err: any) {
+      setLogoError(err.message);
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }, [project.id, onLogoUploaded]);
 
   return (
     <div className="ticket-card" style={{ padding: "16px 20px" }}>
@@ -179,7 +200,16 @@ const ProjectCard = memo(function ProjectCard({
         </div>
       ) : (
         <div style={{ marginTop: 8 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>{project.name}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            {project.logoPath && (
+              <img
+                src={`/api/uploads/projects/${project.id}/logo`}
+                alt={`${project.name} logo`}
+                style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }}
+              />
+            )}
+            <div style={{ fontWeight: 600 }}>{project.name}</div>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#94a3b8" }}>
             <div>
               Boards:{" "}
@@ -213,6 +243,24 @@ const ProjectCard = memo(function ProjectCard({
               Project rules:{" "}
               <span style={{ color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{project.rules ?? "-"}</span>
             </div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.gif,.webp"
+              style={{ display: "none" }}
+              onChange={handleLogoChange}
+            />
+            <button
+              className="btn"
+              style={{ fontSize: 11, padding: "3px 8px" }}
+              onClick={() => logoInputRef.current?.click()}
+              disabled={logoUploading}
+            >
+              {logoUploading ? "Uploading..." : project.logoPath ? "Replace Logo" : "Upload Logo"}
+            </button>
+            {logoError && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{logoError}</div>}
           </div>
         </div>
       )}
@@ -354,6 +402,10 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
     [load, onProjectsChanged],
   );
 
+  const handleLogoUploaded = useCallback(async (_projectId: number) => {
+    await load();
+  }, [load]);
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -454,6 +506,7 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
               onCancelEdit={cancelEdit}
               onChangeEdit={changeEdit}
               onSave={saveEdit}
+              onLogoUploaded={handleLogoUploaded}
             />
           ))}
         </div>

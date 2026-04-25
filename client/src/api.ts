@@ -287,3 +287,27 @@ export async function deleteProject(id: number): Promise<void> {
     throw new Error(body.error ?? "Failed to delete project");
   }
 }
+
+// ── Image uploads ─────────────────────────────────────────────────
+
+export async function uploadProjectLogo(projectId: number, file: File): Promise<{ logoPath: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/uploads/projects/${projectId}/logo`, { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to upload logo");
+  }
+  return res.json();
+}
+
+export async function uploadTicketImage(ticketId: number, file: File): Promise<{ path: string; description: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/uploads/tickets/${ticketId}/images`, { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to upload image");
+  }
+  return res.json();
+}

@@ -23,6 +23,7 @@ type ProjectActivityRow = {
   project_introduction: string | null;
   project_rules: string | null;
   project_techStack: string | null;
+  project_logoPath: string | null;
   project_createdAt: Date | string;
   project_updatedAt: Date | string;
   ticketCount?: number | string;
@@ -40,6 +41,7 @@ type ProjectWriteData = {
   introduction?: string | null;
   rules?: string | null;
   techStack?: string | null;
+  logoPath?: string | null;
 };
 
 export class ProjectRepository {
@@ -127,6 +129,7 @@ export class ProjectRepository {
     project.introduction = raw.project_introduction == null ? null : String(raw.project_introduction);
     project.rules = raw.project_rules == null ? null : String(raw.project_rules);
     project.techStack = raw.project_techStack == null ? null : String(raw.project_techStack);
+    project.logoPath = raw.project_logoPath == null ? null : String(raw.project_logoPath);
     project.createdAt = new Date(String(raw.project_createdAt));
     project.updatedAt = new Date(String(raw.project_updatedAt));
     const ticketCount = Number(raw.ticketCount ?? 0);
@@ -152,6 +155,7 @@ export class ProjectRepository {
       introduction: data.introduction ?? null,
       rules: data.rules ?? null,
       techStack: data.techStack ?? null,
+      logoPath: data.logoPath ?? null,
     });
     return this.repo.save(project);
   }
@@ -173,6 +177,7 @@ export class ProjectRepository {
     if (data.introduction !== undefined) project.introduction = data.introduction;
     if (data.rules !== undefined) project.rules = data.rules;
     if (data.techStack !== undefined) project.techStack = data.techStack;
+    if (data.logoPath !== undefined) project.logoPath = data.logoPath;
 
     return this.repo.save(project);
   }

@@ -53,6 +53,7 @@ export interface Project {
   introduction: string | null;
   rules: string | null;
   techStack: string | null;
+  logoPath: string | null;
   ticketCount?: number;
   runningTicketCount?: number;
   hasRunningTickets?: boolean;
