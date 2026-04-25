@@ -77,4 +77,7 @@ export class Ticket {
   @ManyToOne(() => Project, (p) => p.tickets, { nullable: true, onDelete: "SET NULL", eager: false })
   @JoinColumn({ name: "projectId" })
   project!: Project | null;
+
+  @Column({ type: "boolean", default: false })
+  isDone!: boolean;
 }

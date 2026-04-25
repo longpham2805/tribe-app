@@ -208,6 +208,7 @@ export class PhaseHandler {
 
   private async finalizeShip(ticket: Ticket, shipOutputPath: string): Promise<void> {
     await this.persistShipArtifacts(ticket, shipOutputPath);
+    await this.ticketRepo.update(ticket.id, { isDone: true });
     if (ticket.slotId == null) {
       log(`ticket #${ticket.id} has no slot — skipping release`);
       return;

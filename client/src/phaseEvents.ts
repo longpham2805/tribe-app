@@ -137,7 +137,7 @@ function summarizeAssistantBlocks(blocks: AssistantContentBlock[]): string | und
   for (const block of blocks) {
     if (block.type === "text") {
       const text = asString(block.text);
-      if (text) summaries.push(truncate(text, 140));
+      if (text) summaries.push(truncate(text, 300));
       continue;
     }
     if (block.type === "thinking") {
@@ -455,23 +455,26 @@ export function getActivityMarkdownEntries(
 }
 
 function formatAssistantMarkdown(blocks: AssistantContentBlock[]): string {
-  return blocks
-    .map((block) => {
-      if (block.type === "text") {
-        return asString(block.text) ?? "";
-      }
-      if (block.type === "thinking") {
-        return "_Thinking…_";
-      }
-      if (block.type === "tool_use") {
-        const toolName = asString(block.name) ?? "Tool";
-        const detail = summarizeToolInput(block.input);
-        return detail ? `🔧 **${toolName}** ${detail}` : `🔧 **${toolName}**`;
-      }
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n\n");
+  const textBlocks: string[] = [];
+  const toolLines: string[] = [];
+
+  for (const block of blocks) {
+    if (block.type === "text") {
+      const text = asString(block.text);
+      if (text) textBlocks.push(text);
+    } else if (block.type === "thinking") {
+      toolLines.push("_Thinking…_");
+    } else if (block.type === "tool_use") {
+      const toolName = asString(block.name) ?? "Tool";
+      const detail = summarizeToolInput(block.input);
+      toolLines.push(detail ? `🔧 _${toolName}_ ${detail}` : `🔧 _${toolName}_`);
+    }
+  }
+
+  const parts: string[] = [];
+  if (textBlocks.length > 0) parts.push(textBlocks.join("\n\n"));
+  if (toolLines.length > 0) parts.push(toolLines.join(" · "));
+  return parts.join("\n\n");
 }
 
 export function extractEventText(event: unknown): string {
@@ -492,7 +495,7 @@ export function extractEventText(event: unknown): string {
     return item.summary;
   }
   if (item.kind === "command") {
-    return item.summary ? `🔧 **${item.title}** ${item.summary}` : `🔧 **${item.title}**`;
+    return item.summary ? `🔧 _${item.title}_ ${item.summary}` : `🔧 _${item.title}_`;
   }
   return item.summary ?? item.title;
 }
