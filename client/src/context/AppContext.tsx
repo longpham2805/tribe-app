@@ -19,6 +19,11 @@ import { useWebSocket } from "../ws";
 
 export type View = "tickets" | "slots" | "projects";
 
+export type ShortcutIntent =
+  | { type: "new-ticket" }
+  | { type: "open-ticket"; ticketId: number }
+  | null;
+
 type AppContextValue = {
   view: View;
   setView: (view: View) => void;
@@ -31,6 +36,9 @@ type AppContextValue = {
   setAutoTriggerEnabled: (enabled: boolean) => Promise<void>;
   setCliAvailable: (cliType: CliType, available: boolean) => Promise<void>;
   loadProjects: () => Promise<void>;
+  shortcutIntent: ShortcutIntent;
+  setShortcutIntent: (intent: ShortcutIntent) => void;
+  clearShortcutIntent: () => void;
 };
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -40,6 +48,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [appState, setAppState] = useState<AppState | null>(null);
   const [selectedProjectId, setSelectedProjectIdState] = useState<number | null>(null);
+  const [shortcutIntent, setShortcutIntent] = useState<ShortcutIntent>(null);
   const selectedProjectIdRef = useRef<number | null>(null);
 
   const selectedProject = useMemo(
@@ -121,6 +130,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [appState],
   );
 
+  const clearShortcutIntent = useCallback(() => setShortcutIntent(null), []);
+
   useEffect(() => {
     void loadProjects();
     void loadAppState();
@@ -147,6 +158,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAutoTriggerEnabled,
       setCliAvailable,
       loadProjects,
+      shortcutIntent,
+      setShortcutIntent,
+      clearShortcutIntent,
     }),
     [
       view,
@@ -159,6 +173,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAutoTriggerEnabled,
       setCliAvailable,
       loadProjects,
+      shortcutIntent,
+      clearShortcutIntent,
     ],
   );
 

@@ -88,7 +88,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
 });
 
 export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps) {
-  const { appState } = useAppContext();
+  const { appState, shortcutIntent, clearShortcutIntent } = useAppContext();
   const paneWidth = 720;
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -113,6 +113,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
   const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
 
+  const newTicketTitleRef = useRef<HTMLInputElement>(null);
   const ticketFileRefreshTimers = useRef<Record<number, number>>({});
   const isBoardMode = filterPhase === "";
   const fetchAndStoreTicketFiles = useCallback(
@@ -300,6 +301,18 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     setViewer(null);
   }, []);
 
+  useEffect(() => {
+    if (!shortcutIntent) return;
+    if (shortcutIntent.type === "new-ticket") {
+      setShowForm(true);
+      clearShortcutIntent();
+      requestAnimationFrame(() => newTicketTitleRef.current?.focus());
+    } else if (shortcutIntent.type === "open-ticket") {
+      openTicket(shortcutIntent.ticketId);
+      clearShortcutIntent();
+    }
+  }, [shortcutIntent, clearShortcutIntent, openTicket]);
+
   const handleCreate = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -427,6 +440,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           <form className="new-ticket-form" onSubmit={handleCreate}>
             <h2>New Ticket</h2>
             <input
+              ref={newTicketTitleRef}
               className="input"
               placeholder="Title"
               value={newTitle}
