@@ -25,7 +25,7 @@
     </filter>
   </defs>
 
-  <rect width="1024" height="1024" rx="96" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="96" fill="#D97757"/>
 
   <!-- Connected Tribe mark -->
   <g filter="url(#glow)" stroke="url(#tribeGradient)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round">
@@ -49,7 +49,7 @@
 
   <!-- Terminal-style name -->
   <g filter="url(#textGlow)" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace" font-size="72" font-weight="500">
-    <text x="338" y="819" fill="#00F59C">&gt;_</text>
-    <text x="455" y="819" fill="#F7F7F8">Tribe</text>
+    <text x="338" y="819" fill="#FAF9F5">&gt;_</text>
+    <text x="455" y="819" fill="#FAF9F5">Tribe</text>
   </g>
 </svg>

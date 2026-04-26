@@ -27,10 +27,10 @@ export const SharedMarkdown = memo(function SharedMarkdown({ content, compact = 
             </div>
           ),
           th: ({ children }) => (
-            <th style={{ textAlign: "left", border: "1px solid #334155", padding: "6px 8px" }}>{children}</th>
+            <th style={{ textAlign: "left", border: "1px solid var(--hairline-strong)", padding: "6px 8px" }}>{children}</th>
           ),
           td: ({ children }) => (
-            <td style={{ border: "1px solid #334155", padding: "6px 8px", verticalAlign: "top" }}>{children}</td>
+            <td style={{ border: "1px solid var(--hairline-strong)", padding: "6px 8px", verticalAlign: "top" }}>{children}</td>
           ),
         }}
       >

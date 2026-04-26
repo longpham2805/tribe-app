@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useEffect, useState, useRef } from "react";
+import { type FormEvent, useEffect, useState, useRef } from "react";
 import { uploadTicketImage } from "../../api";
 import { extractPullRequestUrl, getPullRequestLinkLabel } from "../../constants/ticket";
 import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
@@ -35,6 +35,7 @@ interface TicketDetailModalProps {
   onResponseDraftChange: (value: string) => void;
   onRespond: (ticketId: number) => void;
   onImageUploaded?: () => void;
+  projectName: string | null;
   phaseLabels: Record<TicketPhase, string>;
   phaseColors: Record<TicketPhase, string>;
   statusLabels: Record<PhaseStatus, string>;
@@ -42,6 +43,20 @@ interface TicketDetailModalProps {
   pausedStatuses: readonly PhaseStatus[];
   phases: readonly TicketPhase[];
   savingContent: boolean;
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - Date.parse(iso);
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
 }
 
 function normalizeTicketDescriptionImages(description: string, ticketId: number): string {
@@ -82,6 +97,7 @@ export function TicketDetailModal({
   onResponseDraftChange,
   onRespond,
   onImageUploaded,
+  projectName,
   phaseLabels,
   phaseColors,
   statusLabels,
@@ -189,338 +205,376 @@ export function TicketDetailModal({
     );
   }
 
-  const metaRowStyle: CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
-    alignItems: "center",
-  };
+  const activePhase = ticket.phases.find((p) => !!p.startedAt && !p.completedAt);
+  const liveFeedPhase = activePhase ?? ticket.phases.slice().reverse().find((p) => !!p.completedAt) ?? ticket.phases[0];
 
   return (
-    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={paneWidth}>
-      <div className="ticket-header" style={{ marginBottom: 10, gap: 12, flexWrap: "wrap" }}>
-        <div className="ticket-meta" style={{ flexWrap: "wrap" }}>
-          <span className="ticket-id">#{ticket.id}</span>
-          <span
-            className="phase-badge"
-            style={{
-              background: `${phaseColors[ticket.currentPhase]}22`,
-              color: phaseColors[ticket.currentPhase],
-            }}
-          >
-            {phaseLabels[ticket.currentPhase]}
-          </span>
-          <span
-            className="phase-badge"
-            style={{ background: "#6366f122", color: "#6366f1" }}
-            title="CLI agent"
-          >
-            {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
-          </span>
-        </div>
-        <div className="ticket-detail-actions">
-          {canEditContent ? (
-            <button
-              className="ticket-action-button"
-              type="button"
-              onClick={() => {
-                if (editingContent) {
-                  setDraftTitle(ticket.title);
-                  setDraftDescription(ticket.description ?? "");
-                }
-                setEditingContent((prev) => !prev);
-                setContentError(null);
-              }}
-              disabled={savingContent}
-            >
-              {editingContent ? "Cancel" : "Edit"}
-            </button>
-          ) : null}
+    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={paneWidth} noHeader>
+      {/* ── Sticky header ── */}
+      <div className="td-topbar">
+        <span className="mono td-topbar__id">#{ticket.id}</span>
+        {projectName && (
+          <>
+            <span className="td-topbar__dot" aria-hidden="true" />
+            <span className="td-topbar__project">{projectName}</span>
+          </>
+        )}
+        <span style={{ flex: 1 }} />
+        {canEditContent && (
           <button
-            className="ticket-remove-button"
+            className="ticket-action-button"
             type="button"
-            onClick={() => onDelete(ticket.id)}
-            title="Remove ticket"
-          >
-            <svg
-              className="ticket-remove-button__icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M3 6h18" />
-              <path d="M8 6V4.75C8 4.336 8.336 4 8.75 4h6.5c.414 0 .75.336.75.75V6" />
-              <path d="M6.75 6l.6 11.3A2 2 0 0 0 9.347 19.2h5.306a2 2 0 0 0 1.997-1.9L17.25 6" />
-              <path d="M10 10.25v5.5" />
-              <path d="M14 10.25v5.5" />
-            </svg>
-            <span>Remove</span>
-          </button>
-        </div>
-      </div>
-
-      <div style={metaRowStyle}>
-        <span className="ticket-date">Created {new Date(ticket.createdAt).toLocaleDateString()}</span>
-        {ticket.waitingForSlot ? (
-          <span className="phase-badge" style={{ background: "#ef444422", color: "#ef4444" }}>
-            Waiting for slot
-          </span>
-        ) : assignedSlotName ? (
-          <span className="phase-badge" style={{ background: "#0ea5e922", color: "#0ea5e9" }}>
-            {assignedSlotName}
-          </span>
-        ) : null}
-      </div>
-
-      {editingContent ? (
-        <form className="ticket-edit-form" onSubmit={handleContentSubmit}>
-          <input
-            className="input"
-            value={draftTitle}
-            onChange={(event) => setDraftTitle(event.target.value)}
-            maxLength={255}
-            required
-            autoFocus
-          />
-          <textarea
-            className="input textarea"
-            value={draftDescription}
-            onChange={(event) => setDraftDescription(event.target.value)}
-            rows={4}
-          />
-          {contentError ? <div className="ticket-edit-error">{contentError}</div> : null}
-          {titleTooLong ? <div className="ticket-edit-error">Title must be 255 characters or fewer.</div> : null}
-          <div className="ticket-edit-actions">
-            <button
-              className="btn"
-              type="button"
-              disabled={savingContent}
-              onClick={() => {
-                setEditingContent(false);
+            onClick={() => {
+              if (editingContent) {
                 setDraftTitle(ticket.title);
                 setDraftDescription(ticket.description ?? "");
-                setContentError(null);
-              }}
-            >
-              Cancel
-            </button>
-            <button className="btn btn-primary" type="submit" disabled={saveDisabled}>
-              {savingContent ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      ) : ticket.description ? (
-        <div className="ticket-desc">
-          <SharedMarkdown content={normalizeTicketDescriptionImages(ticket.description, ticket.id)} />
-        </div>
-      ) : null}
-
-      <div style={{ marginBottom: 12 }}>
-        <input
-          ref={imgInputRef}
-          type="file"
-          accept=".jpg,.jpeg,.png,.gif,.webp,.svg"
-          style={{ display: "none" }}
-          onChange={handleImageChange}
-        />
+              }
+              setEditingContent((prev) => !prev);
+              setContentError(null);
+            }}
+            disabled={savingContent}
+          >
+            {editingContent ? "Cancel" : "Edit"}
+          </button>
+        )}
         <button
-          className="btn"
+          className="ticket-remove-button"
           type="button"
-          style={{ fontSize: 11, padding: "3px 8px" }}
-          disabled={imgUploading}
-          onClick={() => imgInputRef.current?.click()}
+          onClick={() => onDelete(ticket.id)}
+          title="Remove ticket"
         >
-          {imgUploading ? "Uploading..." : "Upload Image"}
+          <svg
+            className="ticket-remove-button__icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4.75C8 4.336 8.336 4 8.75 4h6.5c.414 0 .75.336.75.75V6" />
+            <path d="M6.75 6l.6 11.3A2 2 0 0 0 9.347 19.2h5.306a2 2 0 0 0 1.997-1.9L17.25 6" />
+            <path d="M10 10.25v5.5" />
+            <path d="M14 10.25v5.5" />
+          </svg>
+          <span>Remove</span>
         </button>
-        {imgError && <span style={{ fontSize: 11, color: "#ef4444", marginLeft: 8 }}>{imgError}</span>}
+        <button className="btn-delete td-topbar__close" type="button" onClick={onClose} title="Close" aria-label="Close">
+          ×
+        </button>
       </div>
 
-      {assignedArtifacts ? (
-        <div className="ship-artifacts card">
-          <div className="ship-artifacts-title">Ship Artifacts</div>
-          {ticket.branchName ? (
-            <div className="ship-artifacts-branch">
-              Branch: <code>{ticket.branchName}</code>
-            </div>
-          ) : null}
-          {ticket.pullRequests?.length ? (
-            <table className="ship-artifacts-table" aria-label={`Ticket ${ticket.id} pull requests`}>
-              <thead>
-                <tr>
-                  <th>Repo</th>
-                  <th>PR Link</th>
-                  <th>Commit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ticket.pullRequests.map((pr) => (
-                  <tr key={`${pr.repo}-${pr.prUrl}`}>
-                    <td>{pr.repo}</td>
-                    <td>
-                      {(() => {
-                        const url = extractPullRequestUrl(pr.prUrl);
-                        if (!url) return <span>{pr.prUrl}</span>;
-                        return (
-                          <a href={url} target="_blank" rel="noreferrer">
-                            {getPullRequestLinkLabel(url)}
-                          </a>
-                        );
-                      })()}
-                    </td>
-                    <td>
-                      <code>{pr.commitSha}</code>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
-        </div>
-      ) : null}
-
-      {ticket.phases.length > 0 ? (
-        <div className="phase-pipeline">
-          {phases.map((phase) => {
-            const phaseRecord = ticket.phases.find((item) => item.phaseName === phase);
-            const isCompleted = !!phaseRecord?.completedAt;
-            const isActive = !!phaseRecord?.startedAt && !phaseRecord?.completedAt;
-            const isPending = !phaseRecord?.startedAt;
-            const status = phaseRecord?.status ?? "PENDING";
-            const phaseColor = phaseColors[phase];
-            const statusColor = statusColors[status];
-            const accent = statusColor ?? phaseColor;
-            const isBusy = triggeringPhase === `${ticket.id}:${phase}`;
-            const isRunning = isActive && status === "RUNNING";
-            const isSelected = selectedPhase === phase;
-            const stateLabel = isCompleted ? "Completed" : isPending ? "Pending" : statusLabels[status] ?? "Active";
-            const icon = isCompleted
-              ? "✓"
-              : status === "ERROR"
-                ? "!"
-                : status === "REQUIRES_ACTION" || status === "QUESTION"
-                  ? "?"
-                  : isActive
-                    ? "●"
-                    : "○";
-
-            return (
-              <div
-                key={phase}
-                role="button"
-                tabIndex={0}
-                className={`phase-card ${isActive ? "phase-card--active" : ""} ${isCompleted ? "phase-card--completed" : ""} ${isPending ? "phase-card--pending" : ""} ${isRunning ? "phase-card--running" : ""} ${isSelected ? "phase-card--selected" : ""}`}
-                style={{
-                  cursor: "pointer",
-                  "--selection-accent": phaseColor,
-                  ...(isRunning
-                    ? ({ "--running-accent": accent } as CSSProperties)
-                    : isActive
-                      ? { borderColor: accent }
-                      : isCompleted
-                        ? { borderColor: `${phaseColor}55` }
-                        : {}),
-                } as CSSProperties}
-                onClick={() => onSelectPhase(ticket.id, phase)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelectPhase(ticket.id, phase);
-                  }
+      <div className="td-body">
+        {/* Title */}
+        {editingContent ? (
+          <form className="ticket-edit-form" onSubmit={handleContentSubmit}>
+            <input
+              className="input"
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              maxLength={255}
+              required
+              autoFocus
+            />
+            <textarea
+              className="input textarea"
+              value={draftDescription}
+              onChange={(event) => setDraftDescription(event.target.value)}
+              rows={4}
+            />
+            {contentError ? <div className="ticket-edit-error">{contentError}</div> : null}
+            {titleTooLong ? <div className="ticket-edit-error">Title must be 255 characters or fewer.</div> : null}
+            <div className="ticket-edit-actions">
+              <button
+                className="btn"
+                type="button"
+                disabled={savingContent}
+                onClick={() => {
+                  setEditingContent(false);
+                  setDraftTitle(ticket.title);
+                  setDraftDescription(ticket.description ?? "");
+                  setContentError(null);
                 }}
               >
-                <div
-                  className="phase-card-header"
-                  style={isActive ? { color: accent } : isCompleted ? { color: phaseColor } : {}}
-                >
-                  <span className={`phase-card-icon${isRunning ? " phase-card-icon--running" : ""}`}>{icon}</span>
-                  <span className="phase-card-name">{phaseLabels[phase]}</span>
-                </div>
-                <div className="phase-card-status" style={isActive && statusColor ? { color: statusColor } : {}}>
-                  {stateLabel}
-                </div>
-                <button
-                  className="phase-card-trigger"
-                  type="button"
-                  style={isActive ? { borderColor: `${accent}66`, color: accent } : {}}
-                  disabled={isBusy || ticketRunning}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onTriggerPhase(ticket.id, phase);
-                  }}
-                  title={ticketRunning ? "A phase is already running" : `Trigger ${phaseLabels[phase]}`}
-                >
-                  {isBusy ? "..." : "Trigger"}
-                </button>
-              </div>
-            );
-          })}
+                Cancel
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={saveDisabled}>
+                {savingContent ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <h1 className="serif td-title">{ticket.title}</h1>
+        )}
+
+        {/* Meta tags row */}
+        <div className="td-meta-row">
+          <span className="sc-tag" style={{ background: `${phaseColors[ticket.currentPhase]}22`, color: phaseColors[ticket.currentPhase] }}>
+            <span className="sc-tag__dot" style={{ background: phaseColors[ticket.currentPhase] }} aria-hidden="true" />
+            {phaseLabels[ticket.currentPhase]}
+          </span>
+          <span className="sc-tag" style={{ background: "var(--hairline)", color: "var(--ink-2)" }}>
+            {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
+          </span>
+          {ticket.waitingForSlot ? (
+            <span className="sc-tag" style={{ background: "#B0763412", color: "var(--status-warn)" }}>
+              Waiting for slot
+            </span>
+          ) : assignedSlotName ? (
+            <span className="sc-tag" style={{ background: "var(--hairline)", color: "var(--ink-3)" }}>
+              {assignedSlotName}
+            </span>
+          ) : null}
+          <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
+            Created {relativeTime(ticket.createdAt)}
+          </span>
         </div>
-      ) : null}
 
-      {selectedPhase ? (
-        <PhaseLiveFeed
-          ticketId={ticket.id}
-          phaseName={selectedPhase}
-          status={selectedPhaseRecord?.status ?? "PENDING"}
-          liveEvents={liveLogs[`${ticket.id}:${selectedPhase}`] ?? []}
-          autoOpenKey={selectedPhaseAutoOpenKey}
-        />
-      ) : null}
-
-      {filesLoading ? (
-        <div style={{ marginTop: 10, fontSize: 11, color: "#64748b" }}>Loading files…</div>
-      ) : files.length > 0 ? (
-        <div className="file-chips">
-          {files.map((file) => (
-            <button
-              key={file.name}
-              className="file-chip"
-              type="button"
-              onClick={() => onOpenFile(file.name)}
-              title={`${file.size} bytes · ${new Date(file.mtime).toLocaleString()}`}
-            >
-              <span className="file-chip-icon">📄</span>
-              {file.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {paused ? (
-        <div
-          ref={replyPanelRef}
-          className="phase-paused"
-          style={{ borderColor: `${statusColors[paused.status] ?? "#f59e0b"}66` }}
-        >
-          <div className="phase-paused-header" style={{ color: statusColors[paused.status] ?? "#f59e0b" }}>
-            {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
+        {/* Description */}
+        {!editingContent && ticket.description ? (
+          <div className="ticket-desc serif" style={{ fontSize: 15, lineHeight: 1.55, color: "var(--ink-1)", marginBottom: 20 }}>
+            <SharedMarkdown content={normalizeTicketDescriptionImages(ticket.description, ticket.id)} />
           </div>
-          {paused.lastMessage ? <div className="phase-paused-message">{paused.lastMessage}</div> : null}
-          <textarea
-            ref={replyTextareaRef}
-            className="input textarea"
-            rows={3}
-            placeholder="Reply to the agent..."
-            value={responseDraft}
-            onChange={(event) => onResponseDraftChange(event.target.value)}
+        ) : null}
+
+        {/* Image upload */}
+        <div style={{ marginBottom: 18 }}>
+          <input
+            ref={imgInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.gif,.webp,.svg"
+            style={{ display: "none" }}
+            onChange={handleImageChange}
           />
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={isReplyBusy || !responseDraft.trim()}
-              onClick={() => onRespond(ticket.id)}
-            >
-              {isReplyBusy ? "Sending..." : "Send reply"}
-            </button>
-          </div>
+          <button
+            className="btn"
+            type="button"
+            style={{ fontSize: 11, padding: "3px 8px" }}
+            disabled={imgUploading}
+            onClick={() => imgInputRef.current?.click()}
+          >
+            {imgUploading ? "Uploading..." : "Upload Image"}
+          </button>
+          {imgError && <span style={{ fontSize: 11, color: "var(--status-error)", marginLeft: 8 }}>{imgError}</span>}
         </div>
-      ) : null}
+
+        {/* ── Lifecycle ── */}
+        {ticket.phases.length > 0 ? (
+          <div className="td-section">
+            <div className="td-section-label">Lifecycle</div>
+            <div className="td-lifecycle">
+              {phases.map((phase) => {
+                const phaseRecord = ticket.phases.find((item) => item.phaseName === phase);
+                const isCompleted = !!phaseRecord?.completedAt;
+                const isActive = !!phaseRecord?.startedAt && !phaseRecord?.completedAt;
+                const status = phaseRecord?.status ?? "PENDING";
+                const isPaused = isActive && (status === "REQUIRES_ACTION" || status === "QUESTION" || status === "ERROR");
+                const isRunning = isActive && status === "RUNNING";
+                const phaseColor = phaseColors[phase];
+                const statusColor = statusColors[status];
+                const accent = isPaused ? (statusColor ?? "var(--status-warn)") : phaseColor;
+                const isBusy = triggeringPhase === `${ticket.id}:${phase}`;
+                const isSelected = selectedPhase === phase;
+                const stateLabel = isCompleted ? "Completed" : isRunning ? "Running…" : isPaused ? (statusLabels[status] ?? "Paused") : isActive ? "Active" : "Pending";
+
+                return (
+                  <div
+                    key={phase}
+                    role="button"
+                    tabIndex={0}
+                    className={`td-lc-card${isSelected ? " td-lc-card--selected" : ""}`}
+                    style={{
+                      borderColor: (isActive || isPaused || isCompleted)
+                        ? `color-mix(in srgb, ${accent} 30%, var(--hairline))`
+                        : undefined,
+                      boxShadow: isRunning ? `0 0 0 2px color-mix(in srgb, ${accent} 25%, transparent)` : undefined,
+                    }}
+                    onClick={() => onSelectPhase(ticket.id, phase)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onSelectPhase(ticket.id, phase);
+                      }
+                    }}
+                  >
+                    <div className="td-lc-card__head">
+                      <span
+                        className="td-lc-card__circle"
+                        style={{
+                          background: isCompleted ? accent : "transparent",
+                          borderColor: isCompleted ? accent : `color-mix(in srgb, ${accent} 50%, var(--hairline-strong))`,
+                        }}
+                      >
+                        {isCompleted && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                            <path d="M2 5l2.5 2.5L8 3" stroke="var(--cream)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                        {isRunning && <span className="td-lc-card__pulse" style={{ background: accent }} />}
+                        {isPaused && (
+                          <span style={{ fontSize: 9, color: accent, fontWeight: 700, lineHeight: 1 }}>
+                            {status === "QUESTION" ? "?" : "!"}
+                          </span>
+                        )}
+                      </span>
+                      <span className="td-lc-card__name">{phaseLabels[phase]}</span>
+                    </div>
+                    <div className="td-lc-card__status" style={{ color: (isActive || isPaused) ? accent : undefined }}>
+                      {stateLabel}
+                    </div>
+                    <button
+                      className="td-lc-card__trigger"
+                      type="button"
+                      disabled={isBusy || ticketRunning}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onTriggerPhase(ticket.id, phase);
+                      }}
+                      title={ticketRunning ? "A phase is already running" : `Trigger ${phaseLabels[phase]}`}
+                    >
+                      {isBusy ? "…" : "Trigger"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* ── Paused / reply panel ── */}
+        {paused ? (
+          <div
+            ref={replyPanelRef}
+            className="td-paused-panel"
+            style={{
+              background: paused.status === "ERROR"
+                ? "color-mix(in srgb, var(--status-error) 8%, var(--cream))"
+                : "color-mix(in srgb, var(--status-warn) 9%, var(--cream))",
+              borderColor: `color-mix(in srgb, ${statusColors[paused.status] ?? "var(--status-warn)"} 35%, transparent)`,
+            }}
+          >
+            <div
+              className="td-paused-panel__label"
+              style={{ color: statusColors[paused.status] ?? "var(--status-warn)" }}
+            >
+              {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
+            </div>
+            {paused.lastMessage ? (
+              <div className="serif td-paused-panel__message">{paused.lastMessage}</div>
+            ) : null}
+            <textarea
+              ref={replyTextareaRef}
+              className="input textarea td-paused-panel__textarea"
+              rows={3}
+              placeholder="Reply to the agent…"
+              value={responseDraft}
+              onChange={(event) => onResponseDraftChange(event.target.value)}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => onResponseDraftChange("")}
+              >
+                Discard
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={isReplyBusy || !responseDraft.trim()}
+                onClick={() => onRespond(ticket.id)}
+              >
+                {isReplyBusy ? "Sending…" : "Send reply"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* ── Live feed ── */}
+        {liveFeedPhase ? (
+          <div className="td-section">
+            <div className="td-section-label">
+              Live feed · {phaseLabels[liveFeedPhase.phaseName as keyof typeof phaseLabels] ?? liveFeedPhase.phaseName}
+            </div>
+            <PhaseLiveFeed
+              ticketId={ticket.id}
+              phaseName={selectedPhase ?? liveFeedPhase.phaseName}
+              status={(selectedPhase ? selectedPhaseRecord?.status : liveFeedPhase.status) ?? "PENDING"}
+              liveEvents={liveLogs[`${ticket.id}:${selectedPhase ?? liveFeedPhase.phaseName}`] ?? []}
+              autoOpenKey={selectedPhaseAutoOpenKey}
+            />
+          </div>
+        ) : null}
+
+        {/* ── Generated files ── */}
+        {(filesLoading || files.length > 0) && (
+          <div className="td-section">
+            <div className="td-section-label">Generated files</div>
+            {filesLoading ? (
+              <div style={{ fontSize: 11, color: "var(--ink-4)" }}>Loading files…</div>
+            ) : (
+              <div className="file-chips">
+                {files.map((file) => (
+                  <button
+                    key={file.name}
+                    className="file-chip"
+                    type="button"
+                    onClick={() => onOpenFile(file.name)}
+                    title={`${file.size} bytes · ${new Date(file.mtime).toLocaleString()}`}
+                  >
+                    <span className="mono file-chip-icon" style={{ fontSize: 11, color: "var(--ink-4)" }}>{"{}"}</span>
+                    {file.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Ship artifacts ── */}
+        {assignedArtifacts ? (
+          <div className="td-section">
+            <div className="td-section-label">Ship artifacts</div>
+            <div className="td-artifacts-card">
+              {ticket.branchName ? (
+                <div className="td-artifacts-row">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="6" y1="3" x2="6" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" />
+                  </svg>
+                  <code className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{ticket.branchName}</code>
+                </div>
+              ) : null}
+              {ticket.pullRequests?.map((pr) => {
+                const url = extractPullRequestUrl(pr.prUrl);
+                return (
+                  <div key={`${pr.repo}-${pr.prUrl}`} className="td-artifacts-row">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="18" cy="18" r="3" />
+                      <circle cx="6" cy="6" r="3" />
+                      <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                      <line x1="6" y1="9" x2="6" y2="21" />
+                    </svg>
+                    <span className="mono" style={{ color: "var(--ink-3)", fontSize: 12 }}>{pr.repo}</span>
+                    {url ? (
+                      <a href={url} target="_blank" rel="noreferrer" style={{ color: "var(--claude-deep)", textDecoration: "none", fontWeight: 500 }}>
+                        {getPullRequestLinkLabel(url)}
+                      </a>
+                    ) : (
+                      <span>{pr.prUrl}</span>
+                    )}
+                    <code className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginLeft: "auto" }}>{pr.commitSha}</code>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </Modal>
   );
 }

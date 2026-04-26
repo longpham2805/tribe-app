@@ -10,10 +10,10 @@ export const PHASE_LABELS: Record<TicketPhase, string> = {
 };
 
 export const PHASE_COLORS: Record<TicketPhase, string> = {
-  CREATED: "#6b7280",
-  PLANNING: "#3b82f6",
-  IMPLEMENTATION: "#f59e0b",
-  SHIP: "#10b981",
+  CREATED: "#8C8779",
+  PLANNING: "#5C7B8A",
+  IMPLEMENTATION: "#B07634",
+  SHIP: "#6F8E5E",
 };
 
 export const PAUSED_STATUSES: PhaseStatus[] = ["REQUIRES_ACTION", "QUESTION", "ERROR"];
@@ -31,18 +31,24 @@ export const STATUS_COLORS: Record<PhaseStatus, string | null> = {
   PENDING: null,
   RUNNING: null,
   COMPLETED: null,
-  REQUIRES_ACTION: "#f59e0b",
-  QUESTION: "#f59e0b",
-  ERROR: "#ef4444",
+  REQUIRES_ACTION: "#B07634",
+  QUESTION: "#B07634",
+  ERROR: "#B14B3F",
 };
 
 export const TICKET_GROUPS = ["RUNNING", "WAITING", "DONE"] as const;
 export type TicketGroup = typeof TICKET_GROUPS[number];
 
 export const TICKET_GROUP_LABELS: Record<TicketGroup, string> = {
-  RUNNING: "Running",
+  RUNNING: "In flight",
   WAITING: "Waiting",
-  DONE: "Done",
+  DONE: "Shipped",
+};
+
+export const TICKET_GROUP_HINTS: Record<TicketGroup, string> = {
+  RUNNING: "Phases currently advancing",
+  WAITING: "Queued — waiting for a free slot",
+  DONE: "Merged in the last 14 days",
 };
 
 export interface TicketPrLink {

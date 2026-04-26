@@ -26,12 +26,12 @@ const MondayGroup = memo(function MondayGroup({
         style={{
           fontSize: "0.7rem",
           fontWeight: 600,
-          color: "#64748b",
+          color: "var(--ink-4)",
           textTransform: "uppercase",
           letterSpacing: "0.05em",
           marginBottom: 6,
           paddingBottom: 4,
-          borderBottom: "1px solid #1e2a3a",
+          borderBottom: "1px solid var(--hairline)",
         }}
       >
         {title}
@@ -45,7 +45,7 @@ const MondayGroup = memo(function MondayGroup({
               className="btn"
               style={{
                 textAlign: "left",
-                ...(isSelected ? { borderColor: "#3b82f6", color: "#3b82f6", background: "#3b82f611" } : {}),
+                ...(isSelected ? { borderColor: "var(--claude)", color: "var(--claude-deep)", background: "#D9775711" } : {}),
               }}
               onClick={() => onSelect(item)}
               disabled={!!importingId}
@@ -148,9 +148,9 @@ export function MondayPicker({ onImported, projectId }: MondayPickerProps) {
       )}
 
       {selectedItem && (
-        <div style={{ marginTop: 16, borderTop: "1px solid #1e2a3a", paddingTop: 16 }}>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>
-            Importing <strong style={{ color: "#e2e8f0" }}>{selectedItem.name}</strong>
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--hairline)", paddingTop: 16 }}>
+          <div style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 6 }}>
+            Importing <strong style={{ color: "var(--ink)" }}>{selectedItem.name}</strong>
           </div>
           <textarea
             className="input textarea"

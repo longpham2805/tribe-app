@@ -22,6 +22,7 @@ export const AppHeader = memo(function AppHeader() {
       <div className="header-inner">
         <div className="header-brand">
           <img src="/tribe-logo.svg" className="logo" alt="Tribe" />
+          <span className="serif header-brand-name">Tribe</span>
           <nav className="header-nav">
             {viewButtons.map((viewButton) => (
               <button
@@ -42,6 +43,7 @@ export const AppHeader = memo(function AppHeader() {
               onClick={() => void setAutoTriggerEnabled(!appState.autoTriggerEnabled).catch(console.error)}
               title="Toggle automatic phase triggering and queued ticket promotion"
             >
+              <span className="state-toggle__dot" aria-hidden="true" />
               {appState.autoTriggerEnabled ? "Auto" : "Paused"}
             </button>
             <div className="cli-toggles" aria-label="Available CLIs">

@@ -36,8 +36,8 @@ const SlotCard = memo(function SlotCard({
           <span
             className="phase-badge"
             style={{
-              background: isFree ? "#10b98122" : "#f59e0b22",
-              color: isFree ? "#10b981" : "#f59e0b",
+              background: isFree ? "#6F8E5E22" : "#B0763422",
+              color: isFree ? "#6F8E5E" : "#B07634",
             }}
           >
             {isFree ? "Free" : `Ticket #${slot.currentTicketId}`}
@@ -85,7 +85,7 @@ const SlotCard = memo(function SlotCard({
       ) : (
         <div style={{ marginTop: 8 }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>{slot.name}</div>
-          <div style={{ fontSize: 12, color: "#6b7280", fontFamily: "monospace" }}>{slot.rootPath}</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "JetBrains Mono, monospace" }}>{slot.rootPath}</div>
         </div>
       )}
     </div>
@@ -190,11 +190,16 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Workspace Slots</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
-          {showForm ? "Cancel" : "+ New Slot"}
-        </button>
+      <div className="page-heading">
+        <div className="page-heading__left">
+          <h1 className="page-heading__title serif">Slots</h1>
+          <p className="page-heading__sub">Worker slots map to local checkouts. Pause a slot to halt new work without killing the running phase.</p>
+        </div>
+        <div className="page-heading__actions">
+          <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
+            {showForm ? "Cancel" : "+ New Slot"}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -228,7 +233,7 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
       ) : slots.length === 0 ? (
         <div className="empty">No slots yet. Create your first workspace slot above.</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="slots-grid">
           {slots.map((slot) => (
             <SlotCard
               key={slot.id}

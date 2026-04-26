@@ -74,7 +74,7 @@ function ColorSwatch({ hex }: { hex: string }) {
         height: 14,
         borderRadius: 3,
         background: hex,
-        border: "1px solid #334155",
+        border: "1px solid var(--hairline-strong)",
         verticalAlign: "middle",
         flexShrink: 0,
       }}
@@ -91,7 +91,7 @@ const formSectionStyle: React.CSSProperties = {
 const formSectionLabelStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: "#64748b",
+  color: "var(--ink-3)",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
   marginBottom: 2,
@@ -148,7 +148,7 @@ const ProjectCard = memo(function ProjectCard({
         <div className="ticket-meta">
           <span className="ticket-id">#{project.id}</span>
           {project.slug && (
-            <span className="phase-badge" style={{ background: "#3b82f622", color: "#3b82f6" }}>
+            <span className="phase-badge" style={{ background: "var(--claude)22", color: "var(--claude)" }}>
               {project.slug}
             </span>
           )}
@@ -235,7 +235,7 @@ const ProjectCard = memo(function ProjectCard({
           </div>
 
           {/* Monday.com */}
-          <details open={hasMondayData} style={{ borderTop: "1px solid #1e293b", paddingTop: 12 }}>
+          <details open={hasMondayData} style={{ borderTop: "1px solid var(--hairline)", paddingTop: 12 }}>
             <summary style={{ ...formSectionLabelStyle, cursor: "pointer", userSelect: "none" }}>Monday.com</summary>
             <div style={{ ...formSectionStyle, marginTop: 8 }}>
               <input
@@ -281,22 +281,22 @@ const ProjectCard = memo(function ProjectCard({
             <div style={{ fontWeight: 600 }}>{project.name}</div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#94a3b8" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--ink-4)" }}>
             {/* Colors */}
             {(project.primaryColor || project.actionColor) && (
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                 {project.primaryColor && (
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "#64748b" }}>Primary:</span>
+                    <span style={{ color: "var(--ink-3)" }}>Primary:</span>
                     <ColorSwatch hex={project.primaryColor} />
-                    <code style={{ color: "#e2e8f0", fontSize: 11 }}>{project.primaryColor}</code>
+                    <code style={{ color: "var(--ink)", fontSize: 11 }}>{project.primaryColor}</code>
                   </div>
                 )}
                 {project.actionColor && (
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "#64748b" }}>Action:</span>
+                    <span style={{ color: "var(--ink-3)" }}>Action:</span>
                     <ColorSwatch hex={project.actionColor} />
-                    <code style={{ color: "#e2e8f0", fontSize: 11 }}>{project.actionColor}</code>
+                    <code style={{ color: "var(--ink)", fontSize: 11 }}>{project.actionColor}</code>
                   </div>
                 )}
               </div>
@@ -305,26 +305,26 @@ const ProjectCard = memo(function ProjectCard({
             {/* Monday.com — only shown when data exists */}
             {hasMondayData && (
               <details open style={{ marginTop: 4 }}>
-                <summary style={{ cursor: "pointer", color: "#64748b", userSelect: "none", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <summary style={{ cursor: "pointer", color: "var(--ink-3)", userSelect: "none", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Monday.com
                 </summary>
                 <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
                   {(project.mondayBoardIds?.length ?? 0) > 0 && (
                     <div>
                       Boards:{" "}
-                      <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayBoardIds!.join(", ")}</span>
+                      <span style={{ fontFamily: "monospace", color: "var(--ink)" }}>{project.mondayBoardIds!.join(", ")}</span>
                     </div>
                   )}
                   {project.mondayDefaultPersonId && (
                     <div>
                       Default person:{" "}
-                      <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayDefaultPersonId}</span>
+                      <span style={{ fontFamily: "monospace", color: "var(--ink)" }}>{project.mondayDefaultPersonId}</span>
                     </div>
                   )}
                   {(project.mondayDevPeople?.length ?? 0) > 0 && (
                     <div>
                       Dev people:{" "}
-                      <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>{project.mondayDevPeople!.join(", ")}</span>
+                      <span style={{ fontFamily: "monospace", color: "var(--ink)" }}>{project.mondayDevPeople!.join(", ")}</span>
                     </div>
                   )}
                 </div>
@@ -334,7 +334,7 @@ const ProjectCard = memo(function ProjectCard({
             {/* Markdown text fields */}
             {project.introduction && (
               <div style={{ marginTop: 6 }}>
-                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Introduction</div>
+                <div style={{ color: "var(--ink-3)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Introduction</div>
                 <div className="project-markdown">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.introduction}</ReactMarkdown>
                 </div>
@@ -342,7 +342,7 @@ const ProjectCard = memo(function ProjectCard({
             )}
             {project.techStack && (
               <div style={{ marginTop: 6 }}>
-                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Tech Stack</div>
+                <div style={{ color: "var(--ink-3)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Tech Stack</div>
                 <div className="project-markdown">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.techStack}</ReactMarkdown>
                 </div>
@@ -350,7 +350,7 @@ const ProjectCard = memo(function ProjectCard({
             )}
             {project.rules && (
               <div style={{ marginTop: 6 }}>
-                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Rules</div>
+                <div style={{ color: "var(--ink-3)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Rules</div>
                 <div className="project-markdown">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.rules}</ReactMarkdown>
                 </div>
@@ -374,7 +374,7 @@ const ProjectCard = memo(function ProjectCard({
             >
               {logoUploading ? "Uploading..." : project.logoPath ? "Replace Logo" : "Upload Logo"}
             </button>
-            {logoError && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{logoError}</div>}
+            {logoError && <div style={{ fontSize: 11, color: "var(--status-error)", marginTop: 4 }}>{logoError}</div>}
           </div>
         </div>
       )}
@@ -522,11 +522,16 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Projects</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
-          {showForm ? "Cancel" : "+ New Project"}
-        </button>
+      <div className="page-heading">
+        <div className="page-heading__left">
+          <h1 className="page-heading__title serif">Projects</h1>
+          <p className="page-heading__sub">Configure repos, Monday boards, and per-project agent rules.</p>
+        </div>
+        <div className="page-heading__actions">
+          <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
+            {showForm ? "Cancel" : "+ New Project"}
+          </button>
+        </div>
       </div>
 
       {showForm && (

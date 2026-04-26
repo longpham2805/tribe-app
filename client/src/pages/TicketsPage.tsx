@@ -22,6 +22,7 @@ import {
   PHASES,
   STATUS_COLORS,
   STATUS_LABELS,
+  TICKET_GROUP_HINTS,
   TICKET_GROUP_LABELS,
   TICKET_GROUPS,
   type TicketGroup,
@@ -45,6 +46,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
   tickets,
   count,
   getSlotName,
+  getProjectName,
   onOpenTicket,
   action,
 }: {
@@ -52,6 +54,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
   tickets: Ticket[];
   count: number;
   getSlotName: (slotId: number | null) => string | null;
+  getProjectName: (projectId: number | null) => string | null;
   onOpenTicket: (ticketId: number) => void;
   action?: { label: string; disabled?: boolean; onClick: () => void } | null;
 }) {
@@ -60,10 +63,10 @@ const TicketGroupSection = memo(function TicketGroupSection({
   return (
     <section className="ticket-group-section">
       <div className="ticket-group-header">
-        <h2 className="ticket-group-title">{TICKET_GROUP_LABELS[group]}</h2>
-        <span className="count">
-          {count} ticket{count !== 1 ? "s" : ""}
-        </span>
+        <h2 className="ticket-group-title serif">{TICKET_GROUP_LABELS[group]}</h2>
+        <span className="ticket-group-count">{count}</span>
+        <span className="ticket-group-rule" aria-hidden="true" />
+        <span className="ticket-group-hint">{TICKET_GROUP_HINTS[group]}</span>
       </div>
       <div className="ticket-list">
         {tickets.map((ticket) => (
@@ -71,6 +74,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
             key={ticket.id}
             ticket={ticket}
             assignedSlotName={getSlotName(ticket.slotId)}
+            projectName={getProjectName(ticket.projectId ?? null)}
             onOpen={() => onOpenTicket(ticket.id)}
             phaseLabels={PHASE_LABELS}
             phaseColors={PHASE_COLORS}
@@ -92,7 +96,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
 });
 
 export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps) {
-  const { appState, shortcutIntent, clearShortcutIntent, setPaletteContextActions } = useAppContext();
+  const { appState, shortcutIntent, clearShortcutIntent, setPaletteContextActions, projects, selectedProjectId } = useAppContext();
   const paneWidth = 720;
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -317,6 +321,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     if (slotId == null) return null;
     return slotNameById.get(slotId) ?? null;
   }, [slotNameById]);
+
+  const getProjectName = useCallback((projectId: number | null) => {
+    if (projectId == null) return null;
+    return projects.find((p) => p.id === projectId)?.name ?? null;
+  }, [projects]);
 
   const selectedTicket = useMemo(
     () => (selectedTicketId != null ? tickets.find((ticket) => ticket.id === selectedTicketId) ?? null : null),
@@ -569,20 +578,30 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           </Modal>
         )}
 
-        <div className="toolbar" style={{ justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" onClick={() => { setShowForm((prev) => { if (prev) setPendingImages([]); return !prev; }); }}>
-              {showForm ? "Cancel" : "+ New Ticket"}
-            </button>
+        {/* Page heading */}
+        <div className="page-heading">
+          <div className="page-heading__left">
+            <div className="page-heading__breadcrumb">
+              {selectedProjectId != null
+                ? (projects.find((p) => p.id === selectedProjectId)?.name ?? "Project")
+                : "All projects"
+              } · Tickets
+            </div>
+            <h1 className="page-heading__title serif">Ticket board</h1>
+            <p className="page-heading__sub">
+              Tickets in flight, waiting for a slot, or shipped. Phases advance automatically; intervene only when an agent asks.
+            </p>
+          </div>
+          <div className="page-heading__actions">
             {canImportFromMonday && (
               <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
                 Import from Monday
               </button>
             )}
+            <button className="btn btn-primary" onClick={() => { setShowForm((prev) => { if (prev) setPendingImages([]); return !prev; }); }}>
+              {showForm ? "Cancel" : "+ New Ticket"}
+            </button>
           </div>
-          <span className="count">
-            {totalCount} ticket{totalCount !== 1 ? "s" : ""}
-          </span>
         </div>
 
         {error && <div className="error">{error}</div>}
@@ -600,6 +619,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
                 tickets={ticketsByGroup[group]}
                 count={ticketCountsByGroup[group]}
                 getSlotName={getSlotName}
+                getProjectName={getProjectName}
                 onOpenTicket={openTicket}
                 action={group === "DONE" && doneHasMore ? {
                   label: loadingMoreDone ? "Loading..." : "Load more",
@@ -623,6 +643,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         files={selectedTicket ? filesByTicket[selectedTicket.id] ?? [] : []}
         filesLoading={selectedTicket != null && !(selectedTicket.id in filesByTicket)}
         assignedSlotName={selectedTicket ? getSlotName(selectedTicket.slotId) : null}
+        projectName={selectedTicket ? getProjectName(selectedTicket.projectId ?? null) : null}
         triggeringPhase={triggeringPhase}
         respondingTicket={respondingTicket}
         responseDraft={selectedTicket ? responseDraft[selectedTicket.id] ?? "" : ""}

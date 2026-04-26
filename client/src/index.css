@@ -1,3 +1,38 @@
+:root {
+  /* Claude paper palette */
+  --paper: #F0EEE5;
+  --paper-2: #E8E6DB;
+  --cream: #FAF9F5;
+  --cream-2: #F5F4ED;
+  --ink: #191919;
+  --ink-1: #2C2A24;
+  --ink-2: #3D3929;
+  --ink-3: #6B6657;
+  --ink-4: #93908A;
+  --ink-5: #B8B4A8;
+  --hairline: #DDD9C9;
+  --hairline-strong: #C9C4B1;
+  --rule: #E2DECC;
+
+  --claude: #D97757;
+  --claude-deep: #C2603F;
+  --claude-soft: #F0DCD0;
+  --claude-tint: #FAEFE7;
+
+  /* Phase accents — muted to fit cream */
+  --phase-created:  #8C8779;
+  --phase-planning: #5C7B8A;
+  --phase-impl:     #B07634;
+  --phase-ship:     #6F8E5E;
+
+  --status-warn:  #B07634;
+  --status-error: #B14B3F;
+  --status-ok:    #6F8E5E;
+
+  --shadow-card: 0 1px 0 rgba(25,25,25,0.04), 0 0 0 1px var(--hairline);
+  --shadow-pop:  0 1px 2px rgba(25,25,25,0.04), 0 8px 24px -10px rgba(60,55,40,0.18), 0 0 0 1px var(--hairline);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -5,8 +40,33 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #0f1117;
-  color: #e2e8f0;
+  font-family: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--paper);
+  color: var(--ink-2);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
 }
+
+.serif {
+  font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  font-feature-settings: "ss02";
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+::selection {
+  background: var(--claude-soft);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 999px;
+  border: 2px solid var(--paper);
+}
+::-webkit-scrollbar-track { background: transparent; }

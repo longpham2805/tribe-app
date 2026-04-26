@@ -7,6 +7,7 @@ interface ModalProps {
   children: ReactNode;
   width?: number;
   variant?: "center" | "right-pane";
+  noHeader?: boolean;
 }
 
 export function Modal({
@@ -16,6 +17,7 @@ export function Modal({
   children,
   width = 820,
   variant = "center",
+  noHeader = false,
 }: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -62,14 +64,16 @@ export function Modal({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <div className="modal-header">
-          <div className="modal-title" id={titleId}>
-            {title}
+        {!noHeader && (
+          <div className="modal-header">
+            <div className="modal-title" id={titleId}>
+              {title}
+            </div>
+            <button className="btn-delete" type="button" onClick={onClose} title="Close" aria-label="Close">
+              ×
+            </button>
           </div>
-          <button className="btn-delete" type="button" onClick={onClose} title="Close" aria-label="Close">
-            ×
-          </button>
-        </div>
+        )}
         <div className={`modal-body modal-body--${variant}`}>{children}</div>
       </div>
     </div>

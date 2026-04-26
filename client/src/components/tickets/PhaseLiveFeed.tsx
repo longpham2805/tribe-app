@@ -95,16 +95,16 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
             marginTop: 6,
             maxHeight: 500,
             overflowY: "auto",
-            border: "1px solid #1e2a3a",
-            borderRadius: 6,
+            border: "1px solid var(--hairline)",
+            borderRadius: 8,
             padding: "10px 12px",
-            background: "#0f1117",
+            background: "var(--paper)",
           }}
         >
           {activityEntries.length === 0 ? (
-            <div style={{ fontSize: 11, color: "#64748b" }}>No events yet.</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>No events yet.</div>
           ) : (
-            <div style={{ color: "#cbd5e1", display: "grid", gap: 12 }}>
+            <div style={{ color: "var(--ink-2)", display: "grid", gap: 12 }}>
               {activityEntries.map((entry) => (
                 <SharedMarkdown key={entry.id} content={entry.content} compact />
               ))}

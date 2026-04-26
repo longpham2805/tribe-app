@@ -43,7 +43,7 @@ export default function App() {
         <ProjectPane
           projects={projects}
           selectedProjectId={selectedProjectId}
-          onSelectProject={setSelectedProjectId}
+          onSelectProject={(id) => setSelectedProjectId(id)}
         />
 
         <main className="main">
