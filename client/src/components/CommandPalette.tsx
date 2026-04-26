@@ -25,6 +25,8 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -41,12 +43,22 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
 
   useEffect(() => {
     if (!open) return;
+    const selectedItem = itemRefs.current[selected];
+    const results = resultsRef.current;
+    if (!selectedItem || !results) return;
+    selectedItem.scrollIntoView({ block: "nearest" });
+  }, [open, selected]);
+
+  useEffect(() => {
+    if (!open) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
+
+  itemRefs.current = [];
 
   if (!open) return null;
 
@@ -111,7 +123,7 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
           <kbd className="cmd-esc-hint">esc</kbd>
         </div>
 
-        <div className="cmd-results">
+        <div ref={resultsRef} className="cmd-results">
           {totalItems === 0 && <div className="cmd-empty">No results</div>}
 
           {filteredContext.length > 0 && (
@@ -120,6 +132,9 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
               {filteredContext.map((action, i) => (
                 <button
                   key={action.id}
+                  ref={(element) => {
+                    itemRefs.current[i] = element;
+                  }}
                   className={`cmd-item${selected === i ? " cmd-item--selected" : ""}`}
                   onClick={() => handleSelect(i)}
                   onMouseEnter={() => setSelected(i)}
@@ -141,6 +156,9 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
                 return (
                   <button
                     key={action.id}
+                    ref={(element) => {
+                      itemRefs.current[globalIdx] = element;
+                    }}
                     className={`cmd-item${selected === globalIdx ? " cmd-item--selected" : ""}`}
                     onClick={() => handleSelect(globalIdx)}
                     onMouseEnter={() => setSelected(globalIdx)}
@@ -163,6 +181,9 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
                 return (
                   <button
                     key={project.id}
+                    ref={(element) => {
+                      itemRefs.current[globalIdx] = element;
+                    }}
                     className={`cmd-item${selected === globalIdx ? " cmd-item--selected" : ""}`}
                     onClick={() => handleSelect(globalIdx)}
                     onMouseEnter={() => setSelected(globalIdx)}
@@ -185,6 +206,9 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
                 return (
                   <button
                     key={ticket.id}
+                    ref={(element) => {
+                      itemRefs.current[globalIdx] = element;
+                    }}
                     className={`cmd-item${selected === globalIdx ? " cmd-item--selected" : ""}`}
                     onClick={() => handleSelect(globalIdx)}
                     onMouseEnter={() => setSelected(globalIdx)}
