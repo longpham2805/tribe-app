@@ -8,17 +8,19 @@ interface PhaseLiveFeedProps {
   ticketId: number;
   phaseName: TicketPhase;
   status: PhaseStatus;
-  liveEvents: any[];
+  liveEvents: unknown[];
+  autoOpenKey?: string;
 }
 
 const AUTO_EXPAND_STATUSES: PhaseStatus[] = ["RUNNING", "QUESTION", "REQUIRES_ACTION", "ERROR"];
 
-export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: PhaseLiveFeedProps) {
+export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpenKey }: PhaseLiveFeedProps) {
   const [historicalEvents, setHistoricalEvents] = useState<unknown[]>([]);
   const [historicalPayloadBytes, setHistoricalPayloadBytes] = useState(0);
   const [expanded, setExpanded] = useState(() => AUTO_EXPAND_STATUSES.includes(status));
   const [userToggled, setUserToggled] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const lastAutoOpenKeyRef = useRef<string | undefined>(autoOpenKey);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +51,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Phase
   const allEvents = useMemo(() => historicalEvents.concat(liveEvents), [historicalEvents, liveEvents]);
   const activityEntries = useMemo(() => getActivityMarkdownEntries(allEvents, Number.POSITIVE_INFINITY), [allEvents]);
   const totalPayloadBytes = useMemo(
-    () => historicalPayloadBytes + liveEvents.reduce((total, event) => total + estimateEventPayloadBytes(event), 0),
+    () => historicalPayloadBytes + liveEvents.reduce<number>((total, event) => total + estimateEventPayloadBytes(event), 0),
     [historicalPayloadBytes, liveEvents],
   );
   const isHeavyActivity = totalPayloadBytes > 512 * 1024;
@@ -58,6 +60,13 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents }: Phase
     if (userToggled) return;
     setExpanded(AUTO_EXPAND_STATUSES.includes(status) && !isHeavyActivity);
   }, [isHeavyActivity, status, userToggled]);
+
+  useEffect(() => {
+    if (!autoOpenKey || lastAutoOpenKeyRef.current === autoOpenKey) return;
+    lastAutoOpenKeyRef.current = autoOpenKey;
+    setUserToggled(false);
+    setExpanded(!isHeavyActivity);
+  }, [autoOpenKey, isHeavyActivity]);
 
   useEffect(() => {
     if (!expanded) return;

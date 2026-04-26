@@ -17,6 +17,7 @@ interface TicketDetailModalProps {
   paneWidth?: number;
   viewer: TicketViewerState | null;
   selectedPhase: TicketPhase | undefined;
+  selectedPhaseAutoOpenKey: string | undefined;
   liveLogs: Record<string, any[]>;
   files: TicketFile[];
   filesLoading: boolean;
@@ -63,6 +64,7 @@ export function TicketDetailModal({
   paneWidth = 720,
   viewer,
   selectedPhase,
+  selectedPhaseAutoOpenKey,
   liveLogs,
   files,
   filesLoading,
@@ -452,6 +454,7 @@ export function TicketDetailModal({
           phaseName={selectedPhase}
           status={selectedPhaseRecord?.status ?? "PENDING"}
           liveEvents={liveLogs[`${ticket.id}:${selectedPhase}`] ?? []}
+          autoOpenKey={selectedPhaseAutoOpenKey}
         />
       ) : null}
 

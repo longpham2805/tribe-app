@@ -115,6 +115,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [viewer, setViewer] = useState<{ fileName: string | null } | null>(null);
   const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
   const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
+  const [selectedPhaseAutoOpenKeyByTicket, setSelectedPhaseAutoOpenKeyByTicket] = useState<Record<number, string>>({});
 
   const newTicketTitleRef = useRef<HTMLInputElement>(null);
   const ticketFileRefreshTimers = useRef<Record<number, number>>({});
@@ -125,6 +126,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     },
     [],
   );
+
+  const handleSelectPhase = useCallback((ticketId: number, phase: TicketPhase) => {
+    setSelectedPhaseByTicket((prev) => ({ ...prev, [ticketId]: phase }));
+    setSelectedPhaseAutoOpenKeyByTicket((prev) => ({ ...prev, [ticketId]: `${ticketId}:${phase}:${Date.now()}` }));
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -265,14 +271,14 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
             id: `goto-phase-${phase}`,
             label: PHASE_LABELS[phase],
             icon: "▶",
-            onSelect: () => setSelectedPhaseByTicket((prev) => ({ ...prev, [selectedTicketId]: phase })),
+            onSelect: () => handleSelectPhase(selectedTicketId, phase),
           });
         }
       }
     }
 
     setPaletteContextActions(actions);
-  }, [selectedTicketId, showForm, tickets, setPaletteContextActions]);
+  }, [handleSelectPhase, selectedTicketId, showForm, tickets, setPaletteContextActions]);
 
   const getTicketGroup = useCallback((ticket: Ticket): TicketGroup => {
     if (ticket.waitingForSlot) return "WAITING";
@@ -596,6 +602,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         ticket={selectedTicket}
         viewer={viewer}
         selectedPhase={selectedTicket ? selectedPhaseByTicket[selectedTicket.id] : undefined}
+        selectedPhaseAutoOpenKey={selectedTicket ? selectedPhaseAutoOpenKeyByTicket[selectedTicket.id] : undefined}
         liveLogs={liveLogs}
         files={selectedTicket ? filesByTicket[selectedTicket.id] ?? [] : []}
         filesLoading={selectedTicket != null && !(selectedTicket.id in filesByTicket)}
@@ -611,7 +618,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         onUpdateContent={handleUpdateTicketContent}
         savingContent={selectedTicket ? savingTicketContent === selectedTicket.id : false}
         onTriggerPhase={handleTriggerPhase}
-        onSelectPhase={(ticketId, phase) => setSelectedPhaseByTicket((prev) => ({ ...prev, [ticketId]: phase }))}
+        onSelectPhase={handleSelectPhase}
         onOpenFile={(fileName) => setViewer({ fileName })}
         onCloseFile={() => setViewer(null)}
         onResponseDraftChange={(value) => {
