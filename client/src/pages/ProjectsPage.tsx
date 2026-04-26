@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { createProject, deleteProject, fetchProjects, updateProject, uploadProjectLogo } from "../api";
 import type { Project } from "../types";
+
+type ProjectsPageProps = {
+  onProjectsChanged?: () => void;
+};
 
 type EditState = {
   name: string;
@@ -16,46 +18,25 @@ type EditState = {
   techStack: string;
 };
 
+type ProjectModalMode = "create" | "configure";
+
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
 const MAX_PROJECT_CONTEXT_FIELD_CHARS = 4000;
 
-type ProjectsPageProps = {
-  onProjectsChanged?: () => void;
-};
-
-function toEditState(project: Project): EditState {
-  return {
-    name: project.name,
-    mondayBoardIds: (project.mondayBoardIds ?? []).join(", "),
-    mondayDefaultPersonId: project.mondayDefaultPersonId ?? "",
-    mondayDevPeople: (project.mondayDevPeople ?? []).join(", "),
-    primaryColor: project.primaryColor ?? "",
-    actionColor: project.actionColor ?? "",
-    introduction: project.introduction ?? "",
-    rules: project.rules ?? "",
-    techStack: project.techStack ?? "",
-  };
-}
-
 function parseBoardIds(raw: string): number[] | null {
-  const ids = raw
-    .split(",")
-    .map((value) => parseInt(value.trim(), 10))
-    .filter((value) => Number.isInteger(value) && value > 0);
+  const ids = raw.split(",").map((v) => parseInt(v.trim(), 10)).filter((v) => Number.isInteger(v) && v > 0);
   return ids.length > 0 ? ids : null;
 }
 
 function parsePeople(raw: string): string[] | null {
-  const people = raw.split(",").map((value) => value.trim()).filter(Boolean);
+  const people = raw.split(",").map((v) => v.trim()).filter(Boolean);
   return people.length > 0 ? people : null;
 }
 
 function normalizeHexColorInput(raw: string, fieldLabel: string): string | null {
   const normalized = raw.trim().toUpperCase();
   if (!normalized) return null;
-  if (!HEX_COLOR_PATTERN.test(normalized)) {
-    throw new Error(`${fieldLabel} must be in #RRGGBB format`);
-  }
+  if (!HEX_COLOR_PATTERN.test(normalized)) throw new Error(`${fieldLabel} must be in #RRGGBB format`);
   return normalized;
 }
 
@@ -64,320 +45,285 @@ function normalizeProjectContextInput(raw: string): string | null {
   return normalized || null;
 }
 
+function toEditState(p: Project): EditState {
+  return {
+    name: p.name,
+    mondayBoardIds: (p.mondayBoardIds ?? []).join(", "),
+    mondayDefaultPersonId: p.mondayDefaultPersonId ?? "",
+    mondayDevPeople: (p.mondayDevPeople ?? []).join(", "),
+    primaryColor: p.primaryColor ?? "",
+    actionColor: p.actionColor ?? "",
+    introduction: p.introduction ?? "",
+    rules: p.rules ?? "",
+    techStack: p.techStack ?? "",
+  };
+}
+
 function ColorSwatch({ hex }: { hex: string }) {
   if (!HEX_COLOR_PATTERN.test(hex)) return null;
   return (
-    <span
-      style={{
-        display: "inline-block",
-        width: 14,
-        height: 14,
-        borderRadius: 3,
-        background: hex,
-        border: "1px solid var(--hairline-strong)",
-        verticalAlign: "middle",
-        flexShrink: 0,
-      }}
-    />
+    <span style={{
+      display: "inline-block", width: 38, borderRadius: 8,
+      border: "1px solid var(--hairline-strong)", background: hex, alignSelf: "stretch",
+    }} />
   );
 }
 
-const formSectionStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 6,
-};
+const SettingsIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+  </svg>
+);
 
-const formSectionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  color: "var(--ink-3)",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  marginBottom: 2,
-};
+function PSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
 
-const ProjectCard = memo(function ProjectCard({
+const ProjectModal = memo(function ProjectModal({
+  open,
+  mode,
   project,
-  editData,
-  onStartEdit,
-  onDelete,
-  onCancelEdit,
-  onChangeEdit,
+  onClose,
   onSave,
-  onLogoUploaded,
+  saving,
+  error,
 }: {
-  project: Project;
-  editData?: EditState;
-  onStartEdit: (project: Project) => void;
-  onDelete: (projectId: number) => void;
-  onCancelEdit: (projectId: number) => void;
-  onChangeEdit: (projectId: number, field: keyof EditState, value: string) => void;
-  onSave: (projectId: number) => void;
-  onLogoUploaded: (projectId: number) => void;
+  open: boolean;
+  mode: ProjectModalMode;
+  project: Project | null;
+  onClose: () => void;
+  onSave: (form: EditState) => void;
+  saving: boolean;
+  error: string | null;
 }) {
-  const isEditing = !!editData;
+  const [form, setForm] = useState<EditState>({
+    name: "", mondayBoardIds: "", mondayDefaultPersonId: "", mondayDevPeople: "",
+    primaryColor: "", actionColor: "", introduction: "", rules: "", techStack: "",
+  });
+  const [mondayOpen, setMondayOpen] = useState(true);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!open) return;
+    if (mode === "configure" && project) {
+      setForm(toEditState(project));
+    } else {
+      setForm({ name: "", mondayBoardIds: "", mondayDefaultPersonId: "", mondayDevPeople: "", primaryColor: "", actionColor: "", introduction: "", rules: "", techStack: "" });
+    }
+    setMondayOpen(true);
+    setLogoError(null);
+  }, [open, mode, project]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  const setField = useCallback((field: keyof EditState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
   const handleLogoChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!project) return;
     const file = e.target.files?.[0];
     if (!file) return;
     setLogoUploading(true);
     setLogoError(null);
     try {
       await uploadProjectLogo(project.id, file);
-      onLogoUploaded(project.id);
     } catch (err: any) {
       setLogoError(err.message);
     } finally {
       setLogoUploading(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
     }
-  }, [project.id, onLogoUploaded]);
+  }, [project]);
 
-  const hasMondayData =
-    (project.mondayBoardIds?.length ?? 0) > 0 ||
-    !!project.mondayDefaultPersonId ||
-    (project.mondayDevPeople?.length ?? 0) > 0;
+  if (!open) return null;
+  const isConfigure = mode === "configure";
+  const idLabel = isConfigure && project ? `#${project.id} · ${project.slug ?? ""}` : "New project";
 
   return (
-    <div className="ticket-card" style={{ padding: "16px 20px" }}>
-      <div className="ticket-header">
-        <div className="ticket-meta">
-          <span className="ticket-id">#{project.id}</span>
-          {project.slug && (
-            <span className="phase-badge" style={{ background: "var(--claude)22", color: "var(--claude)" }}>
-              {project.slug}
-            </span>
+    <div className="ntm-backdrop" onClick={onClose}>
+      <div className="ntm-panel ntm-panel--wide" onClick={(e) => e.stopPropagation()}>
+        <div className="ntm-panel__topbar">
+          <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{idLabel}</span>
+          {isConfigure && project && (
+            <span className="mono" style={{ fontSize: 11.5, color: "var(--claude-deep)" }}>{project.name?.toLowerCase()}</span>
           )}
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ width: 24, height: 24, border: "none", background: "transparent", color: "var(--ink-3)", cursor: "pointer", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 16 }}
+          >×</button>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {!isEditing && (
-            <button className="btn btn-primary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => onStartEdit(project)}>
-              Edit
-            </button>
-          )}
-          <button className="btn-delete" onClick={() => onDelete(project.id)} title="Delete">
-            ×
-          </button>
-        </div>
-      </div>
 
-      {isEditing ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
-          {/* Basic */}
-          <div style={formSectionStyle}>
-            <div style={formSectionLabelStyle}>Basic</div>
+        <form
+          className="ntm-panel__form ntm-panel__form--scroll"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!form.name.trim()) return;
+            onSave(form);
+          }}
+        >
+          <PSection label="Basic">
             <input
               className="input"
-              value={editData.name}
-              placeholder="Name"
-              onChange={(e) => onChangeEdit(project.id, "name", e.target.value)}
+              value={form.name}
+              onChange={(e) => setField("name", e.target.value)}
+              placeholder="Project name"
+              autoFocus
+              required
             />
-          </div>
+          </PSection>
 
-          {/* Appearance */}
-          <div style={formSectionStyle}>
-            <div style={formSectionLabelStyle}>Appearance</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                className="input"
-                value={editData.primaryColor}
-                placeholder="Primary color (#1D4ED8)"
-                maxLength={7}
-                onChange={(e) => onChangeEdit(project.id, "primaryColor", e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <ColorSwatch hex={editData.primaryColor} />
+          <PSection label="Appearance">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                <input
+                  className="input mono"
+                  value={form.primaryColor}
+                  onChange={(e) => setField("primaryColor", e.target.value)}
+                  placeholder="Primary color (#1D4ED8)"
+                  maxLength={7}
+                  style={{ flex: 1 }}
+                />
+                <ColorSwatch hex={form.primaryColor} />
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                <input
+                  className="input mono"
+                  value={form.actionColor}
+                  onChange={(e) => setField("actionColor", e.target.value)}
+                  placeholder="Action color (#EFF6FF)"
+                  maxLength={7}
+                  style={{ flex: 1 }}
+                />
+                <ColorSwatch hex={form.actionColor} />
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                className="input"
-                value={editData.actionColor}
-                placeholder="Action color (#EFF6FF)"
-                maxLength={7}
-                onChange={(e) => onChangeEdit(project.id, "actionColor", e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <ColorSwatch hex={editData.actionColor} />
-            </div>
-          </div>
+          </PSection>
 
-          {/* Context */}
-          <div style={formSectionStyle}>
-            <div style={formSectionLabelStyle}>Context</div>
-            <textarea
-              className="input"
-              value={editData.introduction}
-              placeholder="Project introduction (markdown supported)"
-              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-              rows={3}
-              onChange={(e) => onChangeEdit(project.id, "introduction", e.target.value)}
-            />
-            <textarea
-              className="input"
-              value={editData.techStack}
-              placeholder="Tech stack (markdown supported)"
-              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-              rows={3}
-              onChange={(e) => onChangeEdit(project.id, "techStack", e.target.value)}
-            />
-            <textarea
-              className="input"
-              value={editData.rules}
-              placeholder="Project rules (markdown supported)"
-              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-              rows={4}
-              onChange={(e) => onChangeEdit(project.id, "rules", e.target.value)}
-            />
-          </div>
-
-          {/* Monday.com */}
-          <details open={hasMondayData} style={{ borderTop: "1px solid var(--hairline)", paddingTop: 12 }}>
-            <summary style={{ ...formSectionLabelStyle, cursor: "pointer", userSelect: "none" }}>Monday.com</summary>
-            <div style={{ ...formSectionStyle, marginTop: 8 }}>
-              <input
+          <PSection label="Context">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <textarea
                 className="input"
-                value={editData.mondayBoardIds}
-                placeholder="Monday board IDs (comma-separated)"
-                onChange={(e) => onChangeEdit(project.id, "mondayBoardIds", e.target.value)}
+                value={form.introduction}
+                onChange={(e) => setField("introduction", e.target.value)}
+                placeholder="Project introduction (markdown supported)"
+                maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+                rows={2}
+                style={{ resize: "vertical", fontFamily: "inherit" }}
               />
-              <input
-                className="input"
-                value={editData.mondayDefaultPersonId}
-                placeholder="Default person ID"
-                onChange={(e) => onChangeEdit(project.id, "mondayDefaultPersonId", e.target.value)}
+              <textarea
+                className="input mono"
+                value={form.techStack}
+                onChange={(e) => setField("techStack", e.target.value)}
+                placeholder={"### Frontend\n- **Framework**: …"}
+                maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+                rows={4}
+                style={{ resize: "vertical", fontSize: 12.5 }}
               />
-              <input
+              <textarea
                 className="input"
-                value={editData.mondayDevPeople}
-                placeholder="Dev people (comma-separated)"
-                onChange={(e) => onChangeEdit(project.id, "mondayDevPeople", e.target.value)}
+                value={form.rules}
+                onChange={(e) => setField("rules", e.target.value)}
+                placeholder="Project rules (markdown supported)"
+                maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
+                rows={3}
+                style={{ resize: "vertical", fontFamily: "inherit" }}
               />
             </div>
-          </details>
+          </PSection>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => onSave(project.id)}>
-              Save
-            </button>
-            <button className="btn" style={{ fontSize: 12 }} onClick={() => onCancelEdit(project.id)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            {project.logoPath && (
-              <img
-                src={`/api/uploads/projects/${project.id}/logo?v=${new Date(project.updatedAt).getTime()}`}
-                alt={`${project.name} logo`}
-                style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }}
-              />
-            )}
-            <div style={{ fontWeight: 600 }}>{project.name}</div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--ink-4)" }}>
-            {/* Colors */}
-            {(project.primaryColor || project.actionColor) && (
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                {project.primaryColor && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "var(--ink-3)" }}>Primary:</span>
-                    <ColorSwatch hex={project.primaryColor} />
-                    <code style={{ color: "var(--ink)", fontSize: 11 }}>{project.primaryColor}</code>
-                  </div>
+          {isConfigure && project && (
+            <div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 6 }}>Logo</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {project.logoPath && (
+                  <img
+                    src={`/api/uploads/projects/${project.id}/logo?v=${Date.now()}`}
+                    alt={`${project.name} logo`}
+                    style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", border: "1px solid var(--hairline-strong)" }}
+                  />
                 )}
-                {project.actionColor && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "var(--ink-3)" }}>Action:</span>
-                    <ColorSwatch hex={project.actionColor} />
-                    <code style={{ color: "var(--ink)", fontSize: 11 }}>{project.actionColor}</code>
-                  </div>
-                )}
+                <input ref={logoInputRef} type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.svg" style={{ display: "none" }} onChange={handleLogoChange} />
+                <button type="button" className="btn" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => logoInputRef.current?.click()} disabled={logoUploading}>
+                  {logoUploading ? "Uploading…" : project.logoPath ? "Replace logo" : "Upload logo"}
+                </button>
+                {logoError && <span style={{ fontSize: 11, color: "var(--status-error)" }}>{logoError}</span>}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Monday.com — only shown when data exists */}
-            {hasMondayData && (
-              <details open style={{ marginTop: 4 }}>
-                <summary style={{ cursor: "pointer", color: "var(--ink-3)", userSelect: "none", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Monday.com
-                </summary>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
-                  {(project.mondayBoardIds?.length ?? 0) > 0 && (
-                    <div>
-                      Boards:{" "}
-                      <span style={{ fontFamily: "monospace", color: "var(--ink)" }}>{project.mondayBoardIds!.join(", ")}</span>
-                    </div>
-                  )}
-                  {project.mondayDefaultPersonId && (
-                    <div>
-                      Default person:{" "}
-                      <span style={{ fontFamily: "monospace", color: "var(--ink)" }}>{project.mondayDefaultPersonId}</span>
-                    </div>
-                  )}
-                  {(project.mondayDevPeople?.length ?? 0) > 0 && (
-                    <div>
-                      Dev people:{" "}
-                      <span style={{ fontFamily: "monospace", color: "var(--ink)" }}>{project.mondayDevPeople!.join(", ")}</span>
-                    </div>
-                  )}
-                </div>
-              </details>
-            )}
-
-            {/* Markdown text fields */}
-            {project.introduction && (
-              <div style={{ marginTop: 6 }}>
-                <div style={{ color: "var(--ink-3)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Introduction</div>
-                <div className="project-markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.introduction}</ReactMarkdown>
-                </div>
-              </div>
-            )}
-            {project.techStack && (
-              <div style={{ marginTop: 6 }}>
-                <div style={{ color: "var(--ink-3)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Tech Stack</div>
-                <div className="project-markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.techStack}</ReactMarkdown>
-                </div>
-              </div>
-            )}
-            {project.rules && (
-              <div style={{ marginTop: 6 }}>
-                <div style={{ color: "var(--ink-3)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Rules</div>
-                <div className="project-markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.rules}</ReactMarkdown>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: 8 }}>
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.gif,.webp,.svg"
-              style={{ display: "none" }}
-              onChange={handleLogoChange}
-            />
+          {/* Monday.com — collapsible */}
+          <div>
             <button
-              className="btn"
-              style={{ fontSize: 11, padding: "3px 8px" }}
-              onClick={() => logoInputRef.current?.click()}
-              disabled={logoUploading}
+              type="button"
+              onClick={() => setMondayOpen((o) => !o)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: 0, marginBottom: 8,
+                background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
+                fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: "0.04em", textTransform: "uppercase",
+              }}
             >
-              {logoUploading ? "Uploading..." : project.logoPath ? "Replace Logo" : "Upload Logo"}
+              <svg width="9" height="9" viewBox="0 0 9 9" style={{ transform: mondayOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 140ms" }}>
+                <path d="M2 1L6 4.5L2 8" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Monday.com
             </button>
-            {logoError && <div style={{ fontSize: 11, color: "var(--status-error)", marginTop: 4 }}>{logoError}</div>}
+            {mondayOpen && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input
+                  className="input mono"
+                  value={form.mondayBoardIds}
+                  onChange={(e) => setField("mondayBoardIds", e.target.value)}
+                  placeholder="Board IDs (comma-separated, e.g. 626076134)"
+                  style={{ fontSize: 12.5 }}
+                />
+                <input
+                  className="input mono"
+                  value={form.mondayDefaultPersonId}
+                  onChange={(e) => setField("mondayDefaultPersonId", e.target.value)}
+                  placeholder="Default person ID (e.g. 14689324)"
+                  style={{ fontSize: 12.5 }}
+                />
+                <input
+                  className="input"
+                  value={form.mondayDevPeople}
+                  onChange={(e) => setField("mondayDevPeople", e.target.value)}
+                  placeholder="Dev people (comma-separated names)"
+                />
+              </div>
+            )}
           </div>
-        </div>
-      )}
+
+          {error && <div className="error" style={{ marginTop: 0 }}>{error}</div>}
+
+          <div className="ntm-panel__footer ntm-panel__footer--sticky">
+            <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
+              {isConfigure ? "Changes apply to all in-flight tickets." : "You can configure repos and rules after creating."}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" type="submit" disabled={saving || !form.name.trim()}>
+                {saving ? "Saving…" : isConfigure ? "Save" : "Create project"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 });
@@ -386,20 +332,11 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [newForm, setNewForm] = useState<EditState>({
-    name: "",
-    mondayBoardIds: "",
-    mondayDefaultPersonId: "",
-    mondayDevPeople: "",
-    primaryColor: "",
-    actionColor: "",
-    introduction: "",
-    rules: "",
-    techStack: "",
+  const [modal, setModal] = useState<{ open: boolean; mode: ProjectModalMode; project: Project | null }>({
+    open: false, mode: "create", project: null,
   });
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<Record<number, EditState>>({});
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -412,94 +349,46 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const handleCreate = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!newForm.name.trim()) return;
-      setCreating(true);
+  const closeModal = useCallback(() => {
+    setModal((m) => ({ ...m, open: false }));
+    setModalError(null);
+  }, []);
+
+  const handleSave = useCallback(
+    async (form: EditState) => {
+      setSaving(true);
+      setModalError(null);
       try {
-        const primaryColor = normalizeHexColorInput(newForm.primaryColor, "Primary color");
-        const actionColor = normalizeHexColorInput(newForm.actionColor, "Action color");
-        await createProject({
-          name: newForm.name.trim(),
-          mondayBoardIds: parseBoardIds(newForm.mondayBoardIds),
-          mondayDefaultPersonId: newForm.mondayDefaultPersonId.trim() || null,
-          mondayDevPeople: parsePeople(newForm.mondayDevPeople),
+        const primaryColor = normalizeHexColorInput(form.primaryColor, "Primary color");
+        const actionColor = normalizeHexColorInput(form.actionColor, "Action color");
+        const payload = {
+          name: form.name.trim(),
+          mondayBoardIds: parseBoardIds(form.mondayBoardIds),
+          mondayDefaultPersonId: form.mondayDefaultPersonId.trim() || null,
+          mondayDevPeople: parsePeople(form.mondayDevPeople),
           primaryColor,
           actionColor,
-          introduction: normalizeProjectContextInput(newForm.introduction),
-          rules: normalizeProjectContextInput(newForm.rules),
-          techStack: normalizeProjectContextInput(newForm.techStack),
-        });
-        setNewForm({
-          name: "",
-          mondayBoardIds: "",
-          mondayDefaultPersonId: "",
-          mondayDevPeople: "",
-          primaryColor: "",
-          actionColor: "",
-          introduction: "",
-          rules: "",
-          techStack: "",
-        });
-        setShowForm(false);
+          introduction: normalizeProjectContextInput(form.introduction),
+          rules: normalizeProjectContextInput(form.rules),
+          techStack: normalizeProjectContextInput(form.techStack),
+        };
+        if (modal.mode === "configure" && modal.project) {
+          await updateProject(modal.project.id, payload);
+        } else {
+          await createProject(payload);
+        }
+        closeModal();
         await load();
         onProjectsChanged?.();
       } catch (e: any) {
-        setError(e.message);
+        setModalError(e.message);
       } finally {
-        setCreating(false);
+        setSaving(false);
       }
     },
-    [newForm, load, onProjectsChanged],
-  );
-
-  const startEdit = useCallback((project: Project) => {
-    setEditing((prev) => ({ ...prev, [project.id]: toEditState(project) }));
-  }, []);
-
-  const cancelEdit = useCallback((projectId: number) => {
-    setEditing((prev) => {
-      const next = { ...prev };
-      delete next[projectId];
-      return next;
-    });
-  }, []);
-
-  const changeEdit = useCallback((projectId: number, field: keyof EditState, value: string) => {
-    setEditing((prev) => ({ ...prev, [projectId]: { ...prev[projectId], [field]: value } }));
-  }, []);
-
-  const saveEdit = useCallback(
-    async (projectId: number) => {
-      const data = editing[projectId];
-      if (!data) return;
-      try {
-        const primaryColor = normalizeHexColorInput(data.primaryColor, "Primary color");
-        const actionColor = normalizeHexColorInput(data.actionColor, "Action color");
-        await updateProject(projectId, {
-          name: data.name.trim(),
-          mondayBoardIds: parseBoardIds(data.mondayBoardIds),
-          mondayDefaultPersonId: data.mondayDefaultPersonId.trim() || null,
-          mondayDevPeople: parsePeople(data.mondayDevPeople),
-          primaryColor,
-          actionColor,
-          introduction: normalizeProjectContextInput(data.introduction),
-          rules: normalizeProjectContextInput(data.rules),
-          techStack: normalizeProjectContextInput(data.techStack),
-        });
-        cancelEdit(projectId);
-        await load();
-        onProjectsChanged?.();
-      } catch (e: any) {
-        setError(e.message);
-      }
-    },
-    [editing, cancelEdit, load, onProjectsChanged],
+    [modal, load, closeModal, onProjectsChanged],
   );
 
   const handleDelete = useCallback(
@@ -516,151 +405,70 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
     [load, onProjectsChanged],
   );
 
-  const handleLogoUploaded = useCallback(async (_projectId: number) => {
-    await load();
-  }, [load]);
-
   return (
-    <div>
+    <div className="page-content">
       <div className="page-heading">
         <div className="page-heading__left">
+          <div className="page-heading__breadcrumb">Workspace · Projects</div>
           <h1 className="page-heading__title serif">Projects</h1>
           <p className="page-heading__sub">Configure repos, Monday boards, and per-project agent rules.</p>
         </div>
         <div className="page-heading__actions">
-          <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
-            {showForm ? "Cancel" : "+ New Project"}
+          <button
+            className="btn btn-primary"
+            onClick={() => setModal({ open: true, mode: "create", project: null })}
+          >
+            + Create project
           </button>
         </div>
       </div>
 
-      {showForm && (
-        <form className="new-ticket-form" onSubmit={handleCreate} style={{ marginBottom: 24 }}>
-          <h2>New Project</h2>
-
-          {/* Basic */}
-          <div style={{ ...formSectionStyle, marginBottom: 12 }}>
-            <div style={formSectionLabelStyle}>Basic</div>
-            <input
-              className="input"
-              placeholder="Name (e.g. eWebinar)"
-              value={newForm.name}
-              onChange={(e) => setNewForm((prev) => ({ ...prev, name: e.target.value }))}
-              required
-              autoFocus
-            />
-          </div>
-
-          {/* Appearance */}
-          <div style={{ ...formSectionStyle, marginBottom: 12 }}>
-            <div style={formSectionLabelStyle}>Appearance</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                className="input"
-                placeholder="Primary color (#1D4ED8)"
-                value={newForm.primaryColor}
-                maxLength={7}
-                onChange={(e) => setNewForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
-                style={{ flex: 1 }}
-              />
-              <ColorSwatch hex={newForm.primaryColor} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                className="input"
-                placeholder="Action color (#EFF6FF)"
-                value={newForm.actionColor}
-                maxLength={7}
-                onChange={(e) => setNewForm((prev) => ({ ...prev, actionColor: e.target.value }))}
-                style={{ flex: 1 }}
-              />
-              <ColorSwatch hex={newForm.actionColor} />
-            </div>
-          </div>
-
-          {/* Context */}
-          <div style={{ ...formSectionStyle, marginBottom: 12 }}>
-            <div style={formSectionLabelStyle}>Context</div>
-            <textarea
-              className="input"
-              placeholder="Project introduction (markdown supported)"
-              value={newForm.introduction}
-              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-              rows={3}
-              onChange={(e) => setNewForm((prev) => ({ ...prev, introduction: e.target.value }))}
-            />
-            <textarea
-              className="input"
-              placeholder="Tech stack (markdown supported)"
-              value={newForm.techStack}
-              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-              rows={3}
-              onChange={(e) => setNewForm((prev) => ({ ...prev, techStack: e.target.value }))}
-            />
-            <textarea
-              className="input"
-              placeholder="Project rules (markdown supported)"
-              value={newForm.rules}
-              maxLength={MAX_PROJECT_CONTEXT_FIELD_CHARS}
-              rows={4}
-              onChange={(e) => setNewForm((prev) => ({ ...prev, rules: e.target.value }))}
-            />
-          </div>
-
-          {/* Monday.com */}
-          <details style={{ marginBottom: 12 }}>
-            <summary style={{ ...formSectionLabelStyle, cursor: "pointer", userSelect: "none" }}>Monday.com</summary>
-            <div style={{ ...formSectionStyle, marginTop: 8 }}>
-              <input
-                className="input"
-                placeholder="Monday board IDs (comma-separated, e.g. 626076134)"
-                value={newForm.mondayBoardIds}
-                onChange={(e) => setNewForm((prev) => ({ ...prev, mondayBoardIds: e.target.value }))}
-              />
-              <input
-                className="input"
-                placeholder="Default person ID (e.g. 14689324)"
-                value={newForm.mondayDefaultPersonId}
-                onChange={(e) => setNewForm((prev) => ({ ...prev, mondayDefaultPersonId: e.target.value }))}
-              />
-              <input
-                className="input"
-                placeholder="Dev people (comma-separated names, e.g. Long Pham)"
-                value={newForm.mondayDevPeople}
-                onChange={(e) => setNewForm((prev) => ({ ...prev, mondayDevPeople: e.target.value }))}
-              />
-            </div>
-          </details>
-
-          <button className="btn btn-primary" type="submit" disabled={creating}>
-            {creating ? "Creating..." : "Create Project"}
-          </button>
-        </form>
-      )}
-
       {error && <div className="error">{error}</div>}
 
       {loading ? (
-        <div className="empty">Loading...</div>
+        <div className="empty">Loading…</div>
       ) : projects.length === 0 ? (
         <div className="empty">No projects yet.</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {projects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              editData={editing[project.id]}
-              onStartEdit={startEdit}
-              onDelete={handleDelete}
-              onCancelEdit={cancelEdit}
-              onChangeEdit={changeEdit}
-              onSave={saveEdit}
-              onLogoUploaded={handleLogoUploaded}
-            />
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {projects.map((p) => {
+            const running = p.runningTicketCount ?? 0;
+            return (
+              <div key={p.id} className="project-list-row">
+                <span className="project-list-row__icon serif">{p.name.charAt(0).toUpperCase()}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 className="serif" style={{ margin: 0, fontSize: 17, color: "var(--ink)", fontWeight: 500 }}>{p.name}</h3>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>/{p.slug ?? ""}</div>
+                </div>
+                {running > 0 && (
+                  <span className="sc-tag" style={{ background: "color-mix(in srgb, var(--claude-deep) 12%, transparent)", color: "var(--claude-deep)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--claude)", animation: "tp-pulse 1.4s infinite" }} />
+                    {running} running
+                  </span>
+                )}
+                <button
+                  className="btn"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, padding: "5px 10px" }}
+                  onClick={() => setModal({ open: true, mode: "configure", project: p })}
+                >
+                  <SettingsIcon /> Configure
+                </button>
+                <button className="btn-delete" onClick={() => handleDelete(p.id)} title="Delete project">×</button>
+              </div>
+            );
+          })}
         </div>
       )}
+
+      <ProjectModal
+        open={modal.open}
+        mode={modal.mode}
+        project={modal.project}
+        onClose={closeModal}
+        onSave={handleSave}
+        saving={saving}
+        error={modalError}
+      />
     </div>
   );
 }

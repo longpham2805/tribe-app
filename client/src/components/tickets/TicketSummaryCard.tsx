@@ -1,5 +1,6 @@
 import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import { PHASES } from "../../constants/ticket";
+import { Tag } from "../ui/Tag";
 import type { CliType, PhaseStatus, Ticket, TicketPhase } from "../../types";
 
 interface TicketSummaryCardProps {
@@ -22,28 +23,6 @@ const PAUSED_STATUS_LABELS: Partial<Record<PhaseStatus, string>> = {
   ERROR: "Error",
 };
 
-function Tag({
-  children,
-  color,
-  dot,
-  icon,
-}: {
-  children: React.ReactNode;
-  color: string;
-  dot?: boolean;
-  icon?: React.ReactNode;
-}) {
-  const bg = color.startsWith("var(")
-    ? `color-mix(in srgb, ${color} 12%, transparent)`
-    : `${color}22`;
-  return (
-    <span className="sc-tag" style={{ background: bg, color }}>
-      {dot && <span className="sc-tag__dot" style={{ background: color }} />}
-      {icon && <span className="sc-tag__icon" aria-hidden="true">{icon}</span>}
-      {children}
-    </span>
-  );
-}
 
 const IconRobot = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -61,6 +40,16 @@ const IconMonitor = () => (
     <rect x="2" y="3" width="20" height="14" rx="2" />
     <line x1="8" y1="21" x2="16" y2="21" />
     <line x1="12" y1="17" x2="12" y2="21" />
+  </svg>
+);
+
+const IconPR = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="18" cy="18" r="3" />
+    <path d="M6 9v6" />
+    <path d="M13 6h3a3 3 0 0 1 3 3v6" />
+    <path d="M11 6l2-2-2-2" />
   </svg>
 );
 
@@ -310,6 +299,7 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
               onClick={stopCardOpen}
               onKeyDown={stopCardOpen}
             >
+              <IconPR />
               {getPrLabel(primaryPR.url)}
               {extraPRs > 0 && <span className="ticket-card-pr-extra"> +{extraPRs}</span>}
             </a>

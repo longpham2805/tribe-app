@@ -519,59 +519,27 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     }
   }, [doneHasMore, donePage, getTicketGroup, loadingMoreDone, projectId]);
 
+  const closeForm = useCallback(() => {
+    setShowForm(false);
+    setNewTitle("");
+    setNewDesc("");
+    setNewCliType("");
+    setPendingImages([]);
+  }, []);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeForm(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showForm, closeForm]);
+
   return (
     <>
       <div
         className={`tickets-page ${paneOpen ? "tickets-page--pane-open" : ""}`}
         style={layoutStyle}
       >
-        {showForm && (
-          <form className="new-ticket-form" onSubmit={handleCreate}>
-            <h2>New Ticket</h2>
-            <input
-              ref={newTicketTitleRef}
-              className="input"
-              placeholder="Title"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              required
-              autoFocus
-            />
-            <textarea
-              className="input textarea"
-              placeholder="Description (optional)"
-              value={newDesc}
-              onChange={(e) => setNewDesc(e.target.value)}
-              rows={3}
-            />
-            <ImageDropZone
-              files={pendingImages}
-              onChange={setPendingImages}
-              disabled={creating}
-            />
-            <select
-              className="input"
-              value={newCliType}
-              onChange={(e) => setNewCliType(e.target.value as CliType | "")}
-            >
-              <option value="">Auto</option>
-              <option value="CLAUDE" disabled={!availableCliTypes.includes("CLAUDE")}>
-                Claude
-              </option>
-              <option value="CODEX" disabled={!availableCliTypes.includes("CODEX")}>
-                Codex
-              </option>
-            </select>
-            <button
-              className="btn btn-primary"
-              type="submit"
-              disabled={creating || (appState !== null && availableCliTypes.length === 0)}
-            >
-              {creating ? "Creating..." : "Create Ticket"}
-            </button>
-          </form>
-        )}
-
         {canImportFromMonday && (
           <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
             <MondayPicker onImported={load} projectId={projectId} />
@@ -598,8 +566,8 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
                 Import from Monday
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => { setShowForm((prev) => { if (prev) setPendingImages([]); return !prev; }); }}>
-              {showForm ? "Cancel" : "+ New Ticket"}
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+              + New Ticket
             </button>
           </div>
         </div>
@@ -663,7 +631,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
         }}
         onRespond={handleRespond}
-        onImageUploaded={() => { void load(); }}
         phases={PHASES}
         phaseLabels={PHASE_LABELS}
         phaseColors={PHASE_COLORS}
@@ -671,6 +638,105 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         statusColors={STATUS_COLORS}
         pausedStatuses={PAUSED_STATUSES}
       />
+
+      {/* New Ticket Modal */}
+      {showForm && (
+        <div
+          className="ntm-backdrop"
+          onClick={closeForm}
+        >
+          <div className="ntm-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="ntm-panel__header">
+              <h2 className="serif ntm-panel__title">New ticket</h2>
+              <p className="ntm-panel__sub">Tribe will route it through Created → Planning → Implementation → Ship.</p>
+            </div>
+            <form className="ntm-panel__form" onSubmit={handleCreate}>
+              <label className="ntm-field">
+                <span className="ntm-field__label">Title</span>
+                <input
+                  ref={newTicketTitleRef}
+                  className="input"
+                  placeholder="Short, action-oriented title…"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </label>
+              <label className="ntm-field">
+                <span className="ntm-field__label">Description</span>
+                <textarea
+                  className="input textarea"
+                  placeholder="What's the problem? What does done look like?"
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  rows={4}
+                />
+              </label>
+              <ImageDropZone files={pendingImages} onChange={setPendingImages} disabled={creating} />
+              <div className="ntm-grid-2">
+                <label className="ntm-field">
+                  <span className="ntm-field__label">Project</span>
+                  <select
+                    className="input"
+                    value={projectId ?? ""}
+                    disabled
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                    {projectId == null && <option value="">All projects</option>}
+                  </select>
+                </label>
+                <label className="ntm-field">
+                  <span className="ntm-field__label">Agent</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {([
+                      { k: "" as CliType | "", label: "Auto" },
+                      { k: "CLAUDE" as CliType | "", label: "Claude" },
+                      { k: "CODEX" as CliType | "", label: "Codex" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.k}
+                        type="button"
+                        disabled={opt.k !== "" && !availableCliTypes.includes(opt.k as CliType)}
+                        onClick={() => setNewCliType(opt.k as CliType | "")}
+                        style={{
+                          flex: 1, padding: "10px 8px", borderRadius: 8,
+                          background: newCliType === opt.k ? "var(--ink)" : "transparent",
+                          color: newCliType === opt.k ? "var(--cream)" : "var(--ink-2)",
+                          border: "1px solid",
+                          borderColor: newCliType === opt.k ? "var(--ink)" : "var(--hairline-strong)",
+                          cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+                          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5,
+                          opacity: opt.k !== "" && !availableCliTypes.includes(opt.k as CliType) ? 0.4 : 1,
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+              </div>
+              <div className="ntm-panel__footer">
+                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
+                  Press <kbd style={{ fontFamily: "inherit", background: "var(--paper)", border: "1px solid var(--hairline-strong)", borderRadius: 4, padding: "1px 5px", fontSize: 10.5 }}>Esc</kbd> to cancel
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" className="btn" onClick={closeForm}>Cancel</button>
+                  <button
+                    className="btn btn-primary"
+                    type="submit"
+                    disabled={creating || !newTitle.trim()}
+                  >
+                    {creating ? "Creating…" : "Create ticket"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

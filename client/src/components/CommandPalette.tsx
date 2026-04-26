@@ -66,7 +66,7 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
   const filteredContext = contextActions.filter((a) => a.label.toLowerCase().includes(q));
   const filteredStatic = STATIC_ACTIONS.filter((a) => a.label.toLowerCase().includes(q));
   const filteredProjects = projects.filter((p) => p.name.toLowerCase().includes(q));
-  const filteredTickets = tickets.filter((t) => t.title.toLowerCase().includes(q));
+  const filteredTickets = tickets.filter((t) => t.title.toLowerCase().includes(q) || String(t.id).includes(q));
   const totalItems = filteredContext.length + filteredStatic.length + filteredProjects.length + filteredTickets.length;
 
   const handleSelect = (idx: number) => {

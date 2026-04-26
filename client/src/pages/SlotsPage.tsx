@@ -6,88 +6,117 @@ type SlotsPageProps = {
   projectId: number | null;
 };
 
-type EditingMap = Record<number, { name: string; rootPath: string }>;
+const SettingsIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+  </svg>
+);
 
-const SlotCard = memo(function SlotCard({
+type SlotModalMode = "create" | "configure";
+
+const SlotModal = memo(function SlotModal({
+  open,
+  mode,
   slot,
-  editData,
-  onStartEdit,
-  onCancelEdit,
-  onDelete,
-  onChangeEdit,
+  onClose,
   onSave,
+  saving,
 }: {
-  slot: Slot;
-  editData?: { name: string; rootPath: string };
-  onStartEdit: (slot: Slot) => void;
-  onCancelEdit: (id: number) => void;
-  onDelete: (id: number) => void;
-  onChangeEdit: (id: number, field: "name" | "rootPath", value: string) => void;
-  onSave: (id: number) => void;
+  open: boolean;
+  mode: SlotModalMode;
+  slot: Slot | null;
+  onClose: () => void;
+  onSave: (data: { name: string; rootPath: string }) => void;
+  saving: boolean;
 }) {
-  const isEditing = !!editData;
-  const isFree = slot.currentTicketId === null;
+  const [name, setName] = useState("");
+  const [rootPath, setRootPath] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    if (mode === "configure" && slot) {
+      setName(slot.name);
+      setRootPath(slot.rootPath);
+    } else {
+      setName("");
+      setRootPath("");
+    }
+  }, [open, mode, slot]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  const isConfigure = mode === "configure";
 
   return (
-    <div className="ticket-card" style={{ padding: "16px 20px" }}>
-      <div className="ticket-header">
-        <div className="ticket-meta">
-          <span className="ticket-id">#{slot.id}</span>
-          <span
-            className="phase-badge"
-            style={{
-              background: isFree ? "#6F8E5E22" : "#B0763422",
-              color: isFree ? "#6F8E5E" : "#B07634",
-            }}
-          >
-            {isFree ? "Free" : `Ticket #${slot.currentTicketId}`}
-          </span>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {!isEditing && (
+    <div className="ntm-backdrop" onClick={onClose}>
+      <div className="ntm-panel ntm-panel--narrow" onClick={(e) => e.stopPropagation()}>
+        <div className="ntm-panel__header">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+              {isConfigure && slot ? `#${slot.id} · ${slot.name}` : "New slot"}
+            </span>
             <button
-              className="btn btn-primary"
-              style={{ fontSize: 12, padding: "4px 10px" }}
-              onClick={() => onStartEdit(slot)}
-            >
-              Edit
-            </button>
-          )}
-          <button className="btn-delete" onClick={() => onDelete(slot.id)} title="Delete">
-            ×
-          </button>
-        </div>
-      </div>
-
-      {isEditing ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-          <input
-            className="input"
-            value={editData.name}
-            placeholder="Name"
-            onChange={(e) => onChangeEdit(slot.id, "name", e.target.value)}
-          />
-          <input
-            className="input"
-            value={editData.rootPath}
-            placeholder="Root path"
-            onChange={(e) => onChangeEdit(slot.id, "rootPath", e.target.value)}
-          />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => onSave(slot.id)}>
-              Save
-            </button>
-            <button className="btn" style={{ fontSize: 12 }} onClick={() => onCancelEdit(slot.id)}>
-              Cancel
-            </button>
+              type="button"
+              onClick={onClose}
+              style={{ width: 24, height: 24, border: "none", background: "transparent", color: "var(--ink-3)", cursor: "pointer", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 16 }}
+            >×</button>
           </div>
+          <h2 className="serif ntm-panel__title">{isConfigure ? "Configure slot" : "New slot"}</h2>
+          <p className="ntm-panel__sub">A slot is a worker checkout. One ticket per slot at a time.</p>
         </div>
-      ) : (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{slot.name}</div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "JetBrains Mono, monospace" }}>{slot.rootPath}</div>
-        </div>
-      )}
+        <form
+          className="ntm-panel__form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim() || !rootPath.trim()) return;
+            onSave({ name: name.trim(), rootPath: rootPath.trim() });
+          }}
+        >
+          <label className="ntm-field">
+            <span className="ntm-field__label">Name</span>
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. macbook-1"
+              autoFocus
+              required
+            />
+          </label>
+          <label className="ntm-field">
+            <span className="ntm-field__label">Root path</span>
+            <input
+              className="input mono"
+              value={rootPath}
+              onChange={(e) => setRootPath(e.target.value)}
+              placeholder="absolute, e.g. ~/code/atlas-1"
+              required
+            />
+          </label>
+          <div className="ntm-panel__footer">
+            <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
+              {isConfigure ? "Slot pauses while saving." : "Tribe will probe the path before activating."}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn" onClick={onClose}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={saving || !name.trim() || !rootPath.trim()}
+              >
+                {saving ? "Saving…" : isConfigure ? "Save" : "Create slot"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 });
@@ -96,11 +125,10 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newRootPath, setNewRootPath] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<EditingMap>({});
+  const [modal, setModal] = useState<{ open: boolean; mode: SlotModalMode; slot: Slot | null }>({
+    open: false, mode: "create", slot: null,
+  });
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -118,61 +146,26 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
     void load();
   }, [load]);
 
-  const handleCreate = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!newName.trim() || !newRootPath.trim()) return;
-      setCreating(true);
+  const closeModal = useCallback(() => setModal((m) => ({ ...m, open: false })), []);
+
+  const handleSave = useCallback(
+    async (data: { name: string; rootPath: string }) => {
+      setSaving(true);
       try {
-        await createSlot({ name: newName.trim(), rootPath: newRootPath.trim(), projectId });
-        setNewName("");
-        setNewRootPath("");
-        setShowForm(false);
+        if (modal.mode === "configure" && modal.slot) {
+          await updateSlot(modal.slot.id, { name: data.name, rootPath: data.rootPath });
+        } else {
+          await createSlot({ name: data.name, rootPath: data.rootPath, projectId });
+        }
+        closeModal();
         await load();
       } catch (e: any) {
         setError(e.message);
       } finally {
-        setCreating(false);
+        setSaving(false);
       }
     },
-    [newName, newRootPath, projectId, load],
-  );
-
-  const startEdit = useCallback((slot: Slot) => {
-    setEditing((prev) => ({
-      ...prev,
-      [slot.id]: { name: slot.name, rootPath: slot.rootPath },
-    }));
-  }, []);
-
-  const cancelEdit = useCallback((id: number) => {
-    setEditing((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  }, []);
-
-  const changeEdit = useCallback((id: number, field: "name" | "rootPath", value: string) => {
-    setEditing((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], [field]: value },
-    }));
-  }, []);
-
-  const saveEdit = useCallback(
-    async (id: number) => {
-      const data = editing[id];
-      if (!data) return;
-      try {
-        await updateSlot(id, { name: data.name, rootPath: data.rootPath });
-        cancelEdit(id);
-        await load();
-      } catch (e: any) {
-        setError(e.message);
-      }
-    },
-    [editing, cancelEdit, load],
+    [modal, projectId, load, closeModal],
   );
 
   const handleDelete = useCallback(
@@ -189,65 +182,82 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
   );
 
   return (
-    <div>
+    <div className="page-content">
       <div className="page-heading">
         <div className="page-heading__left">
+          <div className="page-heading__breadcrumb">Workers · Slots</div>
           <h1 className="page-heading__title serif">Slots</h1>
           <p className="page-heading__sub">Worker slots map to local checkouts. Pause a slot to halt new work without killing the running phase.</p>
         </div>
         <div className="page-heading__actions">
-          <button className="btn btn-primary" onClick={() => setShowForm((prev) => !prev)}>
-            {showForm ? "Cancel" : "+ New Slot"}
+          <button
+            className="btn btn-primary"
+            onClick={() => setModal({ open: true, mode: "create", slot: null })}
+          >
+            + Create slot
           </button>
         </div>
       </div>
 
-      {showForm && (
-        <form className="new-ticket-form" onSubmit={handleCreate} style={{ marginBottom: 24 }}>
-          <h2>New Slot</h2>
-          <input
-            className="input"
-            placeholder="Name (e.g. Slot 1)"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            required
-            autoFocus
-          />
-          <input
-            className="input"
-            placeholder="Root path (absolute, e.g. /workspaces/slot-1)"
-            value={newRootPath}
-            onChange={(e) => setNewRootPath(e.target.value)}
-            required
-          />
-          <button className="btn btn-primary" type="submit" disabled={creating}>
-            {creating ? "Creating..." : "Create Slot"}
-          </button>
-        </form>
-      )}
-
       {error && <div className="error">{error}</div>}
 
       {loading ? (
-        <div className="empty">Loading...</div>
+        <div className="empty">Loading…</div>
       ) : slots.length === 0 ? (
-        <div className="empty">No slots yet. Create your first workspace slot above.</div>
+        <div className="empty">No slots yet. Create your first workspace slot.</div>
       ) : (
         <div className="slots-grid">
-          {slots.map((slot) => (
-            <SlotCard
-              key={slot.id}
-              slot={slot}
-              editData={editing[slot.id]}
-              onStartEdit={startEdit}
-              onCancelEdit={cancelEdit}
-              onDelete={handleDelete}
-              onChangeEdit={changeEdit}
-              onSave={saveEdit}
-            />
-          ))}
+          {slots.map((slot) => {
+            const isBusy = slot.currentTicketId != null;
+            return (
+              <div key={slot.id} className="slot-card">
+                <div className="slot-card__header">
+                  <span
+                    className="slot-card__dot"
+                    style={{
+                      background: isBusy ? "var(--claude)" : "var(--ink-5)",
+                      animation: isBusy ? "tp-pulse 1.4s ease-in-out infinite" : "none",
+                    }}
+                  />
+                  <h3 className="serif slot-card__name">{slot.name}</h3>
+                  <span className="slot-card__status" style={{ color: isBusy ? "var(--claude-deep)" : "var(--ink-4)" }}>
+                    {isBusy ? "Busy" : "Idle"}
+                  </span>
+                </div>
+                <div className="mono slot-card__path">{slot.rootPath}</div>
+                <div className="slot-card__footer">
+                  <span style={{ fontSize: 12.5, color: "var(--ink-3)", flex: 1 }}>
+                    {isBusy ? `Working ticket #${slot.currentTicketId}` : "Available for the next ticket in queue."}
+                  </span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      className="btn"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, padding: "5px 10px" }}
+                      onClick={() => setModal({ open: true, mode: "configure", slot })}
+                    >
+                      <SettingsIcon /> Configure
+                    </button>
+                    <button
+                      className="btn-delete"
+                      onClick={() => handleDelete(slot.id)}
+                      title="Delete slot"
+                    >×</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
+
+      <SlotModal
+        open={modal.open}
+        mode={modal.mode}
+        slot={modal.slot}
+        onClose={closeModal}
+        onSave={handleSave}
+        saving={saving}
+      />
     </div>
   );
 }

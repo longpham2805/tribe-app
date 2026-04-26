@@ -37,7 +37,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <AppHeader />
+      <AppHeader onSearchClick={() => setCommandPaletteOpen(true)} />
 
       <div className="app-shell">
         <ProjectPane

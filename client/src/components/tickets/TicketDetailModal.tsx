@@ -1,10 +1,21 @@
 import { type FormEvent, useEffect, useState, useRef } from "react";
-import { uploadTicketImage } from "../../api";
+
+const IconRobot = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="10" rx="2" />
+    <path d="M12 11V7" />
+    <circle cx="12" cy="5" r="2" />
+    <line x1="8" y1="15" x2="8" y2="15" strokeWidth="2.5" />
+    <line x1="12" y1="15" x2="12" y2="15" strokeWidth="2.5" />
+    <line x1="16" y1="15" x2="16" y2="15" strokeWidth="2.5" />
+  </svg>
+);
 import { extractPullRequestUrl, getPullRequestLinkLabel } from "../../constants/ticket";
 import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
 import { SharedMarkdown } from "../markdown/SharedMarkdown";
 import { Modal } from "../ui/Modal";
+import { Tag } from "../ui/Tag";
 import { PhaseLiveFeed } from "./PhaseLiveFeed";
 
 interface TicketViewerState {
@@ -34,7 +45,6 @@ interface TicketDetailModalProps {
   onCloseFile: () => void;
   onResponseDraftChange: (value: string) => void;
   onRespond: (ticketId: number) => void;
-  onImageUploaded?: () => void;
   projectName: string | null;
   phaseLabels: Record<TicketPhase, string>;
   phaseColors: Record<TicketPhase, string>;
@@ -96,7 +106,6 @@ export function TicketDetailModal({
   onCloseFile,
   onResponseDraftChange,
   onRespond,
-  onImageUploaded,
   projectName,
   phaseLabels,
   phaseColors,
@@ -117,11 +126,8 @@ export function TicketDetailModal({
     setDraftDescription(ticket?.description ?? "");
     setContentError(null);
   }, [ticket?.id, ticket?.title, ticket?.description, ticket?.waitingForSlot]);
-  const imgInputRef = useRef<HTMLInputElement>(null);
   const replyPanelRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const [imgUploading, setImgUploading] = useState(false);
-  const [imgError, setImgError] = useState<string | null>(null);
 
   const paused = ticket?.phases.find(
     (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
@@ -143,21 +149,6 @@ export function TicketDetailModal({
   const canEditContent = ticket.waitingForSlot;
   const assignedArtifacts = ticket.branchName || (ticket.pullRequests?.length ?? 0) > 0;
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImgUploading(true);
-    setImgError(null);
-    try {
-      await uploadTicketImage(ticket.id, file);
-      onImageUploaded?.();
-    } catch (err: any) {
-      setImgError(err.message);
-    } finally {
-      setImgUploading(false);
-      if (imgInputRef.current) imgInputRef.current.value = "";
-    }
-  };
   const selectedPhaseRecord = selectedPhase ? ticket.phases.find((phase) => phase.phaseName === selectedPhase) : null;
   const ticketRunning = ticket.phases.some((phase) => phase.status === "RUNNING");
   const isReplyBusy = respondingTicket === ticket.id;
@@ -311,25 +302,18 @@ export function TicketDetailModal({
 
         {/* Meta tags row */}
         <div className="td-meta-row">
-          <span className="sc-tag" style={{ background: `${phaseColors[ticket.currentPhase]}22`, color: phaseColors[ticket.currentPhase] }}>
-            <span className="sc-tag__dot" style={{ background: phaseColors[ticket.currentPhase] }} aria-hidden="true" />
+          <Tag color={phaseColors[ticket.currentPhase]} dot>
             {phaseLabels[ticket.currentPhase]}
-          </span>
-          <span className="sc-tag" style={{ background: "var(--hairline)", color: "var(--ink-2)" }}>
+          </Tag>
+          <Tag color="var(--ink-2)" icon={<IconRobot />}>
             {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
-          </span>
+          </Tag>
           {ticket.waitingForSlot ? (
-            <span className="sc-tag" style={{ background: "#B0763412", color: "var(--status-warn)" }}>
-              Waiting for slot
-            </span>
+            <Tag color="var(--status-warn)">Waiting for slot</Tag>
           ) : assignedSlotName ? (
-            <span className="sc-tag" style={{ background: "var(--hairline)", color: "var(--ink-3)" }}>
-              {assignedSlotName}
-            </span>
+            <Tag color="var(--ink-3)">{assignedSlotName}</Tag>
           ) : null}
-          <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
-            Created {relativeTime(ticket.createdAt)}
-          </span>
+          <Tag color="var(--ink-4)">Created {relativeTime(ticket.createdAt)}</Tag>
         </div>
 
         {/* Description */}
@@ -338,27 +322,6 @@ export function TicketDetailModal({
             <SharedMarkdown content={normalizeTicketDescriptionImages(ticket.description, ticket.id)} />
           </div>
         ) : null}
-
-        {/* Image upload */}
-        <div style={{ marginBottom: 18 }}>
-          <input
-            ref={imgInputRef}
-            type="file"
-            accept=".jpg,.jpeg,.png,.gif,.webp,.svg"
-            style={{ display: "none" }}
-            onChange={handleImageChange}
-          />
-          <button
-            className="btn"
-            type="button"
-            style={{ fontSize: 11, padding: "3px 8px" }}
-            disabled={imgUploading}
-            onClick={() => imgInputRef.current?.click()}
-          >
-            {imgUploading ? "Uploading..." : "Upload Image"}
-          </button>
-          {imgError && <span style={{ fontSize: 11, color: "var(--status-error)", marginLeft: 8 }}>{imgError}</span>}
-        </div>
 
         {/* ── Lifecycle ── */}
         {ticket.phases.length > 0 ? (

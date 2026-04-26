@@ -7,22 +7,6 @@ interface ProjectPaneProps {
   onSelectProject: (projectId: number | null) => void;
 }
 
-const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
-const FALLBACK_BG = [
-  "#5C7B8A", "#6F8E5E", "#B07634",
-  "#D97757", "#8C7B6A", "#6B6657",
-];
-
-function isHexColor(v: string | null | undefined): v is string {
-  return typeof v === "string" && HEX_COLOR_PATTERN.test(v);
-}
-
-function getProjectBg(project: Project): string {
-  return isHexColor(project.primaryColor)
-    ? project.primaryColor
-    : FALLBACK_BG[(project.id - 1) % FALLBACK_BG.length];
-}
-
 function getInitial(name: string): string {
   const t = name.trim();
   return t ? t.charAt(0).toUpperCase() : "?";
@@ -33,10 +17,11 @@ export const ProjectPane = memo(function ProjectPane({
   selectedProjectId,
   onSelectProject,
 }: ProjectPaneProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
 
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-w", collapsed ? "56px" : "220px");
+    localStorage.setItem("sidebar-collapsed", String(collapsed));
   }, [collapsed]);
   const totalRunning = projects.reduce((s, p) => s + (p.runningTicketCount ?? 0), 0);
 
@@ -63,12 +48,11 @@ export const ProjectPane = memo(function ProjectPane({
           title="All projects"
           aria-label={`All projects${totalRunning > 0 ? `, ${totalRunning} running` : ""}`}
         >
-          <span style={{ fontSize: 11, fontWeight: 600 }}>All</span>
+          <span style={{ fontSize: 11, fontWeight: 600, fontFamily: '"Source Serif 4", serif' }}>All</span>
           {totalRunning > 0 && <span className="project-icon-btn__badge">{totalRunning}</span>}
         </button>
 
         {projects.map((p) => {
-          const bg = getProjectBg(p);
           const count = p.runningTicketCount ?? 0;
           const active = selectedProjectId === p.id;
           return (
@@ -76,15 +60,11 @@ export const ProjectPane = memo(function ProjectPane({
               key={p.id}
               type="button"
               className={`project-icon-btn${active ? " project-icon-btn--active" : ""}`}
-              style={active ? undefined : { background: bg, color: "#FAF9F5" }}
               onClick={() => onSelectProject(p.id)}
               title={p.name}
               aria-label={`${p.name}${count > 0 ? `, ${count} running` : ""}`}
             >
-              {p.logoPath
-                ? <img src={`/api/uploads/projects/${p.id}/logo`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
-                : <span style={{ fontFamily: '"Source Serif 4", serif', fontWeight: 600, fontSize: 15 }}>{getInitial(p.name)}</span>
-              }
+              <span style={{ fontFamily: '"Source Serif 4", serif', fontWeight: 600, fontSize: 15 }}>{getInitial(p.name)}</span>
               {count > 0 && <span className="project-icon-btn__badge">{count}</span>}
             </button>
           );
@@ -126,7 +106,6 @@ export const ProjectPane = memo(function ProjectPane({
         </button>
 
         {projects.map((p) => {
-          const bg = getProjectBg(p);
           const count = p.runningTicketCount ?? 0;
           const active = selectedProjectId === p.id;
           return (
@@ -136,14 +115,8 @@ export const ProjectPane = memo(function ProjectPane({
               className={`project-row${active ? " project-row--active" : ""}`}
               onClick={() => onSelectProject(p.id)}
             >
-              <span
-                className="project-row__icon"
-                style={{ background: bg, color: "#FAF9F5" }}
-              >
-                {p.logoPath
-                  ? <img src={`/api/uploads/projects/${p.id}/logo`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
-                  : getInitial(p.name)
-                }
+              <span className="project-row__icon">
+                {getInitial(p.name)}
               </span>
               <span className={`project-row__name${active ? " project-row__name--active" : ""}`}>{p.name}</span>
               {count > 0 && (
