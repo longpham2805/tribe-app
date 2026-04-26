@@ -100,8 +100,25 @@ export function TicketDetailModal({
     setContentError(null);
   }, [ticket?.id, ticket?.title, ticket?.description, ticket?.waitingForSlot]);
   const imgInputRef = useRef<HTMLInputElement>(null);
+  const replyPanelRef = useRef<HTMLDivElement>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [imgUploading, setImgUploading] = useState(false);
   const [imgError, setImgError] = useState<string | null>(null);
+
+  const paused = ticket?.phases.find(
+    (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
+  );
+
+  useEffect(() => {
+    if (!open || !paused || editingContent) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      replyPanelRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+      replyTextareaRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, ticket?.id, paused?.id, paused?.status, editingContent]);
 
   if (!ticket) return null;
 
@@ -123,9 +140,6 @@ export function TicketDetailModal({
       if (imgInputRef.current) imgInputRef.current.value = "";
     }
   };
-  const paused = ticket.phases.find(
-    (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
-  );
   const selectedPhaseRecord = selectedPhase ? ticket.phases.find((phase) => phase.phaseName === selectedPhase) : null;
   const ticketRunning = ticket.phases.some((phase) => phase.status === "RUNNING");
   const isReplyBusy = respondingTicket === ticket.id;
@@ -475,12 +489,17 @@ export function TicketDetailModal({
       ) : null}
 
       {paused ? (
-        <div className="phase-paused" style={{ borderColor: `${statusColors[paused.status] ?? "#f59e0b"}66` }}>
+        <div
+          ref={replyPanelRef}
+          className="phase-paused"
+          style={{ borderColor: `${statusColors[paused.status] ?? "#f59e0b"}66` }}
+        >
           <div className="phase-paused-header" style={{ color: statusColors[paused.status] ?? "#f59e0b" }}>
             {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
           </div>
           {paused.lastMessage ? <div className="phase-paused-message">{paused.lastMessage}</div> : null}
           <textarea
+            ref={replyTextareaRef}
             className="input textarea"
             rows={3}
             placeholder="Reply to the agent..."
