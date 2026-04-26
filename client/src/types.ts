@@ -84,7 +84,9 @@ export interface BoardTicketsResponse {
   doneTickets: Ticket[];
   donePage: number;
   donePageSize: number;
+  nonDoneTotal: number;
   doneTotal: number;
+  totalCount: number;
   doneHasMore: boolean;
 }
 
