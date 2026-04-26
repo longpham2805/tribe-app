@@ -1,7 +1,5 @@
 import { Repository } from "typeorm";
 import { AppDataSource } from "../data-source";
-import { PhaseStatus } from "../enum/PhaseStatus";
-import { Phase } from "../entity/Phase";
 import { Project } from "../entity/Project";
 import { Ticket } from "../entity/Ticket";
 
@@ -94,11 +92,10 @@ export class ProjectRepository {
       )
       .addSelect(
         (subQuery) => subQuery
-          .select("COUNT(DISTINCT ticket.id)")
+          .select("COUNT(ticket.id)")
           .from(Ticket, "ticket")
-          .innerJoin(Phase, "phase", "phase.ticket_id = ticket.id")
           .where("ticket.projectId = project.id")
-          .andWhere("phase.status = :runningStatus", { runningStatus: PhaseStatus.RUNNING }),
+          .andWhere("ticket.isDone = false"),
         "runningTicketCount",
       );
   }
