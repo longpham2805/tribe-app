@@ -10,7 +10,9 @@ export interface BoardTicketsPage {
   doneTickets: Ticket[];
   donePage: number;
   donePageSize: number;
+  nonDoneTotal: number;
   doneTotal: number;
+  totalCount: number;
   doneHasMore: boolean;
 }
 
@@ -51,7 +53,7 @@ export class TicketRepository {
     const offset = (donePage - 1) * DONE_PAGE_SIZE;
     const projectFilter = opts?.projectId != null ? { projectId: opts.projectId } : {};
 
-    const [nonDoneTickets, doneTickets, doneTotal] = await Promise.all([
+    const [nonDoneTickets, doneTickets, nonDoneTotal, doneTotal] = await Promise.all([
       this.repo.find({
         where: { isDone: false, ...projectFilter },
         relations: ["phases"],
@@ -64,6 +66,7 @@ export class TicketRepository {
         skip: offset,
         take: DONE_PAGE_SIZE,
       }),
+      this.repo.count({ where: { isDone: false, ...projectFilter } }),
       this.repo.count({ where: { isDone: true, ...projectFilter } }),
     ]);
 
@@ -72,7 +75,9 @@ export class TicketRepository {
       doneTickets,
       donePage,
       donePageSize: DONE_PAGE_SIZE,
+      nonDoneTotal,
       doneTotal,
+      totalCount: nonDoneTotal + doneTotal,
       doneHasMore: offset + doneTickets.length < doneTotal,
     };
   }

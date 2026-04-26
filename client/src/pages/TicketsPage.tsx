@@ -43,12 +43,14 @@ const MAX_LIVE_LOG_EVENTS = 200;
 const TicketGroupSection = memo(function TicketGroupSection({
   group,
   tickets,
+  count,
   getSlotName,
   onOpenTicket,
   action,
 }: {
   group: TicketGroup;
   tickets: Ticket[];
+  count: number;
   getSlotName: (slotId: number | null) => string | null;
   onOpenTicket: (ticketId: number) => void;
   action?: { label: string; disabled?: boolean; onClick: () => void } | null;
@@ -60,7 +62,7 @@ const TicketGroupSection = memo(function TicketGroupSection({
       <div className="ticket-group-header">
         <h2 className="ticket-group-title">{TICKET_GROUP_LABELS[group]}</h2>
         <span className="count">
-          {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
+          {count} ticket{count !== 1 ? "s" : ""}
         </span>
       </div>
       <div className="ticket-list">
@@ -99,6 +101,8 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [error, setError] = useState<string | null>(null);
   const [donePage, setDonePage] = useState(1);
   const [doneTotal, setDoneTotal] = useState(0);
+  const [doneHasMore, setDoneHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [showMondayPicker, setShowMondayPicker] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -142,6 +146,8 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       setTickets([...ticketData.nonDoneTickets, ...ticketData.doneTickets]);
       setDonePage(ticketData.donePage);
       setDoneTotal(ticketData.doneTotal);
+      setDoneHasMore(ticketData.doneHasMore);
+      setTotalCount(ticketData.totalCount);
       setSlots(slotData);
     } catch (e: any) {
       setError(e.message);
@@ -292,7 +298,14 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     for (const ticket of tickets) groups[getTicketGroup(ticket)].push(ticket);
     return groups;
   }, [tickets, getTicketGroup]);
-  const doneHasMore = ticketsByGroup.DONE.length < doneTotal;
+  const ticketCountsByGroup = useMemo(
+    () => ({
+      RUNNING: ticketsByGroup.RUNNING.length,
+      WAITING: ticketsByGroup.WAITING.length,
+      DONE: doneTotal,
+    }),
+    [doneTotal, ticketsByGroup],
+  );
 
   const slotNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -488,6 +501,8 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       });
       setDonePage(boardData.donePage);
       setDoneTotal(boardData.doneTotal);
+      setDoneHasMore(boardData.doneHasMore);
+      setTotalCount(boardData.totalCount);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -566,7 +581,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
             )}
           </div>
           <span className="count">
-            {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
+            {totalCount} ticket{totalCount !== 1 ? "s" : ""}
           </span>
         </div>
 
@@ -583,6 +598,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
                 key={group}
                 group={group}
                 tickets={ticketsByGroup[group]}
+                count={ticketCountsByGroup[group]}
                 getSlotName={getSlotName}
                 onOpenTicket={openTicket}
                 action={group === "DONE" && doneHasMore ? {
