@@ -10,11 +10,12 @@ interface PhaseLiveFeedProps {
   status: PhaseStatus;
   liveEvents: unknown[];
   autoOpenKey?: string;
+  fill?: boolean;
 }
 
 const AUTO_EXPAND_STATUSES: PhaseStatus[] = ["RUNNING", "QUESTION", "REQUIRES_ACTION", "ERROR"];
 
-export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpenKey }: PhaseLiveFeedProps) {
+export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpenKey, fill = false }: PhaseLiveFeedProps) {
   const [historicalEvents, setHistoricalEvents] = useState<unknown[]>([]);
   const [historicalPayloadBytes, setHistoricalPayloadBytes] = useState(0);
   const [expanded, setExpanded] = useState(() => AUTO_EXPAND_STATUSES.includes(status));
@@ -76,35 +77,26 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
   }, [expanded, activityEntries.length]);
 
   return (
-    <div style={{ marginTop: 6 }}>
+    <div className={`phase-live-feed${fill ? " phase-live-feed--fill" : ""}`}>
       <button
         type="button"
-        className="phase-card-trigger"
+        className="phase-card-trigger phase-live-feed__trigger"
         onClick={() => {
           setUserToggled(true);
           setExpanded((prev) => !prev);
         }}
-        style={{ fontSize: 11 }}
       >
         Activity ({allEvents.length})
       </button>
       {expanded && (
         <div
           ref={bodyRef}
-          style={{
-            marginTop: 6,
-            maxHeight: 500,
-            overflowY: "auto",
-            border: "1px solid var(--hairline)",
-            borderRadius: 8,
-            padding: "10px 12px",
-            background: "var(--paper)",
-          }}
+          className="phase-live-feed__body"
         >
           {activityEntries.length === 0 ? (
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>No events yet.</div>
+            <div className="phase-live-feed__empty">No events yet.</div>
           ) : (
-            <div style={{ color: "var(--ink-2)", display: "grid", gap: 12 }}>
+            <div className="phase-live-feed__entries">
               {activityEntries.map((entry) => (
                 <SharedMarkdown key={entry.id} content={entry.content} compact />
               ))}

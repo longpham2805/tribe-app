@@ -150,6 +150,11 @@ export function TicketDetailModal({
   const assignedArtifacts = ticket.branchName || (ticket.pullRequests?.length ?? 0) > 0;
 
   const selectedPhaseRecord = selectedPhase ? ticket.phases.find((phase) => phase.phaseName === selectedPhase) : null;
+  const activePhase = ticket.phases.find((p) => !!p.startedAt && !p.completedAt);
+  const liveFeedPhase = activePhase ?? ticket.phases.slice().reverse().find((p) => !!p.completedAt) ?? ticket.phases[0];
+  const displayedFeedPhaseName = selectedPhase ?? liveFeedPhase?.phaseName;
+  const displayedFeedPhaseStatus = (selectedPhase ? selectedPhaseRecord?.status : liveFeedPhase?.status) ?? "PENDING";
+  const hasActivityDock = !!activePhase;
   const ticketRunning = ticket.phases.some((phase) => phase.status === "RUNNING");
   const isReplyBusy = respondingTicket === ticket.id;
   const title = viewer?.fileName ? `Ticket #${ticket.id} · ${viewer.fileName}` : `Ticket #${ticket.id} · ${ticket.title}`;
@@ -196,68 +201,66 @@ export function TicketDetailModal({
     );
   }
 
-  const activePhase = ticket.phases.find((p) => !!p.startedAt && !p.completedAt);
-  const liveFeedPhase = activePhase ?? ticket.phases.slice().reverse().find((p) => !!p.completedAt) ?? ticket.phases[0];
-
   return (
     <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={paneWidth} noHeader>
-      {/* ── Sticky header ── */}
-      <div className="td-topbar">
-        <span className="mono td-topbar__id">#{ticket.id}</span>
-        {projectName && (
-          <>
-            <span className="td-topbar__dot" aria-hidden="true" />
-            <span className="td-topbar__project">{projectName}</span>
-          </>
-        )}
-        <span style={{ flex: 1 }} />
-        {canEditContent && (
+      <div className={`td-shell${hasActivityDock ? " td-shell--activity-dock" : ""}`}>
+        {/* ── Sticky header ── */}
+        <div className="td-topbar">
+          <span className="mono td-topbar__id">#{ticket.id}</span>
+          {projectName && (
+            <>
+              <span className="td-topbar__dot" aria-hidden="true" />
+              <span className="td-topbar__project">{projectName}</span>
+            </>
+          )}
+          <span style={{ flex: 1 }} />
+          {canEditContent && (
+            <button
+              className="ticket-action-button"
+              type="button"
+              onClick={() => {
+                if (editingContent) {
+                  setDraftTitle(ticket.title);
+                  setDraftDescription(ticket.description ?? "");
+                }
+                setEditingContent((prev) => !prev);
+                setContentError(null);
+              }}
+              disabled={savingContent}
+            >
+              {editingContent ? "Cancel" : "Edit"}
+            </button>
+          )}
           <button
-            className="ticket-action-button"
+            className="ticket-remove-button"
             type="button"
-            onClick={() => {
-              if (editingContent) {
-                setDraftTitle(ticket.title);
-                setDraftDescription(ticket.description ?? "");
-              }
-              setEditingContent((prev) => !prev);
-              setContentError(null);
-            }}
-            disabled={savingContent}
+            onClick={() => onDelete(ticket.id)}
+            title="Remove ticket"
           >
-            {editingContent ? "Cancel" : "Edit"}
+            <svg
+              className="ticket-remove-button__icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6V4.75C8 4.336 8.336 4 8.75 4h6.5c.414 0 .75.336.75.75V6" />
+              <path d="M6.75 6l.6 11.3A2 2 0 0 0 9.347 19.2h5.306a2 2 0 0 0 1.997-1.9L17.25 6" />
+              <path d="M10 10.25v5.5" />
+              <path d="M14 10.25v5.5" />
+            </svg>
+            <span>Remove</span>
           </button>
-        )}
-        <button
-          className="ticket-remove-button"
-          type="button"
-          onClick={() => onDelete(ticket.id)}
-          title="Remove ticket"
-        >
-          <svg
-            className="ticket-remove-button__icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M3 6h18" />
-            <path d="M8 6V4.75C8 4.336 8.336 4 8.75 4h6.5c.414 0 .75.336.75.75V6" />
-            <path d="M6.75 6l.6 11.3A2 2 0 0 0 9.347 19.2h5.306a2 2 0 0 0 1.997-1.9L17.25 6" />
-            <path d="M10 10.25v5.5" />
-            <path d="M14 10.25v5.5" />
-          </svg>
-          <span>Remove</span>
-        </button>
-        <button className="btn-delete td-topbar__close" type="button" onClick={onClose} title="Close" aria-label="Close">
-          ×
-        </button>
-      </div>
+          <button className="btn-delete td-topbar__close" type="button" onClick={onClose} title="Close" aria-label="Close">
+            ×
+          </button>
+        </div>
 
-      <div className="td-body">
+        <div className={`td-body${hasActivityDock ? " td-body--with-activity-dock" : ""}`}>
         {/* Title */}
         {editingContent ? (
           <form className="ticket-edit-form" onSubmit={handleContentSubmit}>
@@ -406,71 +409,6 @@ export function TicketDetailModal({
           </div>
         ) : null}
 
-        {/* ── Paused / reply panel ── */}
-        {paused ? (
-          <div
-            ref={replyPanelRef}
-            className="td-paused-panel"
-            style={{
-              background: paused.status === "ERROR"
-                ? "color-mix(in srgb, var(--status-error) 8%, var(--cream))"
-                : "color-mix(in srgb, var(--status-warn) 9%, var(--cream))",
-              borderColor: `color-mix(in srgb, ${statusColors[paused.status] ?? "var(--status-warn)"} 35%, transparent)`,
-            }}
-          >
-            <div
-              className="td-paused-panel__label"
-              style={{ color: statusColors[paused.status] ?? "var(--status-warn)" }}
-            >
-              {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
-            </div>
-            {paused.lastMessage ? (
-              <div className="serif td-paused-panel__message">{paused.lastMessage}</div>
-            ) : null}
-            <textarea
-              ref={replyTextareaRef}
-              className="input textarea td-paused-panel__textarea"
-              rows={3}
-              placeholder="Reply to the agent…"
-              value={responseDraft}
-              onChange={(event) => onResponseDraftChange(event.target.value)}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => onResponseDraftChange("")}
-              >
-                Discard
-              </button>
-              <button
-                className="btn btn-primary"
-                type="button"
-                disabled={isReplyBusy || !responseDraft.trim()}
-                onClick={() => onRespond(ticket.id)}
-              >
-                {isReplyBusy ? "Sending…" : "Send reply"}
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {/* ── Live feed ── */}
-        {liveFeedPhase ? (
-          <div className="td-section">
-            <div className="td-section-label">
-              Live feed · {phaseLabels[liveFeedPhase.phaseName as keyof typeof phaseLabels] ?? liveFeedPhase.phaseName}
-            </div>
-            <PhaseLiveFeed
-              ticketId={ticket.id}
-              phaseName={selectedPhase ?? liveFeedPhase.phaseName}
-              status={(selectedPhase ? selectedPhaseRecord?.status : liveFeedPhase.status) ?? "PENDING"}
-              liveEvents={liveLogs[`${ticket.id}:${selectedPhase ?? liveFeedPhase.phaseName}`] ?? []}
-              autoOpenKey={selectedPhaseAutoOpenKey}
-            />
-          </div>
-        ) : null}
-
         {/* ── Generated files ── */}
         {(filesLoading || files.length > 0) && (
           <div className="td-section">
@@ -537,6 +475,73 @@ export function TicketDetailModal({
             </div>
           </div>
         ) : null}
+
+        {/* ── Live feed ── */}
+        {displayedFeedPhaseName ? (
+          <div className={`td-section td-activity-section${hasActivityDock ? " td-activity-section--docked" : ""}`}>
+            <div className="td-section-label">
+              Live feed · {phaseLabels[displayedFeedPhaseName] ?? displayedFeedPhaseName}
+            </div>
+            <PhaseLiveFeed
+              ticketId={ticket.id}
+              phaseName={displayedFeedPhaseName}
+              status={displayedFeedPhaseStatus}
+              liveEvents={liveLogs[`${ticket.id}:${displayedFeedPhaseName}`] ?? []}
+              autoOpenKey={selectedPhaseAutoOpenKey}
+              fill={hasActivityDock}
+            />
+          </div>
+        ) : null}
+
+        {/* ── Paused / reply panel ── */}
+        {paused ? (
+          <div
+            ref={replyPanelRef}
+            className={`td-paused-panel${hasActivityDock ? " td-paused-panel--sticky" : ""}`}
+            style={{
+              background: paused.status === "ERROR"
+                ? "color-mix(in srgb, var(--status-error) 8%, var(--cream))"
+                : "color-mix(in srgb, var(--status-warn) 9%, var(--cream))",
+              borderColor: `color-mix(in srgb, ${statusColors[paused.status] ?? "var(--status-warn)"} 35%, transparent)`,
+            }}
+          >
+            <div
+              className="td-paused-panel__label"
+              style={{ color: statusColors[paused.status] ?? "var(--status-warn)" }}
+            >
+              {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
+            </div>
+            {paused.lastMessage ? (
+              <div className="serif td-paused-panel__message">{paused.lastMessage}</div>
+            ) : null}
+            <textarea
+              ref={replyTextareaRef}
+              className="input textarea td-paused-panel__textarea"
+              rows={3}
+              placeholder="Reply to the agent…"
+              value={responseDraft}
+              onChange={(event) => onResponseDraftChange(event.target.value)}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => onResponseDraftChange("")}
+              >
+                Discard
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={isReplyBusy || !responseDraft.trim()}
+                onClick={() => onRespond(ticket.id)}
+              >
+                {isReplyBusy ? "Sending…" : "Send reply"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        </div>
       </div>
     </Modal>
   );
