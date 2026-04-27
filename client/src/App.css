@@ -273,9 +273,13 @@
 .tickets-page {
   --ticket-pane-gap: 24px;
   width: 100%;
-  min-width: 320px;
-  max-width: min(1050px, calc(100% - var(--ticket-pane-width)));
+  min-width: 720px;
+  max-width: 1046px;
   transition: max-width 200ms ease;
+}
+
+.tickets-page--pane-open {
+  max-width: min(1046px, calc(100% - var(--ticket-pane-width)));
 }
 
 .new-ticket-form {
