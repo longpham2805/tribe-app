@@ -9,18 +9,26 @@ type CommandPaletteProps = {
   onClose: () => void;
   onAction: (intent: NonNullable<ShortcutIntent>) => void;
   projectId: number | null;
+  canImportFromMonday: boolean;
   contextActions: PaletteAction[];
   projects: Project[];
 };
 
 const STATIC_ACTIONS = [
   { id: "new-ticket", label: "Add new ticket", icon: "+", intent: { type: "new-ticket" } as const },
-  { id: "nav-tickets", label: "Go to Tickets", icon: "🎫", intent: { type: "navigate", view: "tickets" } as const },
-  { id: "nav-slots", label: "Go to Slots", icon: "⏱", intent: { type: "navigate", view: "slots" } as const },
-  { id: "nav-projects", label: "Go to Projects", icon: "📁", intent: { type: "navigate", view: "projects" } as const },
+  { id: "nav-tickets", label: "Go to Tickets", icon: "T", intent: { type: "navigate", view: "tickets" } as const },
+  { id: "nav-slots", label: "Go to Slots", icon: "S", intent: { type: "navigate", view: "slots" } as const },
+  { id: "nav-projects", label: "Go to Projects", icon: "P", intent: { type: "navigate", view: "projects" } as const },
 ];
 
-export function CommandPalette({ open, onClose, onAction, projectId, contextActions, projects }: CommandPaletteProps) {
+const MONDAY_IMPORT_ACTION = {
+  id: "import-from-monday",
+  label: "Import from Monday",
+  icon: "M",
+  intent: { type: "import-from-monday" } as const,
+};
+
+export function CommandPalette({ open, onClose, onAction, projectId, canImportFromMonday, contextActions, projects }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selected, setSelected] = useState(0);
@@ -64,7 +72,8 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
 
   const q = query.toLowerCase();
   const filteredContext = contextActions.filter((a) => a.label.toLowerCase().includes(q));
-  const filteredStatic = STATIC_ACTIONS.filter((a) => a.label.toLowerCase().includes(q));
+  const actions = canImportFromMonday ? [...STATIC_ACTIONS, MONDAY_IMPORT_ACTION] : STATIC_ACTIONS;
+  const filteredStatic = actions.filter((a) => a.label.toLowerCase().includes(q));
   const filteredProjects = projects.filter((p) => p.name.toLowerCase().includes(q));
   const filteredTickets = tickets.filter((t) => t.title.toLowerCase().includes(q) || String(t.id).includes(q));
   const totalItems = filteredContext.length + filteredStatic.length + filteredProjects.length + filteredTickets.length;
@@ -189,7 +198,7 @@ export function CommandPalette({ open, onClose, onAction, projectId, contextActi
                     onMouseEnter={() => setSelected(globalIdx)}
                     type="button"
                   >
-                    <span className="cmd-item-icon">📁</span>
+                    <span className="cmd-item-icon">P</span>
                     <span className="cmd-item-label">{project.name}</span>
                     <kbd className="cmd-item-shortcut">↩</kbd>
                   </button>
