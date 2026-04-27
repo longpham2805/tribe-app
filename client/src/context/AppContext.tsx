@@ -24,6 +24,7 @@ export type ShortcutIntent =
   | { type: "open-ticket"; ticketId: number }
   | { type: "navigate"; view: View }
   | { type: "switch-project"; projectId: number }
+  | { type: "import-from-monday" }
   | null;
 
 export type PaletteAction = {

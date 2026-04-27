@@ -29,6 +29,9 @@ export default function App() {
       setView(intent.view);
     } else if (intent.type === "switch-project") {
       setSelectedProjectId(intent.projectId);
+    } else if (intent.type === "import-from-monday") {
+      setView("tickets");
+      setShortcutIntent(intent);
     } else {
       setShortcutIntent(intent);
     }
@@ -58,6 +61,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onAction={handlePaletteAction}
         projectId={selectedProjectId}
+        canImportFromMonday={canImportFromMonday}
         contextActions={paletteContextActions}
         projects={projects}
       />

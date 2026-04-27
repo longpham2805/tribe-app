@@ -365,8 +365,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     } else if (shortcutIntent.type === "open-ticket") {
       openTicket(shortcutIntent.ticketId);
       clearShortcutIntent();
+    } else if (shortcutIntent.type === "import-from-monday") {
+      if (canImportFromMonday) setShowMondayPicker(true);
+      clearShortcutIntent();
     }
-  }, [shortcutIntent, clearShortcutIntent, openTicket]);
+  }, [shortcutIntent, clearShortcutIntent, openTicket, canImportFromMonday]);
 
   const handleCreate = useCallback(
     async (e: React.FormEvent) => {

@@ -124,6 +124,9 @@
   justify-content: center;
   color: var(--ink-2);
   flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .cmd-item-id {
