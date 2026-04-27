@@ -190,13 +190,21 @@ export function TicketDetailModal({
     const phaseName = fileToPhase(viewer.fileName);
     const live = phaseName ? liveLogs[`${ticket.id}:${phaseName}`] ?? [] : [];
     return (
-      <Modal open={open} onClose={onCloseFile} title={title} variant="right-pane" width={paneWidth}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-          <button className="btn" type="button" onClick={onCloseFile}>
-            ← Back to ticket
-          </button>
+      <Modal open={open} onClose={onCloseFile} title={title} variant="right-pane" width={paneWidth} noHeader>
+        <div className="td-file-shell">
+          <div className="td-topbar td-topbar--file">
+            <span className="mono td-topbar__id">#{ticket.id}</span>
+            <span className="td-topbar__dot" aria-hidden="true" />
+            <span className="td-topbar__project">{viewer.fileName}</span>
+            <span style={{ flex: 1 }} />
+            <button className="btn-delete td-topbar__close" type="button" onClick={onCloseFile} title="Back to ticket" aria-label="Back to ticket">
+              ×
+            </button>
+          </div>
+          <div className="td-file-body">
+            <MarkdownViewer ticketId={ticket.id} fileName={viewer.fileName} phaseName={phaseName} liveEvents={live} onBack={onCloseFile} />
+          </div>
         </div>
-        <MarkdownViewer ticketId={ticket.id} fileName={viewer.fileName} phaseName={phaseName} liveEvents={live} />
       </Modal>
     );
   }

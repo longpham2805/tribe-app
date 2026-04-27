@@ -39,6 +39,14 @@ interface AssistantContentBlock extends UnknownRecord {
   input?: unknown;
 }
 
+interface MessageContentBlock extends UnknownRecord {
+  type?: string;
+  text?: string;
+  content?: unknown;
+  tool_use_id?: string;
+  is_error?: boolean;
+}
+
 const SECRET_KEY_PATTERN =
   /(token|secret|authorization|api[-_]?key|password|cookie|session|credential)/i;
 const BEARER_VALUE_PATTERN = /^Bearer\s+/i;
@@ -72,6 +80,10 @@ function formatTime(timestamp?: string): string | null {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function eventTimestamp(event: UnknownRecord): string | undefined {
+  return asString(event.at) ?? asString(event.timestamp);
 }
 
 function sanitizeString(value: string, key?: string): string {
@@ -201,8 +213,81 @@ function buildActivityId(event: UnknownRecord, index: number): string {
   }
 
   const type = asString(event.type) ?? "unknown";
-  const timestamp = asString(event.at) ?? String(index);
+  const timestamp = eventTimestamp(event) ?? String(index);
   return `${type}:${timestamp}:${index}`;
+}
+
+function collectMessageBlocks(event: UnknownRecord): MessageContentBlock[] {
+  const message = event.message;
+  if (!isRecord(message) || !Array.isArray(message.content)) return [];
+  return message.content.filter(isRecord) as MessageContentBlock[];
+}
+
+function safeInlineCode(value: string): string {
+  return value.replace(/`/g, "\\`");
+}
+
+function fencedJson(value: unknown): string {
+  const json = JSON.stringify(sanitizeDetail(value), null, 2) ?? "null";
+  const fence = json.includes("```") ? "````" : "```";
+  return `${fence}json\n${json}\n${fence}`;
+}
+
+function blockContentToMarkdown(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (content === undefined) return "";
+  return fencedJson(content);
+}
+
+function summarizeUserBlocks(blocks: MessageContentBlock[]): string | undefined {
+  const summaries: string[] = [];
+  for (const block of blocks) {
+    const type = asString(block.type);
+    if (type === "text") {
+      const text = asString(block.text);
+      if (text) summaries.push(normalizeWhitespace(text));
+      continue;
+    }
+    if (type === "tool_result") {
+      const id = asString(block.tool_use_id);
+      const content = blockContentToMarkdown(block.content);
+      const label = id ? `Tool result ${id}` : "Tool result";
+      summaries.push(content ? `${label}: ${normalizeWhitespace(content)}` : label);
+      continue;
+    }
+    if (type) summaries.push(toTitleCase(type));
+  }
+  return summaries.length > 0 ? summaries.join(" | ") : undefined;
+}
+
+function formatUserMarkdown(event: UnknownRecord): string {
+  const blocks = collectMessageBlocks(event);
+  const parts: string[] = [];
+
+  for (const block of blocks) {
+    const type = asString(block.type);
+    if (type === "text") {
+      const text = asString(block.text);
+      if (text) parts.push(text);
+      continue;
+    }
+
+    if (type === "tool_result") {
+      const id = asString(block.tool_use_id);
+      const label = id ? `Tool result \`${safeInlineCode(id)}\`` : "Tool result";
+      const content = blockContentToMarkdown(block.content);
+      parts.push(`**${label}:**${block.is_error ? " _error_" : ""}${content ? `\n\n${content}` : ""}`);
+      continue;
+    }
+
+    if (type) {
+      parts.push(`**${toTitleCase(type)}:**\n\n${fencedJson(block)}`);
+    }
+  }
+
+  const fullEvent = fencedJson(event);
+  const summary = parts.length > 0 ? parts.join("\n\n") : "**User event**";
+  return `${summary}\n\n**Full event**\n\n${fullEvent}`;
 }
 
 function normalizeItemEvent(event: UnknownRecord, index: number): ActivityItem {
@@ -280,7 +365,7 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
   }
 
   const type = asString(event.type) ?? "unknown";
-  const timestamp = asString(event.at);
+  const timestamp = eventTimestamp(event);
   const severity = inferSeverity(event);
 
   if (type === "system") {
@@ -345,6 +430,21 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
       title: "User message",
       summary: text?.trim() || undefined,
       detail: sanitizeRecordDetail(event, ["type", "at", "text"]),
+      raw: event,
+      severity,
+    };
+  }
+
+  if (type === "user") {
+    const blocks = collectMessageBlocks(event);
+    return {
+      id: buildActivityId(event, index),
+      kind: "message",
+      timestamp,
+      actor: "You",
+      title: blocks.some((block) => block.type === "tool_result") ? "User tool result" : "User message",
+      summary: summarizeUserBlocks(blocks),
+      detail: sanitizeRecordDetail(event, ["type", "at", "timestamp"]),
       raw: event,
       severity,
     };
@@ -486,6 +586,9 @@ export function extractEventText(event: unknown): string {
   if (isRecord(event) && asString(event.type) === "assistant") {
     const markdown = formatAssistantMarkdown(collectAssistantBlocks(event));
     if (markdown) return markdown;
+  }
+  if (isRecord(event) && asString(event.type) === "user") {
+    return formatUserMarkdown(event);
   }
   if (item.kind === "message" && item.actor === "You" && item.summary) {
     return `**You:** ${item.summary}`;

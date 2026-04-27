@@ -22,19 +22,31 @@ function formatRelativeTime(iso: string | undefined): string {
   if (isNaN(ms) || ms < 0) return "";
   const mins = Math.floor(ms / 60000);
   if (mins < 1) return "updated just now";
-  if (mins < 60) return `updated ${mins}m`;
+  if (mins < 60) return `updated ${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `updated ${hrs}h`;
+  if (hrs < 24) return `updated ${hrs}h ago`;
   const days = Math.floor(hrs / 24);
-  return `updated ${days}d`;
+  if (days < 30) return `updated ${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `updated ${months}mo ago`;
+  return `updated ${Math.floor(months / 12)}y ago`;
 }
 
 function formatAssignee(text: string | null | undefined): string {
   if (!text?.trim()) return "";
-  const first = text.trim().split(/\s*,\s*/)[0];
-  const parts = first.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  return text
+    .split(/\s*,\s*/)
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function timestampFromMondayText(text: string): string | undefined {
+  const value = text.trim();
+  if (!value) return undefined;
+  const normalized = value.replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+UTC$/i, "$1T$2Z");
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 function getBoardLabel(projectName: string | undefined): string {
@@ -58,13 +70,13 @@ function getItemMeta(item: MondayNotStartedItem) {
     columnValues.find((column) => column.id === "tags" || column.id === "label" || column.id === "labels")?.text ?? "";
   const tags = rawTags ? rawTags.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
   const lastUpdatedText = columnValues.find((column) => column.id === "last_updated")?.text?.trim() ?? "";
-  const latestTimestamp = item.updated_at ? new Date(item.updated_at).getTime() : 0;
+  const updatedAtIso = item.updated_at || timestampFromMondayText(lastUpdatedText);
 
   return {
     people: formatAssignee(peopleText),
     priority,
     tags,
-    updatedAt: lastUpdatedText || (latestTimestamp && !isNaN(latestTimestamp) ? formatRelativeTime(new Date(latestTimestamp).toISOString()) : ""),
+    updatedAt: formatRelativeTime(updatedAtIso),
   };
 }
 

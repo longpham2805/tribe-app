@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog } from "../../api";
 import { estimateEventPayloadBytes, getActivityMarkdownEntries } from "../../phaseEvents";
 import type { PhaseStatus, TicketPhase } from "../../types";
-import { SharedMarkdown } from "../markdown/SharedMarkdown";
+import { MarkdownProse } from "../markdown/MarkdownProse";
 
 interface PhaseLiveFeedProps {
   ticketId: number;
@@ -74,7 +74,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
     const el = bodyRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [expanded, activityEntries.length]);
+  }, [activityEntries.length, expanded]);
 
   return (
     <div className={`phase-live-feed${fill ? " phase-live-feed--fill" : ""}`}>
@@ -91,14 +91,16 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
       {expanded && (
         <div
           ref={bodyRef}
-          className="phase-live-feed__body"
+          className="phase-live-feed__body file-viewer__body--markdown"
         >
           {activityEntries.length === 0 ? (
             <div className="phase-live-feed__empty">No events yet.</div>
           ) : (
-            <div className="phase-live-feed__entries">
+            <div className="phase-live-feed__entries phase-live-feed__entries--prose">
               {activityEntries.map((entry) => (
-                <SharedMarkdown key={entry.id} content={entry.content} compact />
+                <article key={entry.id} className="phase-live-feed__entry">
+                  <MarkdownProse content={entry.content} />
+                </article>
               ))}
             </div>
           )}
