@@ -29,7 +29,14 @@ export class PhaseRepository {
   async findActiveByTicketId(ticketId: number): Promise<Phase | null> {
     return this.repo.findOne({
       where: { ticketId, startedAt: Not(IsNull()), completedAt: IsNull() },
-      order: { startedAt: "DESC" },
+      order: { sequence: "DESC", startedAt: "DESC", id: "DESC" },
+    });
+  }
+
+  async findLatestPendingByTicketId(ticketId: number): Promise<Phase | null> {
+    return this.repo.findOne({
+      where: { ticketId, startedAt: IsNull() },
+      order: { sequence: "DESC", id: "DESC" },
     });
   }
 
@@ -39,19 +46,45 @@ export class PhaseRepository {
   ): Promise<Phase | null> {
     return this.repo.findOne({
       where: { ticketId, phaseName, startedAt: IsNull() },
+      order: { sequence: "DESC", id: "DESC" },
     });
+  }
+
+  async findMaxSequenceByTicketIdAndName(
+    ticketId: number,
+    phaseName: TicketPhase
+  ): Promise<number> {
+    const row = await this.repo
+      .createQueryBuilder("phase")
+      .select("MAX(phase.sequence)", "max")
+      .where("phase.ticketId = :ticketId", { ticketId })
+      .andWhere("phase.phaseName = :phaseName", { phaseName })
+      .getRawOne<{ max: string | number | null }>();
+
+    const max = row?.max == null ? -1 : Number(row.max);
+    return Number.isFinite(max) ? max : -1;
   }
 
   async create(data: {
     ticketId: number;
     phaseName: TicketPhase;
     startedAt?: Date | null;
+    status?: PhaseStatus;
+    sequence?: number;
+    feedbackComment?: string | null;
+    branchName?: string | null;
+    pullRequests?: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
   }): Promise<Phase> {
     const phase = this.repo.create({
       ticketId: data.ticketId,
       phaseName: data.phaseName,
+      sequence: data.sequence ?? 0,
+      feedbackComment: data.feedbackComment ?? null,
+      branchName: data.branchName ?? null,
+      pullRequests: data.pullRequests ?? null,
       startedAt: data.startedAt !== undefined ? data.startedAt : new Date(),
       completedAt: null,
+      status: data.status ?? PhaseStatus.PENDING,
     });
     return this.repo.save(phase);
   }
@@ -69,6 +102,10 @@ export class PhaseRepository {
       status?: PhaseStatus;
       lastMessage?: string | null;
       cliSessionId?: string | null;
+      sequence?: number;
+      feedbackComment?: string | null;
+      branchName?: string | null;
+      pullRequests?: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
     }
   ): Promise<Phase | null> {
     const phase = await this.findById(id);
@@ -80,6 +117,10 @@ export class PhaseRepository {
     if (data.status !== undefined) phase.status = data.status;
     if (data.lastMessage !== undefined) phase.lastMessage = data.lastMessage;
     if (data.cliSessionId !== undefined) phase.cliSessionId = data.cliSessionId;
+    if (data.sequence !== undefined) phase.sequence = data.sequence;
+    if (data.feedbackComment !== undefined) phase.feedbackComment = data.feedbackComment;
+    if (data.branchName !== undefined) phase.branchName = data.branchName;
+    if (data.pullRequests !== undefined) phase.pullRequests = data.pullRequests;
 
     return this.repo.save(phase);
   }

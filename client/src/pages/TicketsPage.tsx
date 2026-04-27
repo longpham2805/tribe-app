@@ -1,5 +1,6 @@
 import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  createFeedback,
   createTicket,
   deleteTicket,
   fetchBoardTickets,
@@ -118,6 +119,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
   const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
   const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
+  const [creatingFeedbackTicket, setCreatingFeedbackTicket] = useState<number | null>(null);
   const [savingTicketContent, setSavingTicketContent] = useState<number | null>(null);
   const [filesByTicket, setFilesByTicket] = useState<Record<number, TicketFile[]>>({});
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
@@ -293,6 +295,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
   const getTicketGroup = useCallback((ticket: Ticket): TicketGroup => {
     if (ticket.waitingForSlot) return "WAITING";
+    if (ticket.phases.some((phase) => !!phase.startedAt && !phase.completedAt)) return "RUNNING";
     const shipPhase = ticket.phases.find((phase) => phase.phaseName === "SHIP");
     if (shipPhase?.status === "COMPLETED") return "DONE";
     return "RUNNING";
@@ -498,6 +501,26 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     [responseDraft, tickets, load],
   );
 
+  const handleCreateFeedback = useCallback(
+    async (ticketId: number, comment: string) => {
+      setCreatingFeedbackTicket(ticketId);
+      setError(null);
+      try {
+        const updated = await createFeedback(ticketId, comment);
+        setTickets((prev) => prev.map((ticket) => (ticket.id === updated.id ? { ...ticket, ...updated } : ticket)));
+        await load();
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to create feedback";
+        setError(message);
+        await load();
+        throw new Error(message);
+      } finally {
+        setCreatingFeedbackTicket(null);
+      }
+    },
+    [load],
+  );
+
   const handleLoadMoreDone = useCallback(async () => {
     if (loadingMoreDone || !doneHasMore) return;
 
@@ -653,6 +676,8 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
         }}
         onRespond={handleRespond}
+        onCreateFeedback={handleCreateFeedback}
+        creatingFeedbackTicket={creatingFeedbackTicket}
         phases={PHASES}
         phaseLabels={PHASE_LABELS}
         phaseColors={PHASE_COLORS}

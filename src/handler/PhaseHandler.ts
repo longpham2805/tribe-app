@@ -217,11 +217,58 @@ export class PhaseHandler {
     });
   }
 
+  private async persistFeedbackArtifacts(ticket: Ticket, phase: Phase, feedbackOutputPath: string): Promise<void> {
+    if (!existsSync(feedbackOutputPath)) {
+      log(`feedback output missing at ${feedbackOutputPath} — skipping artifact persistence`);
+      return;
+    }
+
+    const feedbackContent = readFileSync(feedbackOutputPath, "utf-8");
+    const { branchName, pullRequests } = this.parseShipArtifacts(feedbackContent);
+    const phasePatch: Partial<Phase> = {};
+    if (branchName) phasePatch.branchName = branchName;
+    if (pullRequests.length) phasePatch.pullRequests = pullRequests;
+    if (Object.keys(phasePatch).length) {
+      await this.updatePhase(phase.id, phasePatch);
+    }
+
+    if (!pullRequests.length) return;
+
+    const freshTicket = await this.ticketRepo.findById(ticket.id);
+    const existing = freshTicket?.pullRequests ?? ticket.pullRequests ?? [];
+    const byUrl = new Map<string, PullRequestArtifact>();
+    for (const pr of existing) {
+      byUrl.set(pr.prUrl, pr);
+    }
+    for (const pr of pullRequests) {
+      byUrl.set(pr.prUrl, pr);
+    }
+
+    await this.ticketRepo.update(ticket.id, {
+      pullRequests: [...byUrl.values()],
+    });
+    await this.emitTicket(ticket.id);
+  }
+
   private async finalizeShip(ticket: Ticket, shipOutputPath: string): Promise<void> {
     await this.persistShipArtifacts(ticket, shipOutputPath);
     await this.ticketRepo.update(ticket.id, { isDone: true });
     if (ticket.slotId == null) {
       log(`ticket #${ticket.id} has no slot — skipping release`);
+      return;
+    }
+    const slotRepo = new SlotRepository();
+    const slot = await slotRepo.findById(ticket.slotId);
+    if (slot) {
+      await new SlotService().releaseAndPromoteQueue(slot);
+    }
+  }
+
+  private async finalizeFeedback(ticket: Ticket, phase: Phase, feedbackOutputPath: string): Promise<void> {
+    await this.persistFeedbackArtifacts(ticket, phase, feedbackOutputPath);
+    await this.ticketRepo.update(ticket.id, { isDone: true });
+    if (ticket.slotId == null) {
+      log(`ticket #${ticket.id} has no slot — skipping feedback release`);
       return;
     }
     const slotRepo = new SlotRepository();
@@ -250,11 +297,16 @@ export class PhaseHandler {
     });
     let phaseEntered = false;
 
-    if (ticket.currentPhase !== phaseName) {
-      const activePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
-      if (activePhase) {
-        log(`completing active phase ${activePhase.phaseName} for ticket #${ticketId}`);
-        await this.updatePhase(activePhase.id, { completedAt: new Date() });
+    const currentActivePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
+    const shouldActivatePending =
+      ticket.currentPhase !== phaseName ||
+      !currentActivePhase ||
+      currentActivePhase.phaseName !== phaseName;
+
+    if (shouldActivatePending) {
+      if (currentActivePhase) {
+        log(`completing active phase ${currentActivePhase.phaseName} for ticket #${ticketId}`);
+        await this.updatePhase(currentActivePhase.id, { completedAt: new Date() });
       }
 
       const pending = await this.phaseRepo.findPendingByTicketIdAndName(ticketId, phaseName);
@@ -265,6 +317,7 @@ export class PhaseHandler {
         if (fresh) emit({ type: "phase.updated", ticketId, phase: fresh });
         this.persistPhaseSystemEvent(phaseLogContext, "activate", `Activated ${phaseName}`, {
           phaseId: pending.id,
+          sequence: pending.sequence,
         });
         phaseEntered = true;
       } else {
@@ -276,11 +329,14 @@ export class PhaseHandler {
       this.persistPhaseSystemEvent(phaseLogContext, "current_phase", `Current phase set to ${phaseName}`);
       await this.emitTicket(ticketId);
     } else {
-      log(`ticket #${ticketId} is already in phase ${phaseName}, re-running handler`);
+      log(`ticket #${ticketId} is already in active phase ${phaseName}, re-running handler`);
     }
 
     const updatedTicket = (await this.ticketRepo.findById(ticketId))!;
-    const activePhase = (await this.phaseRepo.findActiveByTicketId(ticketId))!;
+    const activePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
+    if (!activePhase || activePhase.phaseName !== phaseName) {
+      throw new Error(`No active ${phaseName} phase for ticket #${ticketId}`);
+    }
     if (phaseEntered) {
       await runPhaseEnteredHooks(updatedTicket, phaseName);
     }
@@ -316,6 +372,8 @@ export class PhaseHandler {
         return this.handleImplementation(ticket);
       case TicketPhase.SHIP:
         return this.handleShip(ticket);
+      case TicketPhase.FEEDBACK:
+        return this.handleFeedback(ticket);
     }
   }
 
@@ -363,15 +421,20 @@ export class PhaseHandler {
     tmpDir: string,
   ): Promise<void> {
     const shipOutputPath = join(tmpDir, "ship.md");
+    const feedbackOutputPath = join(tmpDir, this.feedbackOutputFile(activePhase));
     const phaseAgent = getAgent(activePhase.phaseName);
-    const prompt = phaseAgent ? phaseAgent.buildFollowupPrompt(message) : `${message}${MARKER_TRAILER}`;
+    const prompt = phaseAgent
+      ? phaseAgent.buildFollowupPrompt(message, { phase: activePhase, ticket })
+      : `${message}${MARKER_TRAILER}`;
     const result = await this.spawnCli(ticket, prompt, slotRoot, activePhase.cliSessionId, {
       ticketId: ticket.id,
       uid: ticket.uid!,
       phaseName: activePhase.phaseName,
     });
 
-    const mdFile = this.phaseOutputFile(activePhase.phaseName);
+    const mdFile = activePhase.phaseName === TicketPhase.FEEDBACK
+      ? this.feedbackOutputFile(activePhase)
+      : this.phaseOutputFile(activePhase.phaseName);
     if (mdFile) {
       const mdPath = join(tmpDir, mdFile);
       const header = `\n\n---\n## Follow-up\n\n`;
@@ -383,15 +446,21 @@ export class PhaseHandler {
     }
 
     await this.applyResultToPhase(activePhase, result);
+    if (activePhase.phaseName === TicketPhase.FEEDBACK) {
+      await this.persistFeedbackArtifacts(ticket, activePhase, feedbackOutputPath);
+    }
     if (result.status === PhaseStatus.COMPLETED) {
       if (activePhase.phaseName === TicketPhase.SHIP) {
         await this.finalizeShip(ticket, shipOutputPath);
+        await this.emitTicket(ticket.id);
+      } else if (activePhase.phaseName === TicketPhase.FEEDBACK) {
+        await this.finalizeFeedback(ticket, activePhase, feedbackOutputPath);
         await this.emitTicket(ticket.id);
       }
       await runPhaseCompletedHooks(ticket, activePhase.phaseName);
     }
 
-    if (result.status === PhaseStatus.COMPLETED) {
+    if (result.status === PhaseStatus.COMPLETED && activePhase.phaseName !== TicketPhase.FEEDBACK) {
       const next = this.nextPhase(activePhase.phaseName);
       if (next) await this.maybeAutoTriggerNext(ticket, activePhase.phaseName, next);
     }
@@ -566,6 +635,55 @@ export class PhaseHandler {
     await this.emitTicket(ticket.id);
   }
 
+  protected async handleFeedback(ticket: Ticket): Promise<void> {
+    log(`handleFeedback → ticket #${ticket.id}`);
+    this.persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.FEEDBACK }, "handler_enter", "Entered feedback handler");
+    const { slotRoot, tmpDir } = await this.resolveWorkspace(ticket);
+
+    if (!existsSync(join(tmpDir, "ticket.md"))) {
+      log(`ticket.md missing — running handleCreated first`);
+      await this.handleCreated(ticket);
+    }
+
+    const activePhase = await this.phaseRepo.findActiveByTicketId(ticket.id);
+    if (!activePhase || activePhase.phaseName !== TicketPhase.FEEDBACK) {
+      throw new Error(`No active FEEDBACK phase for ticket #${ticket.id}`);
+    }
+
+    const ticketContent = readFileSync(join(tmpDir, "ticket.md"), "utf-8");
+    const planningPath = join(tmpDir, "planning.md");
+    const implementationPath = join(tmpDir, "implementation.md");
+    const shipPath = join(tmpDir, "ship.md");
+    const planningContent = existsSync(planningPath) ? readFileSync(planningPath, "utf-8") : "";
+    const implementationContent = existsSync(implementationPath) ? readFileSync(implementationPath, "utf-8") : "";
+    const shipContent = existsSync(shipPath) ? readFileSync(shipPath, "utf-8") : "";
+    const feedbackOutputPath = join(tmpDir, this.feedbackOutputFile(activePhase));
+
+    const agent = getAgent(TicketPhase.FEEDBACK);
+    if (!agent) throw new Error("No agent configured for FEEDBACK");
+    const projectContext = await this.loadProjectAgentContext(ticket);
+    const lastPrUrl = ticket.pullRequests?.length
+      ? ticket.pullRequests[ticket.pullRequests.length - 1]?.prUrl ?? null
+      : null;
+    const baseBranch = ticket.branchName ?? "dev";
+    const suggestedBranchName = this.suggestFeedbackBranchName(ticket, activePhase);
+    const prompt = agent.buildPrompt({
+      ticketContent,
+      projectContext,
+      planningContent,
+      implementationContent,
+      shipContent,
+      feedbackComment: activePhase.feedbackComment ?? "",
+      feedbackSequence: activePhase.sequence,
+      feedbackOutputPath,
+      baseBranch,
+      lastPrUrl,
+      suggestedBranchName,
+    });
+
+    await this.runPhase(ticket, TicketPhase.FEEDBACK, slotRoot, tmpDir, prompt, this.feedbackOutputFile(activePhase));
+  }
+
   // ── Shared phase runner ───────────────────────────────────────────
 
   private async loadProjectAgentContext(ticket: Ticket): Promise<ProjectAgentContext | undefined> {
@@ -601,23 +719,40 @@ export class PhaseHandler {
     await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING });
 
     log(`spawning ${ticket.cliType} for ${phaseName.toLowerCase()} (resume=${activePhase.cliSessionId ?? "none"})`);
-    const result = await this.spawnCli(ticket, prompt, slotRoot, activePhase.cliSessionId, {
+    const rawResult = await this.spawnCli(ticket, prompt, slotRoot, activePhase.cliSessionId, {
       ticketId: ticket.id,
       uid: ticket.uid!,
       phaseName,
     });
+    const result = phaseName === TicketPhase.FEEDBACK && rawResult.status === PhaseStatus.COMPLETED
+      ? {
+          ...rawResult,
+          status: PhaseStatus.REQUIRES_ACTION,
+          message: rawResult.message ?? "Does this resolve your feedback? Reply 'yes' to close, or describe further changes.",
+        }
+      : rawResult;
 
     writeFileSync(join(tmpDir, outputFile), result.output);
     log(`${phaseName.toLowerCase()} output → ${join(tmpDir, outputFile)} (status=${result.status})`);
 
+    if (phaseName === TicketPhase.FEEDBACK) {
+      await this.persistFeedbackArtifacts(ticket, activePhase, join(tmpDir, outputFile));
+    }
+
     await this.applyResultToPhase(activePhase, result);
-    if (result.status === PhaseStatus.COMPLETED && phaseName !== TicketPhase.SHIP) {
+    if (result.status === PhaseStatus.COMPLETED && phaseName === TicketPhase.FEEDBACK) {
+      await this.finalizeFeedback(ticket, activePhase, join(tmpDir, outputFile));
+      await runPhaseCompletedHooks(ticket, phaseName);
+      await this.emitTicket(ticket.id);
+    } else if (result.status === PhaseStatus.COMPLETED && phaseName !== TicketPhase.SHIP) {
       await runPhaseCompletedHooks(ticket, phaseName);
     }
 
     if (result.status === PhaseStatus.COMPLETED) {
-      const next = this.nextPhase(phaseName);
-      if (next) await this.maybeAutoTriggerNext(ticket, phaseName, next);
+      if (phaseName !== TicketPhase.FEEDBACK) {
+        const next = this.nextPhase(phaseName);
+        if (next) await this.maybeAutoTriggerNext(ticket, phaseName, next);
+      }
     } else {
       log(`phase ${phaseName} paused with status=${result.status} — awaiting user`);
     }
@@ -628,6 +763,8 @@ export class PhaseHandler {
     currentPhase: TicketPhase,
     nextPhase: TicketPhase,
   ): Promise<void> {
+    if (currentPhase === TicketPhase.FEEDBACK) return;
+
     const logContext = { ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: currentPhase };
     const appState = await this.appStateRepo.get();
 
@@ -683,6 +820,23 @@ export class PhaseHandler {
       default:
         return null;
     }
+  }
+
+  private feedbackOutputFile(phase: Phase): string {
+    return `feedback-${phase.sequence}.md`;
+  }
+
+  private suggestFeedbackBranchName(ticket: Ticket, phase: Phase): string {
+    return `feedback/${ticket.id}-${phase.sequence}-${this.slugifyBranchSegment(ticket.title)}`;
+  }
+
+  private slugifyBranchSegment(value: string): string {
+    const slug = value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48);
+    return slug || "ticket";
   }
 
   private phaseOutputFile(phaseName: TicketPhase): string | null {
@@ -742,6 +896,14 @@ export class PhaseHandler {
           at: new Date().toISOString(),
           resumeSessionId: resumeSessionId ?? null,
         });
+        if (logContext.phaseName === TicketPhase.FEEDBACK && resumeSessionId) {
+          this.persistPhaseEvent(logContext, {
+            type: "_tribe.prompt",
+            at: new Date().toISOString(),
+            resumeSessionId,
+            text: prompt,
+          });
+        }
       }
 
       const persistEvent = (evt: unknown) => {

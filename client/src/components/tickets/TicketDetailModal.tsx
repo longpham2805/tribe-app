@@ -45,6 +45,8 @@ interface TicketDetailModalProps {
   onCloseFile: () => void;
   onResponseDraftChange: (value: string) => void;
   onRespond: (ticketId: number) => void;
+  onCreateFeedback: (ticketId: number, comment: string) => Promise<void>;
+  creatingFeedbackTicket: number | null;
   projectName: string | null;
   phaseLabels: Record<TicketPhase, string>;
   phaseColors: Record<TicketPhase, string>;
@@ -106,6 +108,8 @@ export function TicketDetailModal({
   onCloseFile,
   onResponseDraftChange,
   onRespond,
+  onCreateFeedback,
+  creatingFeedbackTicket,
   projectName,
   phaseLabels,
   phaseColors,
@@ -119,12 +123,18 @@ export function TicketDetailModal({
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [contentError, setContentError] = useState<string | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackDraft, setFeedbackDraft] = useState("");
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   useEffect(() => {
     setEditingContent(false);
     setDraftTitle(ticket?.title ?? "");
     setDraftDescription(ticket?.description ?? "");
     setContentError(null);
+    setFeedbackOpen(false);
+    setFeedbackDraft("");
+    setFeedbackError(null);
   }, [ticket?.id, ticket?.title, ticket?.description, ticket?.waitingForSlot]);
   const replyPanelRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -147,9 +157,24 @@ export function TicketDetailModal({
   if (!ticket) return null;
 
   const canEditContent = ticket.waitingForSlot;
-  const assignedArtifacts = ticket.branchName || (ticket.pullRequests?.length ?? 0) > 0;
+  const feedbackPhases = ticket.phases
+    .filter((phase) => phase.phaseName === "FEEDBACK")
+    .sort((left, right) => left.sequence - right.sequence || left.id - right.id);
+  const feedbackPrUrls = new Set(
+    feedbackPhases.flatMap((phase) => (phase.pullRequests ?? []).map((pr) => pr.prUrl)),
+  );
+  const shipPullRequests = (ticket.pullRequests ?? []).filter((pr) => !feedbackPrUrls.has(pr.prUrl));
+  const hasActivePhase = ticket.phases.some((phase) => !!phase.startedAt && !phase.completedAt);
+  const hasOpenFeedback = feedbackPhases.some((phase) => !phase.completedAt);
+  const assignedArtifacts = ticket.branchName || shipPullRequests.length > 0;
+  const canRequestFeedback = ((ticket.pullRequests?.length ?? 0) > 0 || ticket.isDone) && !hasActivePhase && !hasOpenFeedback;
+  const feedbackBusy = creatingFeedbackTicket === ticket.id;
 
-  const selectedPhaseRecord = selectedPhase ? ticket.phases.find((phase) => phase.phaseName === selectedPhase) : null;
+  const selectedPhaseRecord = selectedPhase
+    ? ticket.phases
+        .filter((phase) => phase.phaseName === selectedPhase)
+        .sort((left, right) => right.sequence - left.sequence || right.id - left.id)[0] ?? null
+    : null;
   const activePhase = ticket.phases.find((p) => !!p.startedAt && !p.completedAt);
   const liveFeedPhase = activePhase ?? ticket.phases.slice().reverse().find((p) => !!p.completedAt) ?? ticket.phases[0];
   const displayedFeedPhaseName = selectedPhase ?? liveFeedPhase?.phaseName;
@@ -177,11 +202,26 @@ export function TicketDetailModal({
     }
   };
 
+  const handleFeedbackSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const comment = feedbackDraft.trim();
+    if (!comment || feedbackBusy || !canRequestFeedback) return;
+    setFeedbackError(null);
+    try {
+      await onCreateFeedback(ticket.id, comment);
+      setFeedbackDraft("");
+      setFeedbackOpen(false);
+    } catch (error: unknown) {
+      setFeedbackError(error instanceof Error ? error.message : "Failed to create feedback");
+    }
+  };
+
   const fileToPhase = (fileName: string): TicketPhase | null => {
     const base = fileName.replace(/\.md$/, "").toLowerCase();
     if (base === "planning") return "PLANNING";
     if (base === "implementation") return "IMPLEMENTATION";
     if (base === "ship") return "SHIP";
+    if (/^feedback-\d+$/.test(base)) return "FEEDBACK";
     if (base === "ticket") return "CREATED";
     return null;
   };
@@ -443,40 +483,178 @@ export function TicketDetailModal({
         )}
 
         {/* ── Ship artifacts ── */}
-        {assignedArtifacts ? (
+        {(assignedArtifacts || ticket.isDone) ? (
           <div className="td-section">
-            <div className="td-section-label">Ship artifacts</div>
-            <div className="td-artifacts-card">
-              {ticket.branchName ? (
-                <div className="td-artifacts-row">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <line x1="6" y1="3" x2="6" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
-                  <code className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{ticket.branchName}</code>
-                </div>
-              ) : null}
-              {ticket.pullRequests?.map((pr) => {
-                const url = extractPullRequestUrl(pr.prUrl);
-                return (
-                  <div key={`${pr.repo}-${pr.prUrl}`} className="td-artifacts-row">
+            <div className="td-section-header">
+              <div className="td-section-label">Ship artifacts</div>
+              <button
+                className="td-feedback-button"
+                type="button"
+                disabled={!canRequestFeedback || feedbackBusy}
+                onClick={() => {
+                  setFeedbackOpen((prev) => !prev);
+                  setFeedbackError(null);
+                }}
+                title={hasOpenFeedback ? "Finish the open feedback round first" : "Add feedback"}
+              >
+                {feedbackOpen ? "Cancel" : "Add feedback"}
+              </button>
+            </div>
+            {assignedArtifacts ? (
+              <div className="td-artifacts-card">
+                {ticket.branchName ? (
+                  <div className="td-artifacts-row">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="18" cy="18" r="3" />
-                      <circle cx="6" cy="6" r="3" />
-                      <path d="M13 6h3a2 2 0 0 1 2 2v7" />
-                      <line x1="6" y1="9" x2="6" y2="21" />
+                      <line x1="6" y1="3" x2="6" y2="15" />
+                      <circle cx="18" cy="6" r="3" />
+                      <circle cx="6" cy="18" r="3" />
+                      <path d="M18 9a9 9 0 0 1-9 9" />
                     </svg>
-                    <span className="mono" style={{ color: "var(--ink-3)", fontSize: 12 }}>{pr.repo}</span>
-                    {url ? (
-                      <a href={url} target="_blank" rel="noreferrer" style={{ color: "var(--claude-deep)", textDecoration: "none", fontWeight: 500 }}>
-                        {getPullRequestLinkLabel(url)}
-                      </a>
-                    ) : (
-                      <span>{pr.prUrl}</span>
-                    )}
-                    <code className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginLeft: "auto" }}>{pr.commitSha}</code>
+                    <code className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{ticket.branchName}</code>
+                  </div>
+                ) : null}
+                {shipPullRequests.map((pr) => {
+                  const url = extractPullRequestUrl(pr.prUrl);
+                  return (
+                    <div key={`${pr.repo}-${pr.prUrl}`} className="td-artifacts-row">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="18" cy="18" r="3" />
+                        <circle cx="6" cy="6" r="3" />
+                        <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                        <line x1="6" y1="9" x2="6" y2="21" />
+                      </svg>
+                      <span className="mono" style={{ color: "var(--ink-3)", fontSize: 12 }}>{pr.repo}</span>
+                      {url ? (
+                        <a href={url} target="_blank" rel="noreferrer" style={{ color: "var(--claude-deep)", textDecoration: "none", fontWeight: 500 }}>
+                          {getPullRequestLinkLabel(url)}
+                        </a>
+                      ) : (
+                        <span>{pr.prUrl}</span>
+                      )}
+                      <code className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginLeft: "auto" }}>{pr.commitSha}</code>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+            {feedbackOpen ? (
+              <form className="td-feedback-form" onSubmit={handleFeedbackSubmit}>
+                <textarea
+                  className="input textarea"
+                  rows={3}
+                  placeholder="Describe the follow-up change…"
+                  value={feedbackDraft}
+                  onChange={(event) => setFeedbackDraft(event.target.value)}
+                />
+                {feedbackError ? <div className="ticket-edit-error">{feedbackError}</div> : null}
+                <div className="td-feedback-form__actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={feedbackBusy}
+                    onClick={() => {
+                      setFeedbackOpen(false);
+                      setFeedbackDraft("");
+                      setFeedbackError(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    type="submit"
+                    disabled={feedbackBusy || !feedbackDraft.trim() || !canRequestFeedback}
+                  >
+                    {feedbackBusy ? "Submitting…" : "Submit"}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* ── Feedback rounds ── */}
+        {feedbackPhases.length > 0 ? (
+          <div className="td-section">
+            <div className="td-section-label">Feedback</div>
+            <div className="td-feedback-list">
+              {feedbackPhases.map((phase) => {
+                const isActivePausedFeedback = paused?.id === phase.id;
+                const color = statusColors[phase.status] ?? phaseColors.FEEDBACK;
+                return (
+                  <div key={phase.id} className="td-feedback-card">
+                    <div className="td-feedback-card__head">
+                      <span className="td-feedback-card__title">Round {phase.sequence}</span>
+                      <Tag color={color} dot>{statusLabels[phase.status]}</Tag>
+                    </div>
+                    {phase.feedbackComment ? (
+                      <div className="td-feedback-card__comment serif">{phase.feedbackComment}</div>
+                    ) : null}
+                    {phase.branchName ? (
+                      <div className="td-artifacts-row">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <line x1="6" y1="3" x2="6" y2="15" />
+                          <circle cx="18" cy="6" r="3" />
+                          <circle cx="6" cy="18" r="3" />
+                          <path d="M18 9a9 9 0 0 1-9 9" />
+                        </svg>
+                        <code className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{phase.branchName}</code>
+                      </div>
+                    ) : null}
+                    {phase.pullRequests?.map((pr) => {
+                      const url = extractPullRequestUrl(pr.prUrl);
+                      return (
+                        <div key={`${phase.id}-${pr.repo}-${pr.prUrl}`} className="td-artifacts-row">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="18" cy="18" r="3" />
+                            <circle cx="6" cy="6" r="3" />
+                            <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                            <line x1="6" y1="9" x2="6" y2="21" />
+                          </svg>
+                          <span className="mono" style={{ color: "var(--ink-3)", fontSize: 12 }}>{pr.repo}</span>
+                          {url ? (
+                            <a href={url} target="_blank" rel="noreferrer" style={{ color: "var(--claude-deep)", textDecoration: "none", fontWeight: 500 }}>
+                              {getPullRequestLinkLabel(url)}
+                            </a>
+                          ) : (
+                            <span>{pr.prUrl}</span>
+                          )}
+                          <code className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginLeft: "auto" }}>{pr.commitSha}</code>
+                        </div>
+                      );
+                    })}
+                    {isActivePausedFeedback ? (
+                      <div ref={replyPanelRef} className="td-feedback-reply">
+                        {phase.lastMessage ? (
+                          <div className="serif td-paused-panel__message">{phase.lastMessage}</div>
+                        ) : null}
+                        <textarea
+                          ref={replyTextareaRef}
+                          className="input textarea td-paused-panel__textarea"
+                          rows={3}
+                          placeholder="Reply to the feedback agent…"
+                          value={responseDraft}
+                          onChange={(event) => onResponseDraftChange(event.target.value)}
+                        />
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => onResponseDraftChange("")}
+                          >
+                            Discard
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            type="button"
+                            disabled={isReplyBusy || !responseDraft.trim()}
+                            onClick={() => onRespond(ticket.id)}
+                          >
+                            {isReplyBusy ? "Sending…" : "Send reply"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -502,7 +680,7 @@ export function TicketDetailModal({
         ) : null}
 
         {/* ── Paused / reply panel ── */}
-        {paused ? (
+        {paused && paused.phaseName !== "FEEDBACK" ? (
           <div
             ref={replyPanelRef}
             className={`td-paused-panel${hasActivityDock ? " td-paused-panel--sticky" : ""}`}

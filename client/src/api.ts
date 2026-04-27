@@ -96,6 +96,19 @@ export async function respondPhase(ticketId: number, message: string): Promise<v
   }
 }
 
+export async function createFeedback(ticketId: number, comment: string): Promise<Ticket> {
+  const res = await fetch(`${BASE}/tickets/${ticketId}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ comment }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to create feedback");
+  }
+  return res.json();
+}
+
 // ── App state ─────────────────────────────────────────────────────
 
 export async function fetchAppState(): Promise<AppState> {

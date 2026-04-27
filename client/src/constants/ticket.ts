@@ -7,6 +7,7 @@ export const PHASE_LABELS: Record<TicketPhase, string> = {
   PLANNING: "Planning",
   IMPLEMENTATION: "Implementation",
   SHIP: "Ship",
+  FEEDBACK: "Feedback",
 };
 
 export const PHASE_COLORS: Record<TicketPhase, string> = {
@@ -14,6 +15,7 @@ export const PHASE_COLORS: Record<TicketPhase, string> = {
   PLANNING: "#5C7B8A",
   IMPLEMENTATION: "#B07634",
   SHIP: "#6F8E5E",
+  FEEDBACK: "#8A5C73",
 };
 
 export const PAUSED_STATUSES: PhaseStatus[] = ["REQUIRES_ACTION", "QUESTION", "ERROR"];

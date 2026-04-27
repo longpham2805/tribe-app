@@ -5,6 +5,7 @@ import { TicketPhase } from "../enum/TicketPhase";
 import { CliType } from "../enum/CliType";
 import { TicketStatus } from "../enum/TicketStatus";
 import { PhaseHandler } from "../handler/PhaseHandler";
+import { FeedbackService } from "../service/FeedbackService";
 import { pickCliForNewTicket } from "../cli";
 import { AppStateRepository } from "../repository/AppStateRepository";
 import { emit } from "../lib/events";
@@ -353,6 +354,41 @@ router.post("/:ticketId/trigger-phase", async (req: Request, res: Response) => {
     if (msg.includes("not found")) status = 404;
     else if (msg.includes("currently unavailable") || msg.includes("No CLI") || msg.includes("is draft")) status = 409;
     res.status(status).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/feedback  { comment }
+router.post("/:id/feedback", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid ticket ID" });
+      return;
+    }
+
+    const { comment } = req.body;
+    if (!comment || typeof comment !== "string" || !comment.trim()) {
+      res.status(400).json({ error: "comment is required" });
+      return;
+    }
+
+    const ticket = await new FeedbackService().create(id, comment);
+    res.status(201).json(ticket);
+  } catch (err: any) {
+    const msg = err.message ?? "";
+    let status = 500;
+    if (msg.includes("not found")) status = 404;
+    else if (
+      msg.includes("draft") ||
+      msg.includes("no shipped PR") ||
+      msg.includes("already has an active phase") ||
+      msg.includes("already has pending feedback") ||
+      msg.includes("currently unavailable") ||
+      msg.includes("No CLI")
+    ) {
+      status = 409;
+    }
+    res.status(status).json({ error: msg });
   }
 });
 

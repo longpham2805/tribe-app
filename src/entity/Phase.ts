@@ -26,6 +26,18 @@ export class Phase {
   @Column({ type: "enum", enum: TicketPhase })
   phaseName!: TicketPhase;
 
+  @Column({ type: "int", default: 0 })
+  sequence!: number;
+
+  @Column({ type: "text", nullable: true })
+  feedbackComment!: string | null;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  branchName!: string | null;
+
+  @Column({ type: "json", nullable: true })
+  pullRequests!: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
+
   @Column({ type: "datetime", nullable: true })
   startedAt!: Date | null;
 

@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { TicketPhase } from "../enum/TicketPhase";
+import type { Phase } from "../entity/Phase";
+import type { Ticket } from "../entity/Ticket";
 
 const log = (msg: string) => console.log(`[BaseAgent] ${msg}`);
 
@@ -37,8 +39,20 @@ export interface PromptContext {
   brainstormContent?: string;
   planningContent?: string;
   implementationContent?: string;
+  shipContent?: string;
+  feedbackComment?: string;
+  feedbackSequence?: number;
+  feedbackOutputPath?: string;
+  baseBranch?: string | null;
+  lastPrUrl?: string | null;
+  suggestedBranchName?: string | null;
   checklistOutputPath?: string;
   shipOutputPath?: string;
+}
+
+export interface FollowupPromptContext {
+  phase?: Phase;
+  ticket?: Ticket;
 }
 
 export abstract class BaseAgent {
@@ -65,7 +79,7 @@ export abstract class BaseAgent {
     return `${sections.filter(Boolean).join("\n\n")}${MARKER_TRAILER}`;
   }
 
-  buildFollowupPrompt(message: string): string {
+  buildFollowupPrompt(message: string, _ctx?: FollowupPromptContext): string {
     return `${message}${MARKER_TRAILER}`;
   }
 

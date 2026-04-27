@@ -20,6 +20,7 @@ function fileToPhase(fileName: string): TicketPhase | null {
   if (base === "planning") return "PLANNING";
   if (base === "implementation") return "IMPLEMENTATION";
   if (base === "ship") return "SHIP";
+  if (/^feedback-\d+$/.test(base)) return "FEEDBACK";
   if (base === "ticket") return "CREATED";
   return null;
 }
@@ -29,6 +30,7 @@ const PHASE_LABELS: Record<TicketPhase, string> = {
   PLANNING: "Planning",
   IMPLEMENTATION: "Implementation",
   SHIP: "Ship",
+  FEEDBACK: "Feedback",
 };
 
 function formatActivityTime(timestamp?: string): string {

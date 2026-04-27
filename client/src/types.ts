@@ -1,4 +1,4 @@
-export type TicketPhase = "CREATED" | "PLANNING" | "IMPLEMENTATION" | "SHIP";
+export type TicketPhase = "CREATED" | "PLANNING" | "IMPLEMENTATION" | "SHIP" | "FEEDBACK";
 
 export type CliType = "CLAUDE" | "CODEX";
 
@@ -22,6 +22,10 @@ export interface Phase {
   id: number;
   ticketId?: number;
   phaseName: TicketPhase;
+  sequence: number;
+  feedbackComment: string | null;
+  branchName: string | null;
+  pullRequests: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
   startedAt: string | null;
   completedAt: string | null;
   status: PhaseStatus;
@@ -73,6 +77,7 @@ export interface Ticket {
   pullRequests: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
   slotId: number | null;
   waitingForSlot: boolean;
+  isDone: boolean;
   projectId: number | null;
   createdAt: string;
   updatedAt: string;

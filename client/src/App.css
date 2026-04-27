@@ -3557,6 +3557,40 @@
   margin-bottom: 10px;
 }
 
+.td-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.td-section-header .td-section-label {
+  margin-bottom: 0;
+}
+
+.td-feedback-button {
+  padding: 5px 9px;
+  background: var(--cream);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 6px;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.td-feedback-button:hover:not(:disabled) {
+  border-color: var(--claude);
+  color: var(--claude-deep);
+}
+
+.td-feedback-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Lifecycle grid ── */
 .td-lifecycle {
   display: grid;
@@ -3707,6 +3741,72 @@
   gap: 8px;
   font-size: 13px;
   color: var(--ink-2);
+}
+
+.td-feedback-form {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+
+.td-feedback-form textarea {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.td-feedback-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.td-feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.td-feedback-card {
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+
+.td-feedback-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.td-feedback-card__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-1);
+}
+
+.td-feedback-card__comment {
+  padding: 9px 10px;
+  margin-bottom: 10px;
+  background: var(--cream);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  color: var(--ink-1);
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.td-feedback-reply {
+  margin-top: 12px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--status-warn) 9%, var(--cream));
+  border: 1px solid color-mix(in srgb, var(--status-warn) 35%, transparent);
+  border-radius: 10px;
 }
 
 

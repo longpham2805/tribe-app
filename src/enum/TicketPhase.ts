@@ -3,4 +3,5 @@ export enum TicketPhase {
   PLANNING = "PLANNING",
   IMPLEMENTATION = "IMPLEMENTATION",
   SHIP = "SHIP",
+  FEEDBACK = "FEEDBACK",
 }
