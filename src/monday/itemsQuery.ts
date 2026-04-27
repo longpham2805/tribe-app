@@ -235,6 +235,7 @@ export async function fetchItems(
       items {
         id
         name
+        updated_at
         group {
           id
           title

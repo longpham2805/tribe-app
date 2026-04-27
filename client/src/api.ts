@@ -6,6 +6,7 @@ import type {
   Slot,
   TicketFile,
   MondayNotStartedItem,
+  MondayItemPreview,
   Project,
   AppState,
 } from "./types";
@@ -199,10 +200,32 @@ export async function fetchMondayNotStarted(projectId?: number): Promise<MondayN
   return body.items ?? [];
 }
 
+export async function fetchMondayItemPreview(itemId: string, projectId?: number | null): Promise<MondayItemPreview> {
+  const encodedId = encodeURIComponent(itemId);
+  const query = projectId != null ? `?projectId=${encodeURIComponent(String(projectId))}` : "";
+  const urls = [
+    `${BASE}/monday/items/${encodedId}/preview${query}`,
+    `${BASE}/monday/items/${encodedId}${query}`,
+  ];
+
+  let lastError = "Failed to fetch item details";
+  for (const url of urls) {
+    const res = await fetch(url);
+    if (res.ok) return res.json();
+    const body = await res.json().catch(() => ({}));
+    lastError = body.error ?? lastError;
+    if (res.status !== 404) break;
+  }
+
+  throw new Error(lastError);
+}
+
 export async function importMondayItem(
   mondayItemId: string,
   clues?: string,
   projectId?: number | null,
+  cliType?: CliType,
+  titleOverride?: string,
 ): Promise<Ticket> {
   const res = await fetch(`${BASE}/monday/import`, {
     method: "POST",
@@ -211,6 +234,8 @@ export async function importMondayItem(
       mondayItemId,
       ...(clues?.trim() ? { clues } : {}),
       ...(projectId != null ? { projectId } : {}),
+      ...(cliType ? { cliType } : {}),
+      ...(titleOverride?.trim() ? { titleOverride } : {}),
     }),
   });
   if (!res.ok) {

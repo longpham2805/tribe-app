@@ -5,6 +5,7 @@ export type ColumnValue = { id: string; text: string | null };
 export type MondayItem = {
   id: string;
   name: string;
+  updated_at?: string;
   column_values: ColumnValue[];
   subitems: MondayItem[];
   group?: {

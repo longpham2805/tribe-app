@@ -109,6 +109,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [totalCount, setTotalCount] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [showMondayPicker, setShowMondayPicker] = useState(false);
+  const [mondayPickerStep, setMondayPickerStep] = useState<"browse" | "configure">("browse");
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newCliType, setNewCliType] = useState<CliType | "">("");
@@ -544,8 +545,25 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         style={layoutStyle}
       >
         {canImportFromMonday && (
-          <Modal open={showMondayPicker} onClose={() => setShowMondayPicker(false)} title="Import from Monday" width={600}>
-            <MondayPicker onImported={load} projectId={projectId} />
+          <Modal
+            open={showMondayPicker}
+            onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
+            title="Import from Monday"
+            width={720}
+            noHeader
+            panelClassName={`monday-import-modal monday-import-modal--${mondayPickerStep}`}
+            bodyClassName="monday-import-modal__body"
+          >
+            <MondayPicker
+              onImported={load}
+              onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
+              projectId={projectId}
+              projects={projects}
+              availableCliTypes={availableCliTypes}
+              projectName={projects.find((p) => p.id === selectedProjectId)?.name}
+              step={mondayPickerStep}
+              onStepChange={setMondayPickerStep}
+            />
           </Modal>
         )}
 
@@ -565,7 +583,8 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           </div>
           <div className="page-heading__actions">
             {canImportFromMonday && (
-              <button className="btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
+              <button className="btn monday-import__trigger-btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
+                <span className="monday-import__dots" aria-hidden="true"><span /><span /><span /></span>
                 Import from Monday
               </button>
             )}
