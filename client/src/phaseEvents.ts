@@ -34,6 +34,14 @@ export interface ActivityMarkdownEntry {
   id: string;
   content: string;
   fullEventContent?: string;
+  toolResults?: ActivityToolResultDisclosure[];
+}
+
+export interface ActivityToolResultDisclosure {
+  id: string;
+  label: string;
+  content: string;
+  isError: boolean;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -256,9 +264,8 @@ function summarizeUserBlocks(blocks: MessageContentBlock[]): string | undefined 
     }
     if (type === "tool_result") {
       const id = asString(block.tool_use_id);
-      const content = blockContentToMarkdown(block.content);
       const label = id ? `Tool result ${id}` : "Tool result";
-      summaries.push(content ? `${label}: ${normalizeWhitespace(content)}` : label);
+      summaries.push(block.is_error ? `${label}: error` : label);
       continue;
     }
     if (type) summaries.push(toTitleCase(type));
@@ -266,9 +273,10 @@ function summarizeUserBlocks(blocks: MessageContentBlock[]): string | undefined 
   return summaries.length > 0 ? summaries.join(" | ") : undefined;
 }
 
-function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEntry, "content" | "fullEventContent"> {
+function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEntry, "content" | "fullEventContent" | "toolResults"> {
   const blocks = collectMessageBlocks(event);
   const parts: string[] = [];
+  const toolResults: ActivityToolResultDisclosure[] = [];
 
   for (const block of blocks) {
     const type = asString(block.type);
@@ -282,7 +290,16 @@ function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEnt
       const id = asString(block.tool_use_id);
       const label = id ? `Tool result \`${safeInlineCode(id)}\`` : "Tool result";
       const content = blockContentToMarkdown(block.content);
-      parts.push(`**${label}:**${block.is_error ? " _error_" : ""}${content ? `\n\n${content}` : ""}`);
+      const isError = block.is_error === true;
+      parts.push(`**${label}:**${isError ? " _error_" : ""}`);
+      if (content) {
+        toolResults.push({
+          id: id ?? `tool-result-${toolResults.length + 1}`,
+          label,
+          content,
+          isError,
+        });
+      }
       continue;
     }
 
@@ -292,7 +309,7 @@ function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEnt
   }
 
   const summary = parts.length > 0 ? parts.join("\n\n") : "**User event**";
-  return { content: summary, fullEventContent: fencedJson(event) };
+  return { content: summary, fullEventContent: fencedJson(event), toolResults };
 }
 
 function formatUserMarkdown(event: UnknownRecord): string {
@@ -557,10 +574,12 @@ export function getActivityMarkdownEntries(
     const userEntry = isRecord(event) && asString(event.type) === "user" ? formatUserMarkdownEntry(event) : undefined;
     const content = (userEntry?.content ?? extractEventText(event)).trim();
     const fullEventContent = userEntry?.fullEventContent;
+    const toolResults = userEntry?.toolResults;
     if (!content) continue;
-    const nextBytes = totalBytes + content.length + (fullEventContent?.length ?? 0);
+    const toolResultBytes = toolResults?.reduce((total, result) => total + result.content.length, 0) ?? 0;
+    const nextBytes = totalBytes + content.length + toolResultBytes + (fullEventContent?.length ?? 0);
     if (entries.length > 0 && nextBytes > maxBytes) break;
-    entries.push({ id: `${normalizeActivityEvent(event, index).id}:${index}`, content, fullEventContent });
+    entries.push({ id: `${normalizeActivityEvent(event, index).id}:${index}`, content, fullEventContent, toolResults });
     totalBytes = nextBytes;
   }
   return entries.reverse();
