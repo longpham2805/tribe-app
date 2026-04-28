@@ -1,8 +1,18 @@
+import type { Project } from "../types";
+
 type StoredProjectSelection =
   | { kind: "missing" }
   | { kind: "legacy-all" }
   | { kind: "id"; id: number }
   | { kind: "invalid" };
+
+export type ProjectShortcutTarget = {
+  key: string;
+  projectId: number | null;
+  label: string;
+};
+
+const MAX_PROJECT_SHORTCUTS = 9;
 
 const PROJECT_SELECTION_STORAGE_KEY = "tribe.selectedProjectId";
 const LEGACY_ALL_PROJECTS_STORAGE_VALUE = "all";
@@ -38,4 +48,18 @@ export const clearStoredProjectSelection = () => {
   } catch {
     // non-fatal
   }
+};
+
+export const getProjectShortcutTargets = (projects: Project[]): ProjectShortcutTarget[] => {
+  const projectTargets = projects.slice(0, MAX_PROJECT_SHORTCUTS - 1).map((project, index) => ({
+    key: String(index + 2),
+    projectId: project.id,
+    label: project.name,
+  }));
+
+  return [{ key: "1", projectId: null, label: "All projects" }, ...projectTargets];
+};
+
+export const getProjectShortcutTargetByKey = (projects: Project[], key: string): ProjectShortcutTarget | null => {
+  return getProjectShortcutTargets(projects).find((target) => target.key === key) ?? null;
 };

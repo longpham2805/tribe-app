@@ -1,4 +1,5 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
+import { getProjectShortcutTargets } from "../../utils/projectSelection";
 import type { Project } from "../../types";
 
 interface ProjectPaneProps {
@@ -18,6 +19,8 @@ export const ProjectPane = memo(function ProjectPane({
   onSelectProject,
 }: ProjectPaneProps) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
+  const shortcutTargets = useMemo(() => getProjectShortcutTargets(projects), [projects]);
+  const allProjectsShortcut = shortcutTargets[0]?.key;
 
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-w", collapsed ? "56px" : "220px");
@@ -97,6 +100,7 @@ export const ProjectPane = memo(function ProjectPane({
         >
           <span className="project-row__icon project-row__icon--all">•</span>
           <span className="project-row__name">All projects</span>
+          {allProjectsShortcut && <kbd className="cmd-item-shortcut">⌘{allProjectsShortcut}</kbd>}
           {totalRunning > 0 && (
             <span className="project-row__running">
               <span className="project-row__running-dot" />
@@ -105,9 +109,10 @@ export const ProjectPane = memo(function ProjectPane({
           )}
         </button>
 
-        {projects.map((p) => {
+        {projects.map((p, index) => {
           const count = p.runningTicketCount ?? 0;
           const active = selectedProjectId === p.id;
+          const shortcutKey = shortcutTargets[index + 1]?.key;
           return (
             <button
               key={p.id}
@@ -119,6 +124,7 @@ export const ProjectPane = memo(function ProjectPane({
                 {getInitial(p.name)}
               </span>
               <span className={`project-row__name${active ? " project-row__name--active" : ""}`}>{p.name}</span>
+              {shortcutKey && <kbd className="cmd-item-shortcut">⌘{shortcutKey}</kbd>}
               {count > 0 && (
                 <span className="project-row__running">
                   <span className="project-row__running-dot" />
