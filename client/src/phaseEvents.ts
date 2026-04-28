@@ -567,6 +567,10 @@ export function selectRecentActivityEvents(
   return { events: [...historicalEvents.slice(-remainingHistory), ...liveWindow], totalCount };
 }
 
+function shouldHideActivityItem(item: ActivityItem): boolean {
+  return item.kind === "system" && (item.title === "System event" || item.title === "User event");
+}
+
 export function getActivityMarkdownEntries(
   events: unknown[],
   maxBytes = ACTIVITY_RENDER_BYTE_LIMIT,
@@ -577,6 +581,7 @@ export function getActivityMarkdownEntries(
     const event = events[index];
     const userEntry = isRecord(event) && asString(event.type) === "user" ? formatUserMarkdownEntry(event) : undefined;
     const activityItem = normalizeActivityEvent(event, index);
+    if (shouldHideActivityItem(activityItem)) continue;
     const content = (userEntry?.content ?? extractEventText(event)).trim();
     const fullEventContent = userEntry?.fullEventContent;
     const toolResults = userEntry?.toolResults;
