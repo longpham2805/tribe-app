@@ -28,6 +28,7 @@ import { SlotRepository } from "../repository/SlotRepository";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { AppStateRepository } from "../repository/AppStateRepository";
 import { attachWebSocket } from "../ws/server";
+import { TicketActivationService } from "../service/TicketActivationService";
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as [string, ...string[]];
@@ -108,11 +109,7 @@ function createServer(): McpServer {
       }
 
       const ticket = await ticketRepo.create({ title, description, status: ticketStatus, cliType });
-      if (ticketStatus === TicketStatus.READY) {
-        new PhaseHandler().initCreated(ticket).catch((err) => {
-          console.error(`initCreated error for ticket #${ticket.id}: ${err?.message ?? err}`);
-        });
-      }
+      new TicketActivationService().activateCreatedIfReady(ticket, "mcp-ticket-create");
       const full = await ticketRepo.findById(ticket.id);
       return {
         content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
@@ -465,6 +462,10 @@ function createServer(): McpServer {
 
           // Re-fetch with relations
           ticket = await ticketRepo.findById(ticket.id);
+        }
+
+        if (!existing) {
+          new TicketActivationService().activateCreatedIfReady(ticket, "mcp-monday-import");
         }
 
         return {

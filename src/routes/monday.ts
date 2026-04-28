@@ -8,6 +8,7 @@ import { DEFAULT_MONDAY_API_URL, type MondayItemDetail } from "../monday/types";
 import { runTicketImportedHooks } from "../hooks/registry";
 import { TicketStatus } from "../enum/TicketStatus";
 import { CliType } from "../enum/CliType";
+import { TicketActivationService } from "../service/TicketActivationService";
 
 const router = Router();
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
@@ -442,6 +443,10 @@ router.post("/import", async (req: Request, res: Response) => {
 
     if (ticket && ticket.status === TicketStatus.READY) {
       await runTicketImportedHooks(ticket, item);
+    }
+
+    if (action === "created") {
+      new TicketActivationService().activateCreatedIfReady(ticket, "monday-import");
     }
 
     res.status(action === "created" ? 201 : 200).json({
