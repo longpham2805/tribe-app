@@ -11,7 +11,7 @@ import {
   updateTicket,
   uploadTicketImage,
 } from "../api";
-import { ImageDropZone } from "../components/tickets/ImageDropZone";
+import { CreateTicketModal } from "../components/tickets/CreateTicketModal";
 import { MondayPicker } from "../components/tickets/MondayPicker";
 import { TicketDetailModal } from "../components/tickets/TicketDetailModal";
 import { TicketSummaryCard } from "../components/tickets/TicketSummaryCard";
@@ -28,7 +28,7 @@ import {
   TICKET_GROUPS,
   type TicketGroup,
 } from "../constants/ticket";
-import type { CliType, Phase, Slot, Ticket, TicketFile, TicketPhase, WsMessage } from "../types";
+import type { Phase, Slot, Ticket, TicketFile, TicketPhase, WsMessage } from "../types";
 import { useAppContext, type PaletteAction } from "../context/AppContext";
 import { useWebSocket } from "../ws";
 
@@ -111,11 +111,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [showForm, setShowForm] = useState(false);
   const [showMondayPicker, setShowMondayPicker] = useState(false);
   const [mondayPickerStep, setMondayPickerStep] = useState<"browse" | "configure">("browse");
-  const [newTitle, setNewTitle] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-  const [newCliType, setNewCliType] = useState<CliType | "">("");
   const [creating, setCreating] = useState(false);
-  const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
   const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
   const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
@@ -128,7 +124,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
   const [selectedPhaseAutoOpenKeyByTicket, setSelectedPhaseAutoOpenKeyByTicket] = useState<Record<number, string>>({});
 
-  const newTicketTitleRef = useRef<HTMLInputElement>(null);
   const ticketFileRefreshTimers = useRef<Record<number, number>>({});
   const fetchAndStoreTicketFiles = useCallback(
     async (ticketId: number) => {
@@ -343,12 +338,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   );
 
   useEffect(() => {
-    if (newCliType && !availableCliTypes.includes(newCliType)) {
-      setNewCliType("");
-    }
-  }, [availableCliTypes, newCliType]);
-
-  useEffect(() => {
     if (selectedTicketId == null) return;
     if (tickets.some((ticket) => ticket.id === selectedTicketId)) return;
     setSelectedTicketId(null);
@@ -365,7 +354,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     if (shortcutIntent.type === "new-ticket") {
       setShowForm(true);
       clearShortcutIntent();
-      requestAnimationFrame(() => newTicketTitleRef.current?.focus());
     } else if (shortcutIntent.type === "open-ticket") {
       openTicket(shortcutIntent.ticketId);
       clearShortcutIntent();
@@ -376,41 +364,36 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   }, [shortcutIntent, clearShortcutIntent, openTicket, canImportFromMonday]);
 
   const handleCreate = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!newTitle.trim()) return;
+    async ({ title, description, cliType }: { title: string; description: string; cliType: "" | "CLAUDE" | "CODEX" }, files: File[]) => {
+      if (!title.trim()) return;
       setCreating(true);
       try {
         const ticket = await createTicket({
-          title: newTitle.trim(),
-          description: newDesc.trim() || undefined,
+          title: title.trim(),
+          description: description.trim() || undefined,
           projectId,
-          cliType: newCliType || undefined,
+          cliType: cliType || undefined,
         });
         const imageErrors: string[] = [];
-        for (const file of pendingImages) {
+        for (const file of files) {
           try {
             await uploadTicketImage(ticket.id, file);
           } catch {
             imageErrors.push(file.name);
           }
         }
-        setNewTitle("");
-        setNewDesc("");
-        setNewCliType("");
-        setPendingImages([]);
         setShowForm(false);
         await load();
         if (imageErrors.length > 0) {
           setError(`Ticket #${ticket.id} created. Failed to upload: ${imageErrors.join(", ")}. Retry via the ticket detail.`);
         }
-      } catch (e: any) {
-        setError(e.message);
+      } catch (error: any) {
+        setError(error.message);
       } finally {
         setCreating(false);
       }
     },
-    [newTitle, newDesc, newCliType, pendingImages, projectId, load],
+    [projectId, load],
   );
 
   const handleTriggerPhase = useCallback(
@@ -548,18 +531,21 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
 
   const closeForm = useCallback(() => {
     setShowForm(false);
-    setNewTitle("");
-    setNewDesc("");
-    setNewCliType("");
-    setPendingImages([]);
   }, []);
 
-  useEffect(() => {
-    if (!showForm) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeForm(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showForm, closeForm]);
+  const handleResponseDraftChange = useCallback((value: string) => {
+    if (!selectedTicket) return;
+    setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
+  }, [selectedTicket]);
+
+  const handleCloseMondayPicker = useCallback(() => {
+    setShowMondayPicker(false);
+    setMondayPickerStep("browse");
+  }, []);
+
+  const handleOpenMondayPicker = useCallback(() => {
+    setShowMondayPicker(true);
+  }, []);
 
   return (
     <>
@@ -583,7 +569,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           </div>
           <div className="page-heading__actions">
             {canImportFromMonday && (
-              <button className="btn monday-import__trigger-btn" onClick={() => setShowMondayPicker((prev) => !prev)}>
+              <button className="btn monday-import__trigger-btn" onClick={handleOpenMondayPicker}>
                 <span className="monday-import__dots" aria-hidden="true"><span /><span /><span /></span>
                 Import from Monday
               </button>
@@ -648,10 +634,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         onSelectPhase={handleSelectPhase}
         onOpenFile={(fileName) => setViewer({ fileName })}
         onCloseFile={() => setViewer(null)}
-        onResponseDraftChange={(value) => {
-          if (!selectedTicket) return;
-          setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
-        }}
+        onResponseDraftChange={handleResponseDraftChange}
         onRespond={handleRespond}
         onCreateFeedback={handleCreateFeedback}
         creatingFeedbackTicket={creatingFeedbackTicket}
@@ -666,7 +649,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       {canImportFromMonday && (
         <Modal
           open={showMondayPicker}
-          onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
+          onClose={handleCloseMondayPicker}
           title="Import from Monday"
           width={720}
           noHeader
@@ -675,7 +658,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         >
           <MondayPicker
             onImported={load}
-            onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
+            onClose={handleCloseMondayPicker}
             projectId={projectId}
             projects={projects}
             availableCliTypes={availableCliTypes}
@@ -686,104 +669,15 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         </Modal>
       )}
 
-      {/* New Ticket Modal */}
-      {showForm && (
-        <div
-          className="ntm-backdrop"
-          onClick={closeForm}
-        >
-          <div className="ntm-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="ntm-panel__header">
-              <h2 className="serif ntm-panel__title">New ticket</h2>
-              <p className="ntm-panel__sub">Tribe will route it through Created → Planning → Implementation → Ship.</p>
-            </div>
-            <form className="ntm-panel__form" onSubmit={handleCreate}>
-              <label className="ntm-field">
-                <span className="ntm-field__label">Title</span>
-                <input
-                  ref={newTicketTitleRef}
-                  className="input"
-                  placeholder="Short, action-oriented title…"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </label>
-              <label className="ntm-field">
-                <span className="ntm-field__label">Description</span>
-                <textarea
-                  className="input textarea"
-                  placeholder="What's the problem? What does done look like?"
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  rows={4}
-                />
-              </label>
-              <ImageDropZone files={pendingImages} onChange={setPendingImages} disabled={creating} />
-              <div className="ntm-grid-2">
-                <label className="ntm-field">
-                  <span className="ntm-field__label">Project</span>
-                  <select
-                    className="input"
-                    value={projectId ?? ""}
-                    disabled
-                  >
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                    {projectId == null && <option value="">All projects</option>}
-                  </select>
-                </label>
-                <label className="ntm-field">
-                  <span className="ntm-field__label">Agent</span>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {([
-                      { k: "" as CliType | "", label: "Auto" },
-                      { k: "CLAUDE" as CliType | "", label: "Claude" },
-                      { k: "CODEX" as CliType | "", label: "Codex" },
-                    ] as const).map((opt) => (
-                      <button
-                        key={opt.k}
-                        type="button"
-                        disabled={opt.k !== "" && !availableCliTypes.includes(opt.k as CliType)}
-                        onClick={() => setNewCliType(opt.k as CliType | "")}
-                        style={{
-                          flex: 1, padding: "10px 8px", borderRadius: 8,
-                          background: newCliType === opt.k ? "var(--ink)" : "transparent",
-                          color: newCliType === opt.k ? "var(--cream)" : "var(--ink-2)",
-                          border: "1px solid",
-                          borderColor: newCliType === opt.k ? "var(--ink)" : "var(--hairline-strong)",
-                          cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500,
-                          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5,
-                          opacity: opt.k !== "" && !availableCliTypes.includes(opt.k as CliType) ? 0.4 : 1,
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </label>
-              </div>
-              <div className="ntm-panel__footer">
-                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
-                  Press <kbd style={{ fontFamily: "inherit", background: "var(--paper)", border: "1px solid var(--hairline-strong)", borderRadius: 4, padding: "1px 5px", fontSize: 10.5 }}>Esc</kbd> to cancel
-                </span>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button" className="btn btn-secondary" onClick={closeForm}>Cancel</button>
-                  <button
-                    className="btn btn-primary"
-                    type="submit"
-                    disabled={creating || !newTitle.trim()}
-                  >
-                    {creating ? "Creating…" : "Create ticket"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateTicketModal
+        open={showForm}
+        creating={creating}
+        projectId={projectId}
+        projects={projects}
+        availableCliTypes={availableCliTypes}
+        onClose={closeForm}
+        onSubmit={handleCreate}
+      />
     </>
   );
 }
