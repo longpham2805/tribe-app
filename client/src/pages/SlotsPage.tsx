@@ -105,7 +105,7 @@ const SlotModal = memo(function SlotModal({
               {isConfigure ? "Slot pauses while saving." : "Tribe will probe the path before activating."}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="btn" onClick={onClose}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
               <button
                 className="btn btn-primary"
                 type="submit"
