@@ -1,4 +1,5 @@
-import { type FormEvent, useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useForm } from "react-hook-form";
 
 const IconRobot = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -120,22 +121,54 @@ export function TicketDetailModal({
   savingContent,
 }: TicketDetailModalProps) {
   const [editingContent, setEditingContent] = useState(false);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftDescription, setDraftDescription] = useState("");
   const [contentError, setContentError] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [feedbackDraft, setFeedbackDraft] = useState("");
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const contentForm = useForm<{ title: string; description: string }>({
+    defaultValues: {
+      title: ticket?.title ?? "",
+      description: ticket?.description ?? "",
+    },
+  });
+  const feedbackForm = useForm<{ comment: string }>({
+    defaultValues: {
+      comment: "",
+    },
+  });
 
   useEffect(() => {
     setEditingContent(false);
-    setDraftTitle(ticket?.title ?? "");
-    setDraftDescription(ticket?.description ?? "");
+    contentForm.reset({
+      title: ticket?.title ?? "",
+      description: ticket?.description ?? "",
+    });
     setContentError(null);
     setFeedbackOpen(false);
-    setFeedbackDraft("");
+    feedbackForm.reset({ comment: "" });
     setFeedbackError(null);
-  }, [ticket?.id, ticket?.title, ticket?.description, ticket?.waitingForSlot]);
+  }, [ticket?.id, ticket?.title, ticket?.description, ticket?.waitingForSlot, contentForm, feedbackForm]);
+
+  const draftTitle = contentForm.watch("title");
+  const draftDescription = contentForm.watch("description");
+  const feedbackDraft = feedbackForm.watch("comment");
+  const setDraftTitle = (value: string) => contentForm.setValue("title", value, { shouldDirty: true });
+  const setDraftDescription = (value: string) => contentForm.setValue("description", value, { shouldDirty: true });
+  const setFeedbackDraft = (value: string) => feedbackForm.setValue("comment", value, { shouldDirty: true });
+  const resetContentDraft = () => contentForm.reset({ title: ticket?.title ?? "", description: ticket?.description ?? "" });
+  const resetFeedbackDraft = () => feedbackForm.reset({ comment: "" });
+  const contentTitleInput = contentForm.register("title", { required: true, maxLength: 255 });
+  const contentDescriptionInput = contentForm.register("description");
+  const feedbackCommentInput = feedbackForm.register("comment");
+  const replyForm = useForm<{ message: string }>({ defaultValues: { message: responseDraft } });
+  const { ref: replyRegisterRef, ...replyInput } = replyForm.register("message");
+  useEffect(() => {
+    replyForm.reset({ message: responseDraft });
+  }, [responseDraft, replyForm]);
+  const replyMessage = replyForm.watch("message");
+  const clearReply = () => {
+    replyForm.reset({ message: "" });
+    onResponseDraftChange("");
+  };
   const replyPanelRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -187,33 +220,44 @@ export function TicketDetailModal({
   const titleTooLong = trimmedDraftTitle.length > 255;
   const saveDisabled = savingContent || !trimmedDraftTitle || titleTooLong;
 
-  const handleContentSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (saveDisabled) return;
+  const handleContentSubmit = contentForm.handleSubmit(async ({ title, description }) => {
+    const trimmedTitle = title.trim();
+    if (savingContent || !trimmedTitle || trimmedTitle.length > 255) return;
     setContentError(null);
     try {
       await onUpdateContent(ticket.id, {
-        title: trimmedDraftTitle,
-        description: draftDescription.trim(),
+        title: trimmedTitle,
+        description: description.trim(),
       });
       setEditingContent(false);
+      contentForm.reset({ title: trimmedTitle, description });
     } catch (error: unknown) {
       setContentError(error instanceof Error ? error.message : "Failed to update ticket");
     }
-  };
+  });
 
-  const handleFeedbackSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const comment = feedbackDraft.trim();
-    if (!comment || feedbackBusy || !canRequestFeedback) return;
+  const handleFeedbackSubmit = feedbackForm.handleSubmit(async ({ comment }) => {
+    const trimmedComment = comment.trim();
+    if (!trimmedComment || feedbackBusy || !canRequestFeedback) return;
     setFeedbackError(null);
     try {
-      await onCreateFeedback(ticket.id, comment);
-      setFeedbackDraft("");
+      await onCreateFeedback(ticket.id, trimmedComment);
+      resetFeedbackDraft();
       setFeedbackOpen(false);
     } catch (error: unknown) {
       setFeedbackError(error instanceof Error ? error.message : "Failed to create feedback");
     }
+  });
+
+  const handleReplyChange = (value: string) => {
+    replyForm.setValue("message", value, { shouldDirty: true });
+    onResponseDraftChange(value);
+  };
+
+  const handleReplySubmit = () => {
+    if (!replyMessage.trim()) return;
+    onResponseDraftChange(replyMessage);
+    onRespond(ticket.id);
   };
 
   const fileToPhase = (fileName: string): TicketPhase | null => {
@@ -314,17 +358,15 @@ export function TicketDetailModal({
           <form className="ticket-edit-form" onSubmit={handleContentSubmit}>
             <input
               className="input"
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
               maxLength={255}
               required
               autoFocus
+              {...contentTitleInput}
             />
             <textarea
               className="input textarea"
-              value={draftDescription}
-              onChange={(event) => setDraftDescription(event.target.value)}
               rows={4}
+              {...contentDescriptionInput}
             />
             {contentError ? <div className="ticket-edit-error">{contentError}</div> : null}
             {titleTooLong ? <div className="ticket-edit-error">Title must be 255 characters or fewer.</div> : null}
@@ -335,8 +377,7 @@ export function TicketDetailModal({
                 disabled={savingContent}
                 onClick={() => {
                   setEditingContent(false);
-                  setDraftTitle(ticket.title);
-                  setDraftDescription(ticket.description ?? "");
+                  resetContentDraft();
                   setContentError(null);
                 }}
               >
@@ -492,7 +533,11 @@ export function TicketDetailModal({
                 type="button"
                 disabled={!canRequestFeedback || feedbackBusy}
                 onClick={() => {
-                  setFeedbackOpen((prev) => !prev);
+                  setFeedbackOpen((prev) => {
+                    const next = !prev;
+                    if (!next) resetFeedbackDraft();
+                    return next;
+                  });
                   setFeedbackError(null);
                 }}
                 title={hasOpenFeedback ? "Finish the open feedback round first" : "Add feedback"}
@@ -543,8 +588,7 @@ export function TicketDetailModal({
                   className="input textarea"
                   rows={3}
                   placeholder="Describe the follow-up change…"
-                  value={feedbackDraft}
-                  onChange={(event) => setFeedbackDraft(event.target.value)}
+                  {...feedbackCommentInput}
                 />
                 {feedbackError ? <div className="ticket-edit-error">{feedbackError}</div> : null}
                 <div className="td-feedback-form__actions">
@@ -554,7 +598,7 @@ export function TicketDetailModal({
                     disabled={feedbackBusy}
                     onClick={() => {
                       setFeedbackOpen(false);
-                      setFeedbackDraft("");
+                      resetFeedbackDraft();
                       setFeedbackError(null);
                     }}
                   >
@@ -629,26 +673,30 @@ export function TicketDetailModal({
                           <div className="serif td-paused-panel__message">{phase.lastMessage}</div>
                         ) : null}
                         <textarea
-                          ref={replyTextareaRef}
+                          ref={(node) => {
+                            replyRegisterRef(node);
+                            replyTextareaRef.current = node;
+                          }}
                           className="input textarea td-paused-panel__textarea"
                           rows={3}
                           placeholder="Reply to the feedback agent…"
-                          value={responseDraft}
-                          onChange={(event) => onResponseDraftChange(event.target.value)}
+                          {...replyInput}
+                          value={replyMessage}
+                          onChange={(event) => handleReplyChange(event.target.value)}
                         />
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                           <button
                             className="btn btn-secondary"
                             type="button"
-                            onClick={() => onResponseDraftChange("")}
+                            onClick={clearReply}
                           >
                             Discard
                           </button>
                           <button
                             className="btn btn-primary"
                             type="button"
-                            disabled={isReplyBusy || !responseDraft.trim()}
-                            onClick={() => onRespond(ticket.id)}
+                            disabled={isReplyBusy || !replyMessage.trim()}
+                            onClick={handleReplySubmit}
                           >
                             {isReplyBusy ? "Sending…" : "Send reply"}
                           </button>
@@ -701,12 +749,16 @@ export function TicketDetailModal({
               <div className="serif td-paused-panel__message">{paused.lastMessage}</div>
             ) : null}
             <textarea
-              ref={replyTextareaRef}
+              ref={(node) => {
+                replyRegisterRef(node);
+                replyTextareaRef.current = node;
+              }}
               className="input textarea td-paused-panel__textarea"
               rows={3}
               placeholder="Reply to the agent…"
-              value={responseDraft}
-              onChange={(event) => onResponseDraftChange(event.target.value)}
+              {...replyInput}
+              value={replyMessage}
+              onChange={(event) => handleReplyChange(event.target.value)}
             />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button

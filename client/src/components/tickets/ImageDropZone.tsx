@@ -1,9 +1,46 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface ImageDropZoneProps {
   files: File[];
   onChange: (files: File[]) => void;
   disabled?: boolean;
+}
+
+function ImagePreview({
+  file,
+  disabled,
+  onRemove,
+}: {
+  file: File;
+  disabled?: boolean;
+  onRemove: () => void;
+}) {
+  const [src, setSrc] = useState("");
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setSrc(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  return (
+    <div className="image-drop-zone__thumb">
+      <img src={src} alt={file.name} className="image-drop-zone__thumb-img" />
+      <button
+        type="button"
+        className="image-drop-zone__remove"
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove();
+        }}
+        disabled={disabled}
+        aria-label={`Remove ${file.name}`}
+      >
+        ×
+      </button>
+      <span className="image-drop-zone__filename">{file.name}</span>
+    </div>
+  );
 }
 
 export function ImageDropZone({ files, onChange, disabled }: ImageDropZoneProps) {
@@ -13,25 +50,28 @@ export function ImageDropZone({ files, onChange, disabled }: ImageDropZoneProps)
   const addFiles = useCallback(
     (incoming: FileList | null) => {
       if (!incoming) return;
-      const images = Array.from(incoming).filter((f) => f.type.startsWith("image/"));
+      const images = Array.from(incoming).filter((file) => file.type.startsWith("image/"));
       if (images.length === 0) return;
       onChange([...files, ...images]);
     },
     [files, onChange],
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (!disabled) setDragging(true);
-  }, [disabled]);
+  const handleDragOver = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      if (!disabled) setDragging(true);
+    },
+    [disabled],
+  );
 
   const handleDragLeave = useCallback(() => setDragging(false), []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
+    (event: React.DragEvent) => {
+      event.preventDefault();
       setDragging(false);
-      if (!disabled) addFiles(e.dataTransfer.files);
+      if (!disabled) addFiles(event.dataTransfer.files);
     },
     [disabled, addFiles],
   );
@@ -42,7 +82,7 @@ export function ImageDropZone({ files, onChange, disabled }: ImageDropZoneProps)
 
   const removeFile = useCallback(
     (index: number) => {
-      onChange(files.filter((_, i) => i !== index));
+      onChange(files.filter((_, fileIndex) => fileIndex !== index));
     },
     [files, onChange],
   );
@@ -57,7 +97,9 @@ export function ImageDropZone({ files, onChange, disabled }: ImageDropZoneProps)
         onClick={handleClick}
         role="button"
         tabIndex={disabled ? -1 : 0}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleClick(); }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") handleClick();
+        }}
         aria-label="Upload images"
       >
         <input
@@ -67,8 +109,8 @@ export function ImageDropZone({ files, onChange, disabled }: ImageDropZoneProps)
           multiple
           hidden
           disabled={disabled}
-          onChange={(e) => addFiles(e.target.files)}
-          onClick={(e) => e.stopPropagation()}
+          onChange={(event) => addFiles(event.target.files)}
+          onClick={(event) => event.stopPropagation()}
         />
         <span className="image-drop-zone__label">
           {dragging ? "Drop images here" : "Drag images or click to browse"}
@@ -78,23 +120,12 @@ export function ImageDropZone({ files, onChange, disabled }: ImageDropZoneProps)
       {files.length > 0 && (
         <div className="image-drop-zone__previews">
           {files.map((file, index) => (
-            <div key={index} className="image-drop-zone__thumb">
-              <img
-                src={URL.createObjectURL(file)}
-                alt={file.name}
-                className="image-drop-zone__thumb-img"
-              />
-              <button
-                type="button"
-                className="image-drop-zone__remove"
-                onClick={(e) => { e.stopPropagation(); removeFile(index); }}
-                disabled={disabled}
-                aria-label={`Remove ${file.name}`}
-              >
-                ×
-              </button>
-              <span className="image-drop-zone__filename">{file.name}</span>
-            </div>
+            <ImagePreview
+              key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+              file={file}
+              disabled={disabled}
+              onRemove={() => removeFile(index)}
+            />
           ))}
         </div>
       )}
