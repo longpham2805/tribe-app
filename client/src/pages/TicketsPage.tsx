@@ -567,29 +567,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         className={`tickets-page ${paneOpen ? "tickets-page--pane-open" : ""}`}
         style={layoutStyle}
       >
-        {canImportFromMonday && (
-          <Modal
-            open={showMondayPicker}
-            onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
-            title="Import from Monday"
-            width={720}
-            noHeader
-            panelClassName={`monday-import-modal monday-import-modal--${mondayPickerStep}`}
-            bodyClassName="monday-import-modal__body"
-          >
-            <MondayPicker
-              onImported={load}
-              onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
-              projectId={projectId}
-              projects={projects}
-              availableCliTypes={availableCliTypes}
-              projectName={projects.find((p) => p.id === selectedProjectId)?.name}
-              step={mondayPickerStep}
-              onStepChange={setMondayPickerStep}
-            />
-          </Modal>
-        )}
-
         {/* Page heading */}
         <div className="page-heading">
           <div className="page-heading__left">
@@ -685,6 +662,29 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         statusColors={STATUS_COLORS}
         pausedStatuses={PAUSED_STATUSES}
       />
+
+      {canImportFromMonday && (
+        <Modal
+          open={showMondayPicker}
+          onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
+          title="Import from Monday"
+          width={720}
+          noHeader
+          panelClassName={`monday-import-modal monday-import-modal--${mondayPickerStep}`}
+          bodyClassName="monday-import-modal__body"
+        >
+          <MondayPicker
+            onImported={load}
+            onClose={() => { setShowMondayPicker(false); setMondayPickerStep("browse"); }}
+            projectId={projectId}
+            projects={projects}
+            availableCliTypes={availableCliTypes}
+            projectName={projects.find((p) => p.id === selectedProjectId)?.name}
+            step={mondayPickerStep}
+            onStepChange={setMondayPickerStep}
+          />
+        </Modal>
+      )}
 
       {/* New Ticket Modal */}
       {showForm && (
