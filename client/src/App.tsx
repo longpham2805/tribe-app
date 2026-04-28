@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getProjectShortcutTargetByKey } from "./utils/projectSelection";
 import { CommandPalette } from "./components/CommandPalette";
 import { AppHeader } from "./components/layout/AppHeader";
 import { ProjectPane } from "./components/layout/ProjectPane";
@@ -10,19 +11,47 @@ import { TicketsPage } from "./pages/TicketsPage";
 import "./App.css";
 
 export default function App() {
-  const { view, setView, projects, selectedProjectId, setSelectedProjectId, canImportFromMonday, loadProjects, setShortcutIntent, paletteContextActions } = useAppContext();
+  const {
+    view,
+    setView,
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
+    canImportFromMonday,
+    loadProjects,
+    setShortcutIntent,
+    paletteContextActions,
+  } = useAppContext();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if (!e.metaKey && !e.ctrlKey) return;
+
+      if (e.key === "k") {
         e.preventDefault();
         setCommandPaletteOpen(true);
+        return;
       }
+
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
+
+      const shortcutTarget = getProjectShortcutTargetByKey(projects, e.key);
+      if (!shortcutTarget) return;
+
+      e.preventDefault();
+      setSelectedProjectId(shortcutTarget.projectId);
+      setCommandPaletteOpen(false);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [projects, setSelectedProjectId]);
 
   const handlePaletteAction = (intent: NonNullable<ShortcutIntent>) => {
     if (intent.type === "navigate") {

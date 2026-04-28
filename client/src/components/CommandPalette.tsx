@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchTickets } from "../api";
 import type { PaletteAction, ShortcutIntent } from "../context/AppContext";
+import { getProjectShortcutTargets } from "../utils/projectSelection";
 import type { Project, Ticket } from "../types";
 import "./CommandPalette.css";
 
@@ -68,6 +69,7 @@ export function CommandPalette({ open, onClose, onAction, projectId, canImportFr
 
   itemRefs.current = [];
 
+  const projectShortcutTargets = useMemo(() => getProjectShortcutTargets(projects), [projects]);
   if (!open) return null;
 
   const q = query.toLowerCase();
@@ -187,6 +189,7 @@ export function CommandPalette({ open, onClose, onAction, projectId, canImportFr
               <div className="cmd-section-label">Projects</div>
               {filteredProjects.map((project, i) => {
                 const globalIdx = filteredContext.length + filteredStatic.length + i;
+                const shortcutKey = projectShortcutTargets.find((target) => target.projectId === project.id)?.key;
                 return (
                   <button
                     key={project.id}
@@ -200,7 +203,7 @@ export function CommandPalette({ open, onClose, onAction, projectId, canImportFr
                   >
                     <span className="cmd-item-icon">P</span>
                     <span className="cmd-item-label">{project.name}</span>
-                    <kbd className="cmd-item-shortcut">↩</kbd>
+                    <kbd className="cmd-item-shortcut">{shortcutKey ? `⌘${shortcutKey}` : "↩"}</kbd>
                   </button>
                 );
               })}

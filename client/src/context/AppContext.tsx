@@ -12,8 +12,10 @@ import { fetchAppState, fetchProjects, updateAppState } from "../api";
 import type { AppState, CliType, Project, WsMessage } from "../types";
 import {
   clearStoredProjectSelection,
+  getProjectShortcutTargets,
   readStoredProjectSelection,
   writeStoredProjectSelection,
+  type ProjectShortcutTarget,
 } from "../utils/projectSelection";
 import { useWebSocket } from "../ws";
 
@@ -51,6 +53,7 @@ type AppContextValue = {
   clearShortcutIntent: () => void;
   paletteContextActions: PaletteAction[];
   setPaletteContextActions: (actions: PaletteAction[]) => void;
+  projectShortcutTargets: ProjectShortcutTarget[];
 };
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -70,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const canImportFromMonday = !!selectedProject?.mondayBoardIds?.length;
+  const projectShortcutTargets = useMemo(() => getProjectShortcutTargets(projects), [projects]);
 
   const setSelectedProjectId = useCallback((projectId: number | null) => {
     selectedProjectIdRef.current = projectId;
@@ -177,6 +181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearShortcutIntent,
       paletteContextActions,
       setPaletteContextActions,
+      projectShortcutTargets,
     }),
     [
       view,
@@ -193,6 +198,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearShortcutIntent,
       paletteContextActions,
       setPaletteContextActions,
+      projectShortcutTargets,
     ],
   );
 
