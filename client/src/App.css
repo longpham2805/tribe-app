@@ -2406,6 +2406,11 @@
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
+.file-viewer__button-icon {
+  flex: 0 0 auto;
+  display: block;
+}
+
 .file-viewer__button:hover:not(:disabled) {
   background: var(--cream-2);
   border-color: var(--hairline-strong);

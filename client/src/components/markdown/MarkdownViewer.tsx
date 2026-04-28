@@ -63,6 +63,25 @@ function downloadMarkdown(fileName: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+function CopyIcon() {
+  return (
+    <svg className="file-viewer__button-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="5.25" y="3.25" width="7.5" height="9.5" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M10.5 3.25V2.75A1.5 1.5 0 0 0 9 1.25H4A1.5 1.5 0 0 0 2.5 2.75V9.5A1.5 1.5 0 0 0 4 11h1.25" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg className="file-viewer__button-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 2.5v6.25" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="m5.5 6.75 2.5 2.75 2.5-2.75" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 12.25h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBack }: MarkdownViewerProps) {
   const [tab, setTab] = useState<Tab>("markdown");
   const [content, setContent] = useState("");
@@ -158,9 +177,11 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBa
         ) : null}
         <span className="file-viewer__toolbar-spacer" />
         <button className="file-viewer__button" type="button" onClick={handleCopy} disabled={!content || loading}>
+          <CopyIcon />
           {copied ? "Copied" : "Copy"}
         </button>
         <button className="file-viewer__button" type="button" onClick={() => downloadMarkdown(fileName, content)} disabled={!content || loading}>
+          <DownloadIcon />
           Download
         </button>
       </div>
