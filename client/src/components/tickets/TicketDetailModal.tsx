@@ -638,7 +638,7 @@ export function TicketDetailModal({
                         />
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                           <button
-                            className="btn"
+                            className="btn btn-secondary"
                             type="button"
                             onClick={() => onResponseDraftChange("")}
                           >
@@ -710,7 +710,7 @@ export function TicketDetailModal({
             />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
-                className="btn"
+                className="btn btn-secondary"
                 type="button"
                 onClick={() => onResponseDraftChange("")}
               >
