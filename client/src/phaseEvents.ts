@@ -30,6 +30,12 @@ export interface ActivityItem {
   severity: ActivitySeverity;
 }
 
+export interface ActivityMarkdownEntry {
+  id: string;
+  content: string;
+  fullEventContent?: string;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 interface AssistantContentBlock extends UnknownRecord {
@@ -260,7 +266,7 @@ function summarizeUserBlocks(blocks: MessageContentBlock[]): string | undefined 
   return summaries.length > 0 ? summaries.join(" | ") : undefined;
 }
 
-function formatUserMarkdown(event: UnknownRecord): string {
+function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEntry, "content" | "fullEventContent"> {
   const blocks = collectMessageBlocks(event);
   const parts: string[] = [];
 
@@ -285,9 +291,13 @@ function formatUserMarkdown(event: UnknownRecord): string {
     }
   }
 
-  const fullEvent = fencedJson(event);
   const summary = parts.length > 0 ? parts.join("\n\n") : "**User event**";
-  return `${summary}\n\n**Full event**\n\n${fullEvent}`;
+  return { content: summary, fullEventContent: fencedJson(event) };
+}
+
+function formatUserMarkdown(event: UnknownRecord): string {
+  const entry = formatUserMarkdownEntry(event);
+  return `${entry.content}\n\n**Full event**\n\n${entry.fullEventContent}`;
 }
 
 function normalizeItemEvent(event: UnknownRecord, index: number): ActivityItem {
@@ -539,15 +549,18 @@ export function selectRecentActivityEvents(
 export function getActivityMarkdownEntries(
   events: unknown[],
   maxBytes = ACTIVITY_RENDER_BYTE_LIMIT,
-): Array<{ id: string; content: string }> {
-  const entries: Array<{ id: string; content: string }> = [];
+): ActivityMarkdownEntry[] {
+  const entries: ActivityMarkdownEntry[] = [];
   let totalBytes = 0;
   for (let index = events.length - 1; index >= 0; index -= 1) {
-    const content = extractEventText(events[index]).trim();
+    const event = events[index];
+    const userEntry = isRecord(event) && asString(event.type) === "user" ? formatUserMarkdownEntry(event) : undefined;
+    const content = (userEntry?.content ?? extractEventText(event)).trim();
+    const fullEventContent = userEntry?.fullEventContent;
     if (!content) continue;
-    const nextBytes = totalBytes + content.length;
+    const nextBytes = totalBytes + content.length + (fullEventContent?.length ?? 0);
     if (entries.length > 0 && nextBytes > maxBytes) break;
-    entries.push({ id: `${normalizeActivityEvent(events[index], index).id}:${index}`, content });
+    entries.push({ id: `${normalizeActivityEvent(event, index).id}:${index}`, content, fullEventContent });
     totalBytes = nextBytes;
   }
   return entries.reverse();

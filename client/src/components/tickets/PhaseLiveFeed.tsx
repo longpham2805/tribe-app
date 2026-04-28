@@ -19,6 +19,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
   const [historicalEvents, setHistoricalEvents] = useState<unknown[]>([]);
   const [historicalPayloadBytes, setHistoricalPayloadBytes] = useState(0);
   const [expanded, setExpanded] = useState(() => AUTO_EXPAND_STATUSES.includes(status));
+  const [expandedFullEvents, setExpandedFullEvents] = useState<Set<string>>(() => new Set());
   const [userToggled, setUserToggled] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const lastAutoOpenKeyRef = useRef<string | undefined>(autoOpenKey);
@@ -47,6 +48,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
 
   useEffect(() => {
     setUserToggled(false);
+    setExpandedFullEvents(new Set());
   }, [ticketId, phaseName]);
 
   const allEvents = useMemo(() => historicalEvents.concat(liveEvents), [historicalEvents, liveEvents]);
@@ -100,6 +102,33 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
               {activityEntries.map((entry) => (
                 <article key={entry.id} className="phase-live-feed__entry">
                   <MarkdownProse content={entry.content} />
+                  {entry.fullEventContent && (
+                    <div className="phase-live-feed__full-event">
+                      <button
+                        type="button"
+                        className="phase-live-feed__full-event-toggle"
+                        aria-expanded={expandedFullEvents.has(entry.id)}
+                        onClick={() => {
+                          setExpandedFullEvents((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(entry.id)) {
+                              next.delete(entry.id);
+                            } else {
+                              next.add(entry.id);
+                            }
+                            return next;
+                          });
+                        }}
+                      >
+                        {expandedFullEvents.has(entry.id) ? "Hide full event" : "Show full event"}
+                      </button>
+                      {expandedFullEvents.has(entry.id) && (
+                        <div className="phase-live-feed__full-event-content">
+                          <MarkdownProse content={`**Full event**\n\n${entry.fullEventContent}`} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
