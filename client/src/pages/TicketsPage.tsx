@@ -770,7 +770,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
                   Press <kbd style={{ fontFamily: "inherit", background: "var(--paper)", border: "1px solid var(--hairline-strong)", borderRadius: 4, padding: "1px 5px", fontSize: 10.5 }}>Esc</kbd> to cancel
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button" className="btn" onClick={closeForm}>Cancel</button>
+                  <button type="button" className="btn btn-secondary" onClick={closeForm}>Cancel</button>
                   <button
                     className="btn btn-primary"
                     type="submit"

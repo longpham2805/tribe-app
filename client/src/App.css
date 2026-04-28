@@ -350,6 +350,17 @@
   cursor: not-allowed;
 }
 
+.btn-secondary {
+  min-height: 34px;
+  border-color: var(--hairline-strong);
+  background: var(--cream);
+  color: var(--ink-2);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--cream-2);
+}
+
 .btn-primary {
   background: var(--ink);
   color: var(--cream);
@@ -1928,17 +1939,6 @@
   font-size: 10.5px;
   font-weight: 500;
   line-height: 1;
-}
-
-.monday-import__secondary-button {
-  min-height: 34px;
-  border-color: var(--hairline-strong);
-  background: var(--cream);
-  color: var(--ink-2);
-}
-
-.monday-import__secondary-button:hover:not(:disabled) {
-  background: var(--cream-2);
 }
 
 .monday-import__continue-button {

@@ -478,7 +478,7 @@ export function MondayPicker({
             to import
           </span>
           <div className="monday-import__footer-actions">
-            <button type="button" className="btn monday-import__secondary-button" onClick={handleBack} disabled={importing}>
+            <button type="button" className="btn btn-secondary" onClick={handleBack} disabled={importing}>
               Back
             </button>
             <button
@@ -620,7 +620,7 @@ export function MondayPicker({
         </div>
 
         <div className="monday-import__footer-actions">
-          <button type="button" className="btn monday-import__secondary-button" onClick={onClose}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
             Cancel
           </button>
           <button
