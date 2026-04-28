@@ -20,6 +20,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
   const [historicalPayloadBytes, setHistoricalPayloadBytes] = useState(0);
   const [expanded, setExpanded] = useState(() => AUTO_EXPAND_STATUSES.includes(status));
   const [expandedFullEvents, setExpandedFullEvents] = useState<Set<string>>(() => new Set());
+  const [expandedToolResults, setExpandedToolResults] = useState<Set<string>>(() => new Set());
   const [userToggled, setUserToggled] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const lastAutoOpenKeyRef = useRef<string | undefined>(autoOpenKey);
@@ -49,6 +50,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
   useEffect(() => {
     setUserToggled(false);
     setExpandedFullEvents(new Set());
+    setExpandedToolResults(new Set());
   }, [ticketId, phaseName]);
 
   const allEvents = useMemo(() => historicalEvents.concat(liveEvents), [historicalEvents, liveEvents]);
@@ -102,11 +104,44 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
               {activityEntries.map((entry) => (
                 <article key={entry.id} className="phase-live-feed__entry">
                   <MarkdownProse content={entry.content} />
+                  {entry.toolResults?.map((toolResult) => {
+                    const toolResultKey = `${entry.id}:${toolResult.id}`;
+                    const isToolResultExpanded = expandedToolResults.has(toolResultKey);
+                    return (
+                      <div key={toolResultKey} className="phase-live-feed__tool-result">
+                        <button
+                          type="button"
+                          className="phase-live-feed__disclosure-toggle"
+                          aria-expanded={isToolResultExpanded}
+                          onClick={() => {
+                            setExpandedToolResults((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(toolResultKey)) {
+                                next.delete(toolResultKey);
+                              } else {
+                                next.add(toolResultKey);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          {isToolResultExpanded ? "Hide tool result" : "Show tool result"}
+                        </button>
+                        {isToolResultExpanded && (
+                          <div className="phase-live-feed__tool-result-content">
+                            <MarkdownProse
+                              content={`**${toolResult.label}:**${toolResult.isError ? " _error_" : ""}\n\n${toolResult.content}`}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {entry.fullEventContent && (
                     <div className="phase-live-feed__full-event">
                       <button
                         type="button"
-                        className="phase-live-feed__full-event-toggle"
+                        className="phase-live-feed__disclosure-toggle"
                         aria-expanded={expandedFullEvents.has(entry.id)}
                         onClick={() => {
                           setExpandedFullEvents((prev) => {
