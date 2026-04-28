@@ -15,6 +15,14 @@ interface PhaseLiveFeedProps {
 
 const AUTO_EXPAND_STATUSES: PhaseStatus[] = ["RUNNING", "QUESTION", "REQUIRES_ACTION", "ERROR"];
 
+function activityEntryClassName(tone: string, severity: string): string {
+  return [
+    "phase-live-feed__entry",
+    `phase-live-feed__entry--${tone}`,
+    `phase-live-feed__entry--${severity}`,
+  ].join(" ");
+}
+
 export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpenKey, fill = false }: PhaseLiveFeedProps) {
   const [historicalEvents, setHistoricalEvents] = useState<unknown[]>([]);
   const [historicalPayloadBytes, setHistoricalPayloadBytes] = useState(0);
@@ -102,7 +110,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
           ) : (
             <div className="phase-live-feed__entries phase-live-feed__entries--prose">
               {activityEntries.map((entry) => (
-                <article key={entry.id} className="phase-live-feed__entry">
+                <article key={entry.id} className={activityEntryClassName(entry.tone, entry.severity)}>
                   <MarkdownProse content={entry.content} />
                   {entry.toolResults?.map((toolResult) => {
                     const toolResultKey = `${entry.id}:${toolResult.id}`;

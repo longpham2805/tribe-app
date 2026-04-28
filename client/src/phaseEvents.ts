@@ -9,6 +9,7 @@ export type ActivityKind =
   | "unknown";
 
 export type ActivitySeverity = "info" | "warn" | "error";
+export type ActivityTone = "primary" | "meta";
 
 export type ActivityDetail =
   | string
@@ -33,6 +34,8 @@ export interface ActivityItem {
 export interface ActivityMarkdownEntry {
   id: string;
   content: string;
+  tone: ActivityTone;
+  severity: ActivitySeverity;
   fullEventContent?: string;
   toolResults?: ActivityToolResultDisclosure[];
 }
@@ -572,6 +575,7 @@ export function getActivityMarkdownEntries(
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     const userEntry = isRecord(event) && asString(event.type) === "user" ? formatUserMarkdownEntry(event) : undefined;
+    const activityItem = normalizeActivityEvent(event, index);
     const content = (userEntry?.content ?? extractEventText(event)).trim();
     const fullEventContent = userEntry?.fullEventContent;
     const toolResults = userEntry?.toolResults;
@@ -579,10 +583,26 @@ export function getActivityMarkdownEntries(
     const toolResultBytes = toolResults?.reduce((total, result) => total + result.content.length, 0) ?? 0;
     const nextBytes = totalBytes + content.length + toolResultBytes + (fullEventContent?.length ?? 0);
     if (entries.length > 0 && nextBytes > maxBytes) break;
-    entries.push({ id: `${normalizeActivityEvent(event, index).id}:${index}`, content, fullEventContent, toolResults });
+    entries.push({
+      id: `${activityItem.id}:${index}`,
+      content,
+      tone: getActivityTone(event, activityItem),
+      severity: activityItem.severity,
+      fullEventContent,
+      toolResults,
+    });
     totalBytes = nextBytes;
   }
   return entries.reverse();
+}
+
+function getActivityTone(event: unknown, item: ActivityItem): ActivityTone {
+  if (isRecord(event) && asString(event.type) === "assistant") {
+    return collectAssistantBlocks(event).some((block) => block.type === "text") ? "primary" : "meta";
+  }
+  if (item.kind === "message" && item.actor === "You" && item.title !== "User tool result") return "primary";
+  if (item.kind === "message" && item.actor === "Codex") return "primary";
+  return "meta";
 }
 
 function formatAssistantMarkdown(blocks: AssistantContentBlock[]): string {

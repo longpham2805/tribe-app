@@ -1200,6 +1200,48 @@
   border-top: 1px solid var(--rule);
 }
 
+.phase-live-feed__entry--meta {
+  color: var(--ink-4);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.phase-live-feed__entry--meta .file-markdown {
+  color: var(--ink-4);
+}
+
+.phase-live-feed__entry--meta .file-markdown__p,
+.phase-live-feed__entry--meta .file-markdown__list,
+.phase-live-feed__entry--meta .file-markdown__code {
+  margin-bottom: 6px;
+}
+
+.phase-live-feed__entry--meta strong {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.phase-live-feed__entry--meta em {
+  color: var(--ink-4);
+}
+
+.phase-live-feed__entry--warn,
+.phase-live-feed__entry--error {
+  border-left: 3px solid var(--status-warn);
+  padding-left: 10px;
+}
+
+.phase-live-feed__entry--error {
+  border-left-color: var(--status-error);
+}
+
+.phase-live-feed__entry--warn .file-markdown,
+.phase-live-feed__entry--warn strong,
+.phase-live-feed__entry--error .file-markdown,
+.phase-live-feed__entry--error strong {
+  color: var(--ink-1);
+}
+
 .phase-live-feed__entry > :last-child,
 .phase-live-feed__entry .file-markdown__p:last-child,
 .phase-live-feed__entry .file-markdown__list:last-child {
