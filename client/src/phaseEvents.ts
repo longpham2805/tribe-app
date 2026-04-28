@@ -540,8 +540,16 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
   };
 }
 
+export function isDisplayableActivityItem(item: ActivityItem): boolean {
+  const rawType = isRecord(item.raw) ? asString(item.raw.type) : undefined;
+  if (rawType === "user" && item.title === "User message" && !item.summary) return false;
+  return !(item.kind === "system" && (item.title === "System event" || item.title === "User event"));
+}
+
 export function normalizeActivityEvents(events: unknown[]): ActivityItem[] {
-  return events.map((event, index) => normalizeActivityEvent(event, index));
+  return events
+    .map((event, index) => normalizeActivityEvent(event, index))
+    .filter(isDisplayableActivityItem);
 }
 
 export const ACTIVITY_RENDER_EVENT_LIMIT = 200;
@@ -567,10 +575,6 @@ export function selectRecentActivityEvents(
   return { events: [...historicalEvents.slice(-remainingHistory), ...liveWindow], totalCount };
 }
 
-function shouldHideActivityItem(item: ActivityItem): boolean {
-  return item.kind === "system" && (item.title === "System event" || item.title === "User event");
-}
-
 export function getActivityMarkdownEntries(
   events: unknown[],
   maxBytes = ACTIVITY_RENDER_BYTE_LIMIT,
@@ -581,7 +585,7 @@ export function getActivityMarkdownEntries(
     const event = events[index];
     const userEntry = isRecord(event) && asString(event.type) === "user" ? formatUserMarkdownEntry(event) : undefined;
     const activityItem = normalizeActivityEvent(event, index);
-    if (shouldHideActivityItem(activityItem)) continue;
+    if (!isDisplayableActivityItem(activityItem)) continue;
     const content = (userEntry?.content ?? extractEventText(event)).trim();
     const fullEventContent = userEntry?.fullEventContent;
     const toolResults = userEntry?.toolResults;
