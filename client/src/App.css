@@ -1206,6 +1206,36 @@
   margin-bottom: 0;
 }
 
+.phase-live-feed__full-event {
+  margin-top: 10px;
+}
+
+.phase-live-feed__full-event-toggle {
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: color-mix(in srgb, var(--cream) 85%, white);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.phase-live-feed__full-event-toggle:hover {
+  border-color: var(--ink-4);
+  color: var(--ink-1);
+}
+
+.phase-live-feed__full-event-toggle:focus-visible {
+  outline: 2px solid var(--claude);
+  outline-offset: 2px;
+}
+
+.phase-live-feed__full-event-content {
+  margin-top: 10px;
+}
+
 .phase-paused {
   margin-top: 0.25rem;
   padding: 0.875rem 1rem;
