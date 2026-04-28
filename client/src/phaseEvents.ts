@@ -294,7 +294,6 @@ function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEnt
       const label = id ? `Tool result \`${safeInlineCode(id)}\`` : "Tool result";
       const content = blockContentToMarkdown(block.content);
       const isError = block.is_error === true;
-      parts.push(`**${label}:**${isError ? " _error_" : ""}`);
       if (content) {
         toolResults.push({
           id: id ?? `tool-result-${toolResults.length + 1}`,
@@ -302,6 +301,8 @@ function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEnt
           content,
           isError,
         });
+      } else {
+        parts.push(`**${label}:**${isError ? " _error_" : ""}`);
       }
       continue;
     }
