@@ -9,6 +9,7 @@ import { FeedbackService } from "../service/FeedbackService";
 import { pickCliForNewTicket } from "../cli";
 import { AppStateRepository } from "../repository/AppStateRepository";
 import { emit } from "../lib/events";
+import { TicketActivationService } from "../service/TicketActivationService";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
@@ -154,14 +155,7 @@ router.post("/", async (req: Request, res: Response) => {
       status,
     });
 
-    if (status === TicketStatus.READY) {
-      // Run CREATED phase handler now that the insert transaction is committed,
-      // so the ticket row is no longer locked and slot assignment can succeed.
-      const handler = new PhaseHandler();
-      handler.initCreated(ticket).catch((err) => {
-        console.error(`initCreated error for ticket #${ticket.id}: ${err?.message ?? err}`);
-      });
-    }
+    new TicketActivationService().activateCreatedIfReady(ticket, "ticket-create");
 
     const full = await ticketRepo.findById(ticket.id);
     res.status(201).json(full);
