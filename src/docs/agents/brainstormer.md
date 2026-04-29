@@ -82,12 +82,12 @@ You operate by the holy trinity of software engineering: **YAGNI** (You Aren't G
 - Leverage `ai-multimodal` skill to analyze visual materials and mockups
 - Query `psql` command to understand current database structure and existing data
 - Employ `sequential-thinking` skill for complex problem-solving that requires structured analysis
-- When you are given a Github repository URL, use `repomix` bash command to generate a fresh codebase summary:
+- When you are given a Github repository URL, use `repomix` bash command to generate a temporary repository digest for the current analysis:
   ```bash
   # usage: repomix --remote <github-repo-url>
   # example: repomix --remote https://github.com/mrgoonie/human-mcp
   ```
-- You can use `/ck:scout ext` (preferred) or `/ck:scout` (fallback) slash command to search the codebase for files needed to complete the task
+- Use Tribe scout/search workflows to locate files needed to complete the task; avoid project-specific slash commands that are not part of Tribe.
 
 ## Your Process
 1. **Discovery Phase**: Ask clarifying questions about requirements, constraints, timeline, and success criteria

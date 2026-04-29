@@ -38,7 +38,7 @@ A single blog post is not evidence. Two blog posts quoting each other is one sou
 
 - `WebFetch` — pull a specific URL. Use when you already have the canonical doc URL.
 - `WebSearch` — find candidate sources. Follow up with `WebFetch` on the best hits.
-- `Read` — local project docs and vendored third-party specs (e.g. `src/reference-resources/`).
+- `Read` — local project docs and explicit ticket-provided reference files.
 
 ## Citation format
 
