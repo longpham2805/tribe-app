@@ -122,12 +122,35 @@ DB_USERNAME=root
 DB_PASSWORD=
 DB_DATABASE=tribe
 
+# API, MCP, and frontend integration
 MCP_PORT=8100
 
-# Optional Monday integration
+# Optional Monday integration. Leave token blank to disable Monday-backed flows.
 MONDAY_ACCESS_TOKEN=
-MONDAY_API_URL=
+MONDAY_API_URL=https://api.monday.com/v2
+MONDAY_DEFAULT_BOARD_IDS=
+EWEBINAR_DEV_PEOPLE=
+EWEBINAR_DEFAULT_PERSON_ID=
 ```
+
+Environment contract:
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE` | Yes | MySQL connection used by TypeORM |
+| `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | No | Legacy aliases recognized by TypeORM config when DB vars are unset |
+| `MCP_PORT` | Yes | Backend REST/MCP/WebSocket port; defaults to `8100` when unset |
+| `MONDAY_ACCESS_TOKEN` | No | Enables Monday import and eWebinar hooks when present |
+| `MONDAY_API_URL` | No | Monday GraphQL endpoint; defaults to `https://api.monday.com/v2` |
+| `MONDAY_DEFAULT_BOARD_IDS` | No | Comma-separated Monday board IDs for default eWebinar setup |
+| `EWEBINAR_DEV_PEOPLE` | No | Comma-separated Monday people IDs/names used by eWebinar flows |
+| `EWEBINAR_DEFAULT_PERSON_ID` | No | Default Monday person ID assigned during eWebinar project seeding |
+
+CLI expectations:
+
+- Tribe orchestrates external coding CLIs through adapters in `src/cli`; configure those CLIs outside this repo.
+- `ClaudeAdapter` is a supported CLI integration name, not a dependency on any external documentation kit.
+- MCP clients should connect to `http://localhost:${MCP_PORT}/mcp`; web clients receive realtime updates on `/ws`.
 
 ### 4) Run migrations
 
@@ -182,3 +205,4 @@ npm run start
 
 - Database synchronization is disabled (`synchronize: false`), so migrations should be used for schema changes.
 - Monday.com features require valid Monday credentials in environment variables.
+- Third-party or vendor reference packs are intentionally not part of the Tribe source contract; keep them outside the runtime tree with an owner and retrieval path.
