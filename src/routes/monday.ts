@@ -1,14 +1,11 @@
 import { Router, type Request, type Response } from "express";
-import { TicketRepository } from "../repository/TicketRepository";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { MondayHelper } from "../monday/MondayHelper";
 import { postMonday } from "../monday/graphqlClient";
-import { formatItemMarkdown } from "../monday/formatItemMarkdown";
 import { DEFAULT_MONDAY_API_URL, type MondayItemDetail } from "../monday/types";
-import { runTicketImportedHooks } from "../hooks/registry";
 import { TicketStatus } from "../enum/TicketStatus";
 import { CliType } from "../enum/CliType";
-import { TicketActivationService } from "../service/TicketActivationService";
+import { MondayImportService } from "../service/MondayImportService";
 
 const router = Router();
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
@@ -397,63 +394,16 @@ router.post("/import", async (req: Request, res: Response) => {
     const resolvedCliType: CliType | undefined =
       cliTypeRaw === CliType.CLAUDE || cliTypeRaw === CliType.CODEX ? cliTypeRaw : undefined;
 
-    // 1. Fetch from Monday
-    const monday = MondayHelper.fromEnv();
-    const { item } = await monday.getItemDetails(mondayItemId);
-
-    // 2. Convert to structured markdown
-    const markdown = formatItemMarkdown(item);
-    const mondayBoardId = parseBoardId(item.board?.id);
-
-    // 3. Upsert into DB
-    const ticketRepo = new TicketRepository();
-    const existing = await ticketRepo.findByMondayItemId(item.id);
-
-    let ticket;
-    let action: "created" | "updated";
-
-    const resolvedTitle =
-      typeof titleOverride === "string" && titleOverride.trim() ? titleOverride.trim() : item.name;
-
-    if (existing) {
-      ticket = await ticketRepo.update(existing.id, {
-        title: resolvedTitle,
-        mondayItemId: item.id,
-        mondayBoardId,
-        mondayMarkdown: markdown,
-        status,
-        ...(description !== undefined ? { description } : {}),
-      });
-      action = "updated";
-    } else {
-      ticket = await ticketRepo.create({
-        title: resolvedTitle,
-        mondayItemId: item.id,
-        mondayBoardId,
-        mondayMarkdown: markdown,
-        description,
-        projectId: resolvedProjectId,
-        status,
-        ...(resolvedCliType ? { cliType: resolvedCliType } : {}),
-      });
-
-      ticket = await ticketRepo.findById(ticket.id);
-      action = "created";
-    }
-
-    if (ticket && ticket.status === TicketStatus.READY) {
-      await runTicketImportedHooks(ticket, item);
-    }
-
-    if (action === "created") {
-      new TicketActivationService().activateCreatedIfReady(ticket, "monday-import");
-    }
-
-    res.status(action === "created" ? 201 : 200).json({
-      action,
-      ticket,
-      mondayMarkdown: markdown,
+    const result = await new MondayImportService().importTicket({
+      mondayItemId,
+      clues: description,
+      projectId: resolvedProjectId,
+      status,
+      ...(resolvedCliType ? { cliType: resolvedCliType } : {}),
+      ...(typeof titleOverride === "string" ? { titleOverride } : {}),
     });
+
+    res.status(result.action === "created" ? 201 : 200).json(result);
   } catch (err: any) {
     res.status(502).json({ error: `Import error: ${err.message}` });
   }

@@ -14,8 +14,6 @@ import { TicketStatus } from "../enum/TicketStatus";
 import { CliType } from "../enum/CliType";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { MondayHelper } from "../monday/MondayHelper";
-import { formatItemMarkdown } from "../monday/formatItemMarkdown";
-import { pickCliForNewTicket } from "../cli";
 import ticketRoutes from "../routes/tickets";
 import phaseRoutes from "../routes/phases";
 import mondayRoutes from "../routes/monday";
@@ -28,7 +26,8 @@ import { SlotRepository } from "../repository/SlotRepository";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { AppStateRepository } from "../repository/AppStateRepository";
 import { attachWebSocket } from "../ws/server";
-import { TicketActivationService } from "../service/TicketActivationService";
+import { TicketCommandService } from "../service/TicketCommandService";
+import { MondayImportService } from "../service/MondayImportService";
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as [string, ...string[]];
@@ -52,13 +51,16 @@ function createServer(): McpServer {
 
   server.tool(
     "list_tickets",
-    "List all tickets, optionally filtered by phase",
-    { phase: z.enum(PHASE_VALUES).optional().describe("Filter by current phase") },
-    async ({ phase }) => {
-      const repo = new TicketRepository();
-      const tickets = phase
-        ? await repo.findByPhase(phase as TicketPhase)
-        : await repo.findAll();
+    "List all tickets, optionally filtered by phase and project",
+    {
+      phase: z.enum(PHASE_VALUES).optional().describe("Filter by current phase"),
+      projectId: z.number().optional().describe("Filter by project ID"),
+    },
+    async ({ phase, projectId }) => {
+      const tickets = await new TicketCommandService().list({
+        ...(phase ? { phase: phase as TicketPhase } : {}),
+        ...(projectId != null ? { projectId } : {}),
+      });
       return {
         content: [{ type: "text", text: JSON.stringify(tickets, null, 2) }],
       };
@@ -90,30 +92,29 @@ function createServer(): McpServer {
     {
       title: z.string().describe("Short summary of the work"),
       description: z.string().optional().describe("Detailed description"),
+      projectId: z.number().nullable().optional().describe("Project ID to assign, or null for none"),
+      cliType: z.enum(Object.values(CliType) as [string, ...string[]]).optional().describe("CLI type to use when READY"),
       status: z.enum(TICKET_STATUS_VALUES).optional().describe("Ticket readiness status"),
     },
-    async ({ title, description, status }) => {
-      const ticketRepo = new TicketRepository();
-      const ticketStatus = (status as TicketStatus | undefined) ?? TicketStatus.READY;
-      let cliType = CliType.CLAUDE;
-
-      if (ticketStatus === TicketStatus.READY) {
-        const appState = await new AppStateRepository().get();
-        if (appState.availableCliTypes.length === 0) {
-          return {
-            content: [{ type: "text", text: "No CLI is currently available" }],
-            isError: true,
-          };
-        }
-        cliType = await pickCliForNewTicket(ticketRepo, appState.availableCliTypes);
+    async ({ title, description, projectId, cliType, status }) => {
+      try {
+        const ticket = await new TicketCommandService().create({
+          title,
+          description,
+          projectId: projectId ?? null,
+          ...(cliType ? { cliType: cliType as CliType } : {}),
+          status: (status as TicketStatus | undefined) ?? TicketStatus.READY,
+          activationContext: "mcp-ticket-create",
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(ticket, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: err.message }],
+          isError: true,
+        };
       }
-
-      const ticket = await ticketRepo.create({ title, description, status: ticketStatus, cliType });
-      new TicketActivationService().activateCreatedIfReady(ticket, "mcp-ticket-create");
-      const full = await ticketRepo.findById(ticket.id);
-      return {
-        content: [{ type: "text", text: JSON.stringify(full, null, 2) }],
-      };
     }
   );
 
@@ -346,8 +347,7 @@ function createServer(): McpServer {
     },
     async ({ ticketId, phaseName }) => {
       try {
-        const handler = new PhaseHandler();
-        const result = await handler.trigger(ticketId, phaseName as TicketPhase);
+        const result = await new TicketCommandService().trigger({ ticketId, phaseName: phaseName as TicketPhase });
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
@@ -358,6 +358,47 @@ function createServer(): McpServer {
         };
       }
     }
+  );
+
+  server.tool(
+    "publish_ticket",
+    "Publish a draft ticket so it can enter the workflow. Existing update_ticket status=READY behavior remains supported.",
+    { ticketId: z.number().describe("Ticket ID") },
+    async ({ ticketId }) => {
+      try {
+        const ticket = await new TicketCommandService().publish({ ticketId });
+        return {
+          content: [{ type: "text", text: JSON.stringify(ticket, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: err.message }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "respond_phase",
+    "Send a response message to the active phase handler for a ticket.",
+    {
+      ticketId: z.number().describe("Ticket ID"),
+      message: z.string().describe("Response message for the active phase"),
+    },
+    async ({ ticketId, message }) => {
+      try {
+        const result = await new TicketCommandService().respond({ ticketId, message });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: err.message }],
+          isError: true,
+        };
+      }
+    },
   );
 
   // ── Monday Integration Tools ─────────────────────────────────────
@@ -426,61 +467,27 @@ function createServer(): McpServer {
         .string()
         .describe("Monday item ID or Monday item URL"),
       projectId: z.number().optional().describe("Project to import the ticket into"),
+      cliType: z.enum(Object.values(CliType) as [string, ...string[]]).optional().describe("CLI type to use for new READY tickets"),
       status: z.enum(TICKET_STATUS_VALUES).optional().describe("Ticket readiness status"),
+      clues: z.string().optional().describe("Additional context saved as ticket description"),
+      titleOverride: z.string().optional().describe("Override Monday item title for the local ticket"),
     },
-    async ({ mondayItemId, projectId, status }) => {
+    async ({ mondayItemId, projectId, cliType, status, clues, titleOverride }) => {
       try {
-        const ticketStatus = (status as TicketStatus | undefined) ?? TicketStatus.READY;
-        // 1. Fetch from Monday
-        const monday = MondayHelper.fromEnv();
-        const { item } = await monday.getItemDetails(mondayItemId);
-
-        // 2. Convert to structured markdown
-        const markdown = formatItemMarkdown(item);
-
-        // 3. Upsert into DB
-        const ticketRepo = new TicketRepository();
-        const existing = await ticketRepo.findByMondayItemId(item.id);
-
-        let ticket;
-        if (existing) {
-          // Update existing ticket
-          ticket = await ticketRepo.update(existing.id, {
-            title: item.name,
-            mondayMarkdown: markdown,
-            status: ticketStatus,
-          });
-        } else {
-          // Create new ticket linked to Monday
-          ticket = await ticketRepo.create({
-            title: item.name,
-            mondayItemId: item.id,
-            mondayMarkdown: markdown,
-            projectId: projectId ?? null,
-            status: ticketStatus,
-          });
-
-          // Re-fetch with relations
-          ticket = await ticketRepo.findById(ticket.id);
-        }
-
-        if (!existing) {
-          new TicketActivationService().activateCreatedIfReady(ticket, "mcp-monday-import");
-        }
-
+        const result = await new MondayImportService().importTicket({
+          mondayItemId,
+          projectId: projectId ?? null,
+          ...(cliType ? { cliType: cliType as CliType } : {}),
+          status: (status as TicketStatus | undefined) ?? TicketStatus.READY,
+          ...(clues ? { clues } : {}),
+          ...(titleOverride ? { titleOverride } : {}),
+          activationContext: "mcp-monday-import",
+        });
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify(
-                {
-                  action: existing ? "updated" : "created",
-                  ticket,
-                  mondayMarkdown: markdown,
-                },
-                null,
-                2,
-              ),
+              text: JSON.stringify(result, null, 2),
             },
           ],
         };

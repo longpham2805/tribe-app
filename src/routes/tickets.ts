@@ -6,10 +6,9 @@ import { CliType } from "../enum/CliType";
 import { TicketStatus } from "../enum/TicketStatus";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { FeedbackService } from "../service/FeedbackService";
-import { pickCliForNewTicket } from "../cli";
-import { AppStateRepository } from "../repository/AppStateRepository";
 import { emit } from "../lib/events";
-import { TicketActivationService } from "../service/TicketActivationService";
+import { TicketCommandService } from "../service/TicketCommandService";
+import { AppStateRepository } from "../repository/AppStateRepository";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
@@ -48,7 +47,6 @@ router.get("/board", async (req: Request, res: Response) => {
 // GET /api/tickets?phase=CREATED&projectId=1
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const repo = new TicketRepository();
     const { phase, projectId: projectIdRaw } = req.query;
 
     if (phase && !PHASE_VALUES.includes(phase as string)) {
@@ -57,11 +55,10 @@ router.get("/", async (req: Request, res: Response) => {
     }
 
     const projectId = projectIdRaw ? parseInt(projectIdRaw as string, 10) : undefined;
-    const opts = projectId != null && !isNaN(projectId) ? { projectId } : undefined;
-
-    const tickets = phase
-      ? await repo.findByPhase(phase as TicketPhase, opts)
-      : await repo.findAll(opts);
+    const tickets = await new TicketCommandService().list({
+      ...(phase ? { phase: phase as TicketPhase } : {}),
+      ...(projectId != null && !isNaN(projectId) ? { projectId } : {}),
+    });
 
     res.json(tickets);
   } catch (err: any) {
@@ -129,36 +126,14 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
-    const ticketRepo = new TicketRepository();
-    let cliType = cliTypeRaw ? (cliTypeRaw as CliType) : CliType.CLAUDE;
-
-    if (status === TicketStatus.READY) {
-      const appState = await new AppStateRepository().get();
-      if (appState.availableCliTypes.length === 0) {
-        res.status(409).json({ error: "No CLI is currently available" });
-        return;
-      }
-      if (cliTypeRaw !== undefined && !appState.availableCliTypes.includes(cliTypeRaw as CliType)) {
-        res.status(409).json({ error: `${cliTypeRaw} is currently unavailable` });
-        return;
-      }
-      cliType = cliTypeRaw
-        ? (cliTypeRaw as CliType)
-        : await pickCliForNewTicket(ticketRepo, appState.availableCliTypes);
-    }
-
-    const ticket = await ticketRepo.create({
+    const ticket = await new TicketCommandService().create({
       title,
       description,
       projectId: typeof projectId === "number" ? projectId : null,
-      cliType,
+      ...(cliTypeRaw ? { cliType: cliTypeRaw as CliType } : {}),
       status,
     });
-
-    new TicketActivationService().activateCreatedIfReady(ticket, "ticket-create");
-
-    const full = await ticketRepo.findById(ticket.id);
-    res.status(201).json(full);
+    res.status(201).json(ticket);
   } catch (err: any) {
     const msg = err.message ?? "";
     const status = msg.includes("No CLI") || msg.includes("currently unavailable") || msg.includes("is draft") ? 409 : 500;
