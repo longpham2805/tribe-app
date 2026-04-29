@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog, fetchTicketFile } from "../../api";
 import { normalizeActivityEvents } from "../../phaseEvents";
 import type { TicketPhase } from "../../types";
-import { MarkdownProse } from "./MarkdownProse";
 import { SharedMarkdown } from "./SharedMarkdown";
+
+const MarkdownProse = lazy(() => import("./MarkdownProse").then((module) => ({ default: module.MarkdownProse })));
 
 type Tab = "markdown" | "activity" | "raw";
 
@@ -227,7 +228,9 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBa
           ) : error ? (
             <div className="error">{error}</div>
           ) : (
-            <MarkdownProse content={content || "_(empty)_"} />
+            <Suspense fallback={<div className="empty">Rendering markdown...</div>}>
+              <MarkdownProse content={content || "_(empty)_"} />
+            </Suspense>
           )}
         </div>
       )}

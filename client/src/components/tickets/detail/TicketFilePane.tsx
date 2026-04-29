@@ -1,7 +1,9 @@
+import { lazy, Suspense } from "react";
 import { Modal } from "../../ui/Modal";
-import { MarkdownViewer } from "../../markdown/MarkdownViewer";
 import type { TicketPhase } from "../../../types";
 import { fileToPhase } from "./ticketDetailUtils";
+
+const MarkdownViewer = lazy(() => import("../../markdown/MarkdownViewer").then((module) => ({ default: module.MarkdownViewer })));
 
 export function TicketFilePane({
   open,
@@ -36,7 +38,9 @@ export function TicketFilePane({
           </button>
         </div>
         <div className="td-file-body">
-          <MarkdownViewer ticketId={ticketId} fileName={fileName} phaseName={phaseName} liveEvents={live} onBack={onCloseFile} />
+          <Suspense fallback={<div className="empty">Loading file viewer...</div>}>
+            <MarkdownViewer ticketId={ticketId} fileName={fileName} phaseName={phaseName} liveEvents={live} onBack={onCloseFile} />
+          </Suspense>
         </div>
       </div>
     </Modal>

@@ -1,7 +1,5 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { CreateTicketModal } from "../components/tickets/CreateTicketModal";
-import { MondayPicker } from "../components/tickets/MondayPicker";
-import { TicketDetailModal } from "../components/tickets/TicketDetailModal";
 import { TicketGroupSection } from "../components/tickets/TicketGroupSection";
 import { useTicketBoardData } from "../components/tickets/hooks/useTicketBoardData";
 import { useTicketFiles } from "../components/tickets/hooks/useTicketFiles";
@@ -20,6 +18,9 @@ import {
 } from "../constants/ticket";
 import type { TicketPhase } from "../types";
 import { useAppContext, type PaletteAction } from "../context/AppContext";
+
+const MondayPicker = lazy(() => import("../components/tickets/MondayPicker").then((module) => ({ default: module.MondayPicker })));
+const TicketDetailModal = lazy(() => import("../components/tickets/TicketDetailModal").then((module) => ({ default: module.TicketDetailModal })));
 
 type TicketsPageProps = {
   projectId: number | null;
@@ -274,43 +275,47 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         )}
       </div>
 
-      <TicketDetailModal
-        open={selectedTicket != null}
-        paneWidth={paneWidth}
-        ticket={selectedTicket}
-        viewer={viewer}
-        selectedPhase={selectedTicket ? selectedPhaseByTicket[selectedTicket.id] : undefined}
-        selectedPhaseAutoOpenKey={selectedTicket ? selectedPhaseAutoOpenKeyByTicket[selectedTicket.id] : undefined}
-        liveLogs={liveLogs}
-        files={selectedTicket ? filesByTicket[selectedTicket.id] ?? [] : []}
-        filesLoading={selectedTicket != null && !(selectedTicket.id in filesByTicket)}
-        assignedSlotName={selectedTicket ? getSlotName(selectedTicket.slotId) : null}
-        projectName={selectedTicket ? getProjectName(selectedTicket.projectId ?? null) : null}
-        triggeringPhase={triggeringPhase}
-        respondingTicket={respondingTicket}
-        responseDraft={selectedTicket ? responseDraft[selectedTicket.id] ?? "" : ""}
-        onClose={() => {
-          setSelectedTicketId(null);
-          setViewer(null);
-        }}
-        onDelete={handleDelete}
-        onUpdateContent={handleUpdateTicketContent}
-        savingContent={selectedTicket ? savingTicketContent === selectedTicket.id : false}
-        onTriggerPhase={handleTriggerPhase}
-        onSelectPhase={handleSelectPhase}
-        onOpenFile={(fileName) => setViewer({ fileName })}
-        onCloseFile={() => setViewer(null)}
-        onResponseDraftChange={handleResponseDraftChange}
-        onRespond={handleRespond}
-        onCreateFeedback={handleCreateFeedback}
-        creatingFeedbackTicket={creatingFeedbackTicket}
-        phases={PHASES}
-        phaseLabels={PHASE_LABELS}
-        phaseColors={PHASE_COLORS}
-        statusLabels={STATUS_LABELS}
-        statusColors={STATUS_COLORS}
-        pausedStatuses={PAUSED_STATUSES}
-      />
+      {selectedTicket && (
+        <Suspense fallback={<Modal open onClose={() => setSelectedTicketId(null)} title="Ticket details" variant="right-pane" width={paneWidth}>Loading ticket details...</Modal>}>
+          <TicketDetailModal
+            open
+            paneWidth={paneWidth}
+            ticket={selectedTicket}
+            viewer={viewer}
+            selectedPhase={selectedPhaseByTicket[selectedTicket.id]}
+            selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKeyByTicket[selectedTicket.id]}
+            liveLogs={liveLogs}
+            files={filesByTicket[selectedTicket.id] ?? []}
+            filesLoading={!(selectedTicket.id in filesByTicket)}
+            assignedSlotName={getSlotName(selectedTicket.slotId)}
+            projectName={getProjectName(selectedTicket.projectId ?? null)}
+            triggeringPhase={triggeringPhase}
+            respondingTicket={respondingTicket}
+            responseDraft={responseDraft[selectedTicket.id] ?? ""}
+            onClose={() => {
+              setSelectedTicketId(null);
+              setViewer(null);
+            }}
+            onDelete={handleDelete}
+            onUpdateContent={handleUpdateTicketContent}
+            savingContent={savingTicketContent === selectedTicket.id}
+            onTriggerPhase={handleTriggerPhase}
+            onSelectPhase={handleSelectPhase}
+            onOpenFile={(fileName) => setViewer({ fileName })}
+            onCloseFile={() => setViewer(null)}
+            onResponseDraftChange={handleResponseDraftChange}
+            onRespond={handleRespond}
+            onCreateFeedback={handleCreateFeedback}
+            creatingFeedbackTicket={creatingFeedbackTicket}
+            phases={PHASES}
+            phaseLabels={PHASE_LABELS}
+            phaseColors={PHASE_COLORS}
+            statusLabels={STATUS_LABELS}
+            statusColors={STATUS_COLORS}
+            pausedStatuses={PAUSED_STATUSES}
+          />
+        </Suspense>
+      )}
 
       {canImportFromMonday && (
         <Modal
@@ -322,16 +327,20 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           panelClassName={`monday-import-modal monday-import-modal--${mondayPickerStep}`}
           bodyClassName="monday-import-modal__body"
         >
-          <MondayPicker
-            onImported={load}
-            onClose={handleCloseMondayPicker}
-            projectId={projectId}
-            projects={projects}
-            availableCliTypes={availableCliTypes}
-            projectName={projects.find((p) => p.id === selectedProjectId)?.name}
-            step={mondayPickerStep}
-            onStepChange={setMondayPickerStep}
-          />
+          {showMondayPicker && (
+            <Suspense fallback={<div className="empty">Loading Monday import...</div>}>
+              <MondayPicker
+                onImported={load}
+                onClose={handleCloseMondayPicker}
+                projectId={projectId}
+                projects={projects}
+                availableCliTypes={availableCliTypes}
+                projectName={projects.find((p) => p.id === selectedProjectId)?.name}
+                step={mondayPickerStep}
+                onStepChange={setMondayPickerStep}
+              />
+            </Suspense>
+          )}
         </Modal>
       )}
 
