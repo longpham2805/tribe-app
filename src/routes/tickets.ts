@@ -6,10 +6,7 @@ import { CliType } from "../enum/CliType";
 import { TicketStatus } from "../enum/TicketStatus";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { FeedbackService } from "../service/FeedbackService";
-import { pickCliForNewTicket } from "../cli";
-import { AppStateRepository } from "../repository/AppStateRepository";
-import { emit } from "../lib/events";
-import { TicketActivationService } from "../service/TicketActivationService";
+import { parseTicketStatus, TicketMutationError, TicketMutationService } from "../service/tickets/TicketMutationService";
 
 const PHASE_VALUES = Object.values(TicketPhase) as string[];
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as string[];
@@ -93,22 +90,6 @@ router.get("/:id", async (req: Request, res: Response) => {
 
 const CLI_TYPE_VALUES = Object.values(CliType) as string[];
 
-function parseTicketStatus(value: unknown, fallback = TicketStatus.READY): TicketStatus | null {
-  if (value === undefined) return fallback;
-  return typeof value === "string" && TICKET_STATUS_VALUES.includes(value)
-    ? (value as TicketStatus)
-    : null;
-}
-
-function hasProcessingStarted(ticket: { uid: string | null; slotId: number | null; waitingForSlot: boolean; phases?: Array<{ startedAt: Date | null; completedAt: Date | null }> }): boolean {
-  return (
-    ticket.uid != null ||
-    ticket.slotId != null ||
-    ticket.waitingForSlot ||
-    Boolean(ticket.phases?.some((phase) => phase.startedAt || phase.completedAt))
-  );
-}
-
 // POST /api/tickets  { title, description?, projectId?, cliType?, status? }
 router.post("/", async (req: Request, res: Response) => {
   try {
@@ -129,54 +110,31 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
-    const ticketRepo = new TicketRepository();
-    let cliType = cliTypeRaw ? (cliTypeRaw as CliType) : CliType.CLAUDE;
-
-    if (status === TicketStatus.READY) {
-      const appState = await new AppStateRepository().get();
-      if (appState.availableCliTypes.length === 0) {
-        res.status(409).json({ error: "No CLI is currently available" });
-        return;
-      }
-      if (cliTypeRaw !== undefined && !appState.availableCliTypes.includes(cliTypeRaw as CliType)) {
-        res.status(409).json({ error: `${cliTypeRaw} is currently unavailable` });
-        return;
-      }
-      cliType = cliTypeRaw
-        ? (cliTypeRaw as CliType)
-        : await pickCliForNewTicket(ticketRepo, appState.availableCliTypes);
-    }
-
-    const ticket = await ticketRepo.create({
+    const full = await new TicketMutationService().create({
       title,
       description,
       projectId: typeof projectId === "number" ? projectId : null,
-      cliType,
+      cliType: cliTypeRaw ? (cliTypeRaw as CliType) : undefined,
       status,
+      activationContext: "ticket-create",
     });
-
-    new TicketActivationService().activateCreatedIfReady(ticket, "ticket-create");
-
-    const full = await ticketRepo.findById(ticket.id);
     res.status(201).json(full);
   } catch (err: any) {
-    const msg = err.message ?? "";
-    const status = msg.includes("No CLI") || msg.includes("currently unavailable") || msg.includes("is draft") ? 409 : 500;
-    res.status(status).json({ error: msg });
+    const status = err instanceof TicketMutationError ? err.statusCode : 500;
+    res.status(status).json({ error: err.message ?? "" });
   }
 });
 
 // PATCH /api/tickets/:id  { title?, description?, currentPhase?, status? }
 router.patch("/:id", async (req: Request, res: Response) => {
   try {
-    const ticketRepo = new TicketRepository();
-    const phaseRepo = new PhaseRepository();
     const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid ticket ID" });
       return;
     }
 
+    const ticketRepo = new TicketRepository();
     const existing = await ticketRepo.findById(id);
     if (!existing) {
       res.status(404).json({ error: `Ticket ${id} not found` });
@@ -186,7 +144,6 @@ router.patch("/:id", async (req: Request, res: Response) => {
     const { title, description, currentPhase, status: statusRaw } = req.body;
     const hasTitlePatch = title !== undefined;
     const hasDescriptionPatch = description !== undefined;
-    const hasContentPatch = hasTitlePatch || hasDescriptionPatch;
 
     if (hasTitlePatch && (typeof title !== "string" || title.trim().length === 0 || title.trim().length > 255)) {
       res.status(400).json({ error: "title must be a non-empty string of 255 characters or fewer" });
@@ -209,68 +166,20 @@ router.patch("/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    if (existing.status === TicketStatus.DRAFT && currentPhase && currentPhase !== existing.currentPhase) {
-      res.status(409).json({ error: `Ticket ${id} is draft and cannot be processed` });
-      return;
-    }
-
-    if (existing.status === TicketStatus.READY && nextStatus === TicketStatus.DRAFT && hasProcessingStarted(existing)) {
-      res.status(409).json({ error: `Ticket ${id} has already started processing and cannot be moved to draft` });
-      return;
-    }
-
-    if (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY) {
-      const appState = await new AppStateRepository().get();
-      if (appState.availableCliTypes.length === 0) {
-        res.status(409).json({ error: "No CLI is currently available" });
-        return;
-      }
-      if (!appState.availableCliTypes.includes(existing.cliType)) {
-        res.status(409).json({ error: `${existing.cliType} is currently unavailable` });
-        return;
-      }
-    }
-
-    if (hasContentPatch && !existing.waitingForSlot) {
-      res.status(409).json({ error: "Ticket content can only be edited while waiting for a slot" });
-      return;
-    }
-
-    // If phase is changing, complete the active phase and activate the pending one
-    if (currentPhase && currentPhase !== existing.currentPhase) {
-      const activePhase = await phaseRepo.findActiveByTicketId(id);
-      if (activePhase) {
-        await phaseRepo.update(activePhase.id, { completedAt: new Date() });
-      }
-      const pending = await phaseRepo.findPendingByTicketIdAndName(id, currentPhase as TicketPhase);
-      if (pending) {
-        await phaseRepo.activate(pending.id);
-      }
-    }
-
-    await ticketRepo.update(id, {
+    const full = await new TicketMutationService(ticketRepo).update({
+      id,
       title: hasTitlePatch ? title.trim() : undefined,
       description: hasDescriptionPatch ? description.trim() : undefined,
       currentPhase: currentPhase as TicketPhase | undefined,
-      status: nextStatus === existing.status || (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY)
-        ? undefined
-        : nextStatus,
+      status: nextStatus,
+      enforceContentEditWindow: true,
+      emitAfterUpdate: true,
     });
 
-    if (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY) {
-      const handler = new PhaseHandler();
-      const full = await handler.publish(id);
-      res.json(full);
-      return;
-    }
-
-    const full = await ticketRepo.findById(id);
-    if (full) emit({ type: "ticket.updated", ticket: full });
     res.json(full);
   } catch (err: any) {
-    const msg = err.message ?? "";
-    const status = msg.includes("No CLI") || msg.includes("currently unavailable") || msg.includes("is draft") ? 409 : 500;
-    res.status(status).json({ error: msg });
+    const status = err instanceof TicketMutationError ? err.statusCode : 500;
+    res.status(status).json({ error: err.message ?? "" });
   }
 });
 
