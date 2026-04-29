@@ -93,6 +93,16 @@ export class PhaseRepository {
     return this.update(id, { startedAt: new Date() });
   }
 
+  async markRunningIfNotRunning(id: number): Promise<Phase | null> {
+    const result = await this.repo.update(
+      { id, status: Not(PhaseStatus.RUNNING), completedAt: IsNull() },
+      { status: PhaseStatus.RUNNING },
+    );
+
+    if ((result.affected ?? 0) === 0) return null;
+    return this.findById(id);
+  }
+
   async update(
     id: number,
     data: {
