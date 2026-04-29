@@ -1,6 +1,6 @@
-import { execSync } from "child_process";
-import { readdirSync, existsSync } from "fs";
-import { join } from "path";
+import { spawnSync } from "child_process";
+import { readdirSync, existsSync, statSync } from "fs";
+import { isAbsolute, join, relative, resolve } from "path";
 import { Slot } from "../entity/Slot";
 import { Ticket } from "../entity/Ticket";
 import { SlotRepository } from "../repository/SlotRepository";
@@ -37,13 +37,14 @@ export class SlotService {
       return null;
     }
 
+    this.ensureReposOnDev(freeSlot);
+
     // Assign slot → ticket and ticket → slot atomically (best-effort; single-server)
     await this.slotRepo.assign(freeSlot.id, ticket.id);
     await this.ticketRepo.updateSlotFields(ticket.id, {
       slotId: freeSlot.id,
       waitingForSlot: false,
     });
-    this.ensureReposOnDev(freeSlot);
 
     return freeSlot;
   }
@@ -54,37 +55,86 @@ export class SlotService {
    * immediate subdirectory — so adding new repos to the workspace just works.
    */
   ensureReposOnDev(slot: Slot): void {
-    let entries;
+    const rootPath = this.validateSlotRoot(slot);
     try {
-      entries = readdirSync(slot.rootPath, { withFileTypes: true });
-    } catch (err) {
-      console.error(`[SlotService] Cannot read rootPath "${slot.rootPath}":`, err);
-      return;
-    }
+      const entries = readdirSync(rootPath, { withFileTypes: true });
+      const repoDirs = entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => resolve(rootPath, entry.name))
+        .filter((dir) => this.isPathInside(dir, rootPath))
+        .filter((dir) => existsSync(join(dir, ".git")));
 
-    const repoDirs = entries
-      .filter((e) => e.isDirectory())
-      .map((e) => join(slot.rootPath, e.name))
-      .filter((dir) => existsSync(join(dir, ".git")));
-
-    if (repoDirs.length === 0) {
-      console.warn(`[SlotService] No git repos found inside "${slot.rootPath}"`);
-      return;
-    }
-
-    for (const repoPath of repoDirs) {
-      try {
-        execSync(
-          `git -C "${repoPath}" fetch origin && ` +
-          `git -C "${repoPath}" checkout dev && ` +
-          `git -C "${repoPath}" pull --ff-only origin dev`,
-          { stdio: "inherit" }
-        );
-        console.log(`[SlotService] Synced "${repoPath}" on dev`);
-      } catch (err) {
-        console.error(`[SlotService] git sync failed for "${repoPath}":`, err);
+      if (repoDirs.length === 0) {
+        throw new Error(`Slot ${slot.id} rootPath has no child git repos: ${rootPath}`);
       }
+
+      for (const repoPath of repoDirs) {
+        this.assertRepoClean(slot, repoPath);
+        this.runGit(slot, repoPath, ["fetch", "origin"]);
+        this.runGit(slot, repoPath, ["checkout", "dev"]);
+        this.runGit(slot, repoPath, ["pull", "--ff-only", "origin", "dev"]);
+        console.log(`[SlotService] Synced "${repoPath}" on dev`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[SlotService] Slot ${slot.id} git sync failed: ${message}`);
+      throw err;
     }
+  }
+
+  private validateSlotRoot(slot: Slot): string {
+    if (!slot.rootPath || !isAbsolute(slot.rootPath)) {
+      throw new Error(`Slot ${slot.id} rootPath must be an absolute path: ${slot.rootPath || "<empty>"}`);
+    }
+
+    const rootPath = resolve(slot.rootPath);
+    try {
+      if (!statSync(rootPath).isDirectory()) {
+        throw new Error(`Slot ${slot.id} rootPath is not a directory: ${rootPath}`);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("rootPath")) throw err;
+      throw new Error(`Slot ${slot.id} rootPath is not readable: ${rootPath}`);
+    }
+
+    return rootPath;
+  }
+
+  private isPathInside(path: string, parentPath: string): boolean {
+    const rel = relative(parentPath, path);
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+  }
+
+  private assertRepoClean(slot: Slot, repoPath: string): void {
+    const result = this.runGit(slot, repoPath, ["status", "--porcelain"], false);
+    const status = result.stdout.trim();
+    if (status) {
+      const summary = status.split("\n").slice(0, 10).join("; ");
+      throw new Error(`Slot ${slot.id} repo is dirty before sync: ${repoPath} (${summary})`);
+    }
+  }
+
+  private runGit(slot: Slot, repoPath: string, args: string[], inheritOutput = true): { stdout: string; stderr: string } {
+    const result = spawnSync("git", ["-C", repoPath, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      stdio: inheritOutput ? ["ignore", "inherit", "pipe"] : ["ignore", "pipe", "pipe"],
+      timeout: 120000,
+    });
+
+    const command = `git -C ${repoPath} ${args.join(" ")}`;
+    if (result.error) {
+      throw new Error(`Slot ${slot.id} git command failed: ${command}: ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+      const stderr = String(result.stderr ?? "").trim().slice(-500);
+      throw new Error(`Slot ${slot.id} git command failed (${result.status}): ${command}${stderr ? `: ${stderr}` : ""}`);
+    }
+
+    return {
+      stdout: String(result.stdout ?? ""),
+      stderr: String(result.stderr ?? ""),
+    };
   }
 
   /**
@@ -118,12 +168,13 @@ export class SlotService {
     });
     if (!nextTicket) return;
 
+    this.ensureReposOnDev(slot);
+
     await this.slotRepo.assign(slot.id, nextTicket.id);
     await this.ticketRepo.updateSlotFields(nextTicket.id, {
       slotId: slot.id,
       waitingForSlot: false,
     });
-    this.ensureReposOnDev(slot);
 
     console.log(
       `[SlotService] Slot ${slot.id} promoted to waiting ticket #${nextTicket.id}`
