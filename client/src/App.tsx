@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { getProjectShortcutTargetByKey } from "./utils/projectSelection";
 import { CommandPalette } from "./components/CommandPalette";
 import { AppHeader } from "./components/layout/AppHeader";
 import { ProjectPane } from "./components/layout/ProjectPane";
 import { useAppContext } from "./context/AppContext";
 import type { ShortcutIntent } from "./context/AppContext";
-import { ProjectsPage } from "./pages/ProjectsPage";
-import { SlotsPage } from "./pages/SlotsPage";
-import { TicketsPage } from "./pages/TicketsPage";
 import "./App.css";
+
+const TicketsPage = lazy(() => import("./pages/TicketsPage").then((module) => ({ default: module.TicketsPage })));
+const SlotsPage = lazy(() => import("./pages/SlotsPage").then((module) => ({ default: module.SlotsPage })));
+const ProjectsPage = lazy(() => import("./pages/ProjectsPage").then((module) => ({ default: module.ProjectsPage })));
 
 export default function App() {
   const {
@@ -79,9 +80,11 @@ export default function App() {
         />
 
         <main className="main">
-          {view === "tickets" && <TicketsPage projectId={selectedProjectId} canImportFromMonday={canImportFromMonday} />}
-          {view === "slots" && <SlotsPage projectId={selectedProjectId} />}
-          {view === "projects" && <ProjectsPage onProjectsChanged={loadProjects} />}
+          <Suspense fallback={<div className="empty">Loading...</div>}>
+            {view === "tickets" && <TicketsPage projectId={selectedProjectId} canImportFromMonday={canImportFromMonday} />}
+            {view === "slots" && <SlotsPage projectId={selectedProjectId} />}
+            {view === "projects" && <ProjectsPage onProjectsChanged={loadProjects} />}
+          </Suspense>
         </main>
       </div>
 
