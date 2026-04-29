@@ -337,6 +337,26 @@ export class PhaseHandler {
     if (!activePhase || activePhase.phaseName !== phaseName) {
       throw new Error(`No active ${phaseName} phase for ticket #${ticketId}`);
     }
+    if (activePhase.status === PhaseStatus.RUNNING) {
+      log(`ticket #${ticketId} phase ${phaseName} is already running; trigger is idempotent no-op`);
+      this.persistPhaseSystemEvent(phaseLogContext, "trigger_noop", `${phaseName} already running`, {
+        phaseId: activePhase.id,
+      });
+      return { ticket: updatedTicket, phase: activePhase };
+    }
+
+    const runningPhase = await this.phaseRepo.markRunningIfNotRunning(activePhase.id);
+    if (!runningPhase) {
+      const refreshedPhase = await this.phaseRepo.findById(activePhase.id);
+      if (!refreshedPhase) throw new Error(`Active ${phaseName} phase disappeared for ticket #${ticketId}`);
+      log(`ticket #${ticketId} phase ${phaseName} was claimed by another trigger; no-op`);
+      this.persistPhaseSystemEvent(phaseLogContext, "trigger_noop", `${phaseName} claimed by concurrent trigger`, {
+        phaseId: activePhase.id,
+      });
+      return { ticket: updatedTicket, phase: refreshedPhase };
+    }
+    emit({ type: "phase.updated", ticketId, phase: runningPhase });
+
     if (phaseEntered) {
       await runPhaseEnteredHooks(updatedTicket, phaseName);
     }
@@ -358,7 +378,7 @@ export class PhaseHandler {
       }
     });
 
-    return { ticket: updatedTicket, phase: activePhase };
+    return { ticket: updatedTicket, phase: runningPhase };
   }
 
   private async dispatch(phaseName: TicketPhase, ticket: Ticket): Promise<void> {
@@ -716,7 +736,6 @@ export class PhaseHandler {
     }
 
     await this.ensureCliAvailable(ticket);
-    await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING });
 
     log(`spawning ${ticket.cliType} for ${phaseName.toLowerCase()} (resume=${activePhase.cliSessionId ?? "none"})`);
     const rawResult = await this.spawnCli(ticket, prompt, slotRoot, activePhase.cliSessionId, {
