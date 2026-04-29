@@ -325,6 +325,16 @@ export function TicketDetailModal({
           onSubmitFeedback={handleFeedbackSubmit}
         />
 
+        <TicketLiveFeedSection
+          ticketId={ticket.id}
+          displayedFeedPhaseName={displayedFeedPhaseName}
+          displayedFeedPhaseStatus={displayedFeedPhaseStatus}
+          hasActivityDock={hasActivityDock}
+          liveLogs={liveLogs}
+          selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKey}
+          phaseLabels={phaseLabels}
+        />
+
         <TicketFeedbackRounds
           feedbackPhases={feedbackPhases}
           paused={paused}
@@ -340,16 +350,6 @@ export function TicketDetailModal({
           onReplyChange={handleReplyChange}
           onClearReply={clearReply}
           onSubmitReply={handleReplySubmit}
-        />
-
-        <TicketLiveFeedSection
-          ticketId={ticket.id}
-          displayedFeedPhaseName={displayedFeedPhaseName}
-          displayedFeedPhaseStatus={displayedFeedPhaseStatus}
-          hasActivityDock={hasActivityDock}
-          liveLogs={liveLogs}
-          selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKey}
-          phaseLabels={phaseLabels}
         />
 
         <TicketReplyPanel
