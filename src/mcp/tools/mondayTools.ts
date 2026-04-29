@@ -1,13 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { CliType } from "../../enum/CliType";
 import { TicketStatus } from "../../enum/TicketStatus";
 import { MondayHelper } from "../../monday/MondayHelper";
-import { formatItemMarkdown } from "../../monday/formatItemMarkdown";
 import { ProjectRepository } from "../../repository/ProjectRepository";
-import { TicketRepository } from "../../repository/TicketRepository";
-import { TicketActivationService } from "../../service/TicketActivationService";
+import { MondayImportService } from "../../service/MondayImportService";
 
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as [string, ...string[]];
+const CLI_TYPE_VALUES = Object.values(CliType) as [string, ...string[]];
 
 export function registerMondayTools(server: McpServer): void {
   server.tool(
@@ -74,53 +74,28 @@ export function registerMondayTools(server: McpServer): void {
         .string()
         .describe("Monday item ID or Monday item URL"),
       projectId: z.number().optional().describe("Project to import the ticket into"),
+      cliType: z.enum(CLI_TYPE_VALUES).optional().describe("CLI type to use for new READY tickets"),
       status: z.enum(TICKET_STATUS_VALUES).optional().describe("Ticket readiness status"),
+      clues: z.string().optional().describe("Additional context saved as ticket description"),
+      titleOverride: z.string().optional().describe("Override Monday item title for the local ticket"),
     },
-    async ({ mondayItemId, projectId, status }) => {
+    async ({ mondayItemId, projectId, cliType, status, clues, titleOverride }) => {
       try {
-        const ticketStatus = (status as TicketStatus | undefined) ?? TicketStatus.READY;
-        const monday = MondayHelper.fromEnv();
-        const { item } = await monday.getItemDetails(mondayItemId);
-        const markdown = formatItemMarkdown(item);
-        const ticketRepo = new TicketRepository();
-        const existing = await ticketRepo.findByMondayItemId(item.id);
-
-        let ticket;
-        if (existing) {
-          ticket = await ticketRepo.update(existing.id, {
-            title: item.name,
-            mondayMarkdown: markdown,
-            status: ticketStatus,
-          });
-        } else {
-          ticket = await ticketRepo.create({
-            title: item.name,
-            mondayItemId: item.id,
-            mondayMarkdown: markdown,
-            projectId: projectId ?? null,
-            status: ticketStatus,
-          });
-
-          ticket = await ticketRepo.findById(ticket.id);
-        }
-
-        if (!existing) {
-          new TicketActivationService().activateCreatedIfReady(ticket, "mcp-monday-import");
-        }
+        const result = await new MondayImportService().importTicket({
+          mondayItemId,
+          projectId: projectId ?? null,
+          cliType: cliType as CliType | undefined,
+          status: (status as TicketStatus | undefined) ?? TicketStatus.READY,
+          ...(clues ? { clues } : {}),
+          ...(titleOverride ? { titleOverride } : {}),
+          activationContext: "mcp-monday-import",
+        });
 
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify(
-                {
-                  action: existing ? "updated" : "created",
-                  ticket,
-                  mondayMarkdown: markdown,
-                },
-                null,
-                2,
-              ),
+              text: JSON.stringify(result, null, 2),
             },
           ],
         };

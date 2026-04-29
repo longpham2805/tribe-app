@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { CliType } from "../../enum/CliType";
 import { TicketPhase } from "../../enum/TicketPhase";
 import { TicketStatus } from "../../enum/TicketStatus";
 import { TicketRepository } from "../../repository/TicketRepository";
@@ -7,17 +8,22 @@ import { TicketMutationService } from "../../service/tickets/TicketMutationServi
 
 const PHASE_VALUES = Object.values(TicketPhase) as [string, ...string[]];
 const TICKET_STATUS_VALUES = Object.values(TicketStatus) as [string, ...string[]];
+const CLI_TYPE_VALUES = Object.values(CliType) as [string, ...string[]];
 
 export function registerTicketTools(server: McpServer): void {
   server.tool(
     "list_tickets",
-    "List all tickets, optionally filtered by phase",
-    { phase: z.enum(PHASE_VALUES).optional().describe("Filter by current phase") },
-    async ({ phase }) => {
+    "List all tickets, optionally filtered by phase and project",
+    {
+      phase: z.enum(PHASE_VALUES).optional().describe("Filter by current phase"),
+      projectId: z.number().optional().describe("Filter by project ID"),
+    },
+    async ({ phase, projectId }) => {
       const repo = new TicketRepository();
+      const opts = projectId != null ? { projectId } : undefined;
       const tickets = phase
-        ? await repo.findByPhase(phase as TicketPhase)
-        : await repo.findAll();
+        ? await repo.findByPhase(phase as TicketPhase, opts)
+        : await repo.findAll(opts);
       return {
         content: [{ type: "text", text: JSON.stringify(tickets, null, 2) }],
       };
@@ -49,13 +55,17 @@ export function registerTicketTools(server: McpServer): void {
     {
       title: z.string().describe("Short summary of the work"),
       description: z.string().optional().describe("Detailed description"),
+      projectId: z.number().nullable().optional().describe("Project ID to assign, or null for none"),
+      cliType: z.enum(CLI_TYPE_VALUES).optional().describe("CLI type to use when READY"),
       status: z.enum(TICKET_STATUS_VALUES).optional().describe("Ticket readiness status"),
     },
-    async ({ title, description, status }) => {
+    async ({ title, description, projectId, cliType, status }) => {
       try {
         const full = await new TicketMutationService().create({
           title,
           description,
+          projectId: projectId ?? null,
+          cliType: cliType as CliType | undefined,
           status: (status as TicketStatus | undefined) ?? TicketStatus.READY,
           activationContext: "mcp-ticket-create",
         });

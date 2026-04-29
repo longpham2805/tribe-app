@@ -156,7 +156,7 @@ export class PhaseHandler {
     }
     if (activePhase.status === PhaseStatus.RUNNING) {
       log(`ticket #${ticketId} phase ${phaseName} is already running; trigger is idempotent no-op`);
-      this.persistPhaseSystemEvent(phaseLogContext, "trigger_noop", `${phaseName} already running`, {
+      persistPhaseSystemEvent(phaseLogContext, "trigger_noop", `${phaseName} already running`, {
         phaseId: activePhase.id,
       });
       return { ticket: updatedTicket, phase: activePhase };
@@ -167,7 +167,7 @@ export class PhaseHandler {
       const refreshedPhase = await this.phaseRepo.findById(activePhase.id);
       if (!refreshedPhase) throw new Error(`Active ${phaseName} phase disappeared for ticket #${ticketId}`);
       log(`ticket #${ticketId} phase ${phaseName} was claimed by another trigger; no-op`);
-      this.persistPhaseSystemEvent(phaseLogContext, "trigger_noop", `${phaseName} claimed by concurrent trigger`, {
+      persistPhaseSystemEvent(phaseLogContext, "trigger_noop", `${phaseName} claimed by concurrent trigger`, {
         phaseId: activePhase.id,
       });
       return { ticket: updatedTicket, phase: refreshedPhase };

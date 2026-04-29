@@ -142,4 +142,47 @@ export function registerPhaseTools(server: McpServer): void {
       }
     },
   );
+
+  server.tool(
+    "publish_ticket",
+    "Publish a draft ticket so it can enter the workflow. Existing update_ticket status=READY behavior remains supported.",
+    { ticketId: z.number().describe("Ticket ID") },
+    async ({ ticketId }) => {
+      try {
+        const handler = new PhaseHandler();
+        const result = await handler.publish(ticketId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: err.message }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "respond_phase",
+    "Send a response message to the active phase handler for a ticket.",
+    {
+      ticketId: z.number().describe("Ticket ID"),
+      message: z.string().describe("Response message for the active phase"),
+    },
+    async ({ ticketId, message }) => {
+      try {
+        const handler = new PhaseHandler();
+        const result = await handler.respond(ticketId, message);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: err.message }],
+          isError: true,
+        };
+      }
+    },
+  );
 }
