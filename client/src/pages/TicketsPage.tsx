@@ -1,20 +1,11 @@
-import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  createFeedback,
-  createTicket,
-  deleteTicket,
-  fetchBoardTickets,
-  fetchSlots,
-  fetchTicketFiles,
-  respondPhase,
-  triggerPhase,
-  updateTicket,
-  uploadTicketImage,
-} from "../api";
+import { lazy, Suspense, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { CreateTicketModal } from "../components/tickets/CreateTicketModal";
-import { MondayPicker } from "../components/tickets/MondayPicker";
-import { TicketDetailModal } from "../components/tickets/TicketDetailModal";
-import { TicketSummaryCard } from "../components/tickets/TicketSummaryCard";
+import { TicketGroupSection } from "../components/tickets/TicketGroupSection";
+import { useTicketBoardData } from "../components/tickets/hooks/useTicketBoardData";
+import { useTicketFiles } from "../components/tickets/hooks/useTicketFiles";
+import { useTicketLiveUpdates } from "../components/tickets/hooks/useTicketLiveUpdates";
+import { useTicketMutations } from "../components/tickets/hooks/useTicketMutations";
+import { groupTicketsByBoardState } from "../components/tickets/utils/ticketBoard";
 import { Modal } from "../components/ui/Modal";
 import {
   PAUSED_STATUSES,
@@ -23,216 +14,54 @@ import {
   PHASES,
   STATUS_COLORS,
   STATUS_LABELS,
-  TICKET_GROUP_HINTS,
-  TICKET_GROUP_LABELS,
   TICKET_GROUPS,
-  type TicketGroup,
 } from "../constants/ticket";
-import type { Phase, Slot, Ticket, TicketFile, TicketPhase, WsMessage } from "../types";
+import type { TicketPhase } from "../types";
 import { useAppContext, type PaletteAction } from "../context/AppContext";
-import { useWebSocket } from "../ws";
+
+const MondayPicker = lazy(() => import("../components/tickets/MondayPicker").then((module) => ({ default: module.MondayPicker })));
+const TicketDetailModal = lazy(() => import("../components/tickets/TicketDetailModal").then((module) => ({ default: module.TicketDetailModal })));
 
 type TicketsPageProps = {
   projectId: number | null;
   canImportFromMonday: boolean;
 };
 
-function sortTicketsByNewest(tickets: Ticket[]): Ticket[] {
-  return [...tickets].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || right.id - left.id);
-}
-const MAX_LIVE_LOG_EVENTS = 200;
-
-const TicketGroupSection = memo(function TicketGroupSection({
-  group,
-  tickets,
-  count,
-  getSlotName,
-  getProjectName,
-  onOpenTicket,
-  action,
-}: {
-  group: TicketGroup;
-  tickets: Ticket[];
-  count: number;
-  getSlotName: (slotId: number | null) => string | null;
-  getProjectName: (projectId: number | null) => string | null;
-  onOpenTicket: (ticketId: number) => void;
-  action?: { label: string; disabled?: boolean; onClick: () => void } | null;
-}) {
-  if (tickets.length === 0) return null;
-
-  return (
-    <section className="ticket-group-section">
-      <div className="ticket-group-header">
-        <h2 className="ticket-group-title serif">{TICKET_GROUP_LABELS[group]}</h2>
-        <span className="ticket-group-count">{count}</span>
-        <span className="ticket-group-rule" aria-hidden="true" />
-        <span className="ticket-group-hint">{TICKET_GROUP_HINTS[group]}</span>
-      </div>
-      <div className="ticket-list">
-        {tickets.map((ticket) => (
-          <TicketSummaryCard
-            key={ticket.id}
-            ticket={ticket}
-            assignedSlotName={getSlotName(ticket.slotId)}
-            projectName={getProjectName(ticket.projectId ?? null)}
-            onOpen={() => onOpenTicket(ticket.id)}
-            phaseLabels={PHASE_LABELS}
-            phaseColors={PHASE_COLORS}
-            statusLabels={STATUS_LABELS}
-            statusColors={STATUS_COLORS}
-            pausedStatuses={PAUSED_STATUSES}
-          />
-        ))}
-      </div>
-      {action && (
-        <div className="ticket-group-action">
-          <button className="btn ticket-group-load-more" onClick={action.onClick} disabled={action.disabled}>
-            {action.label}
-          </button>
-        </div>
-      )}
-    </section>
-  );
-});
-
 export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps) {
   const { appState, shortcutIntent, clearShortcutIntent, setPaletteContextActions, projects, selectedProjectId } = useAppContext();
   const paneWidth = 720;
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMoreDone, setLoadingMoreDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [donePage, setDonePage] = useState(1);
-  const [doneTotal, setDoneTotal] = useState(0);
-  const [doneHasMore, setDoneHasMore] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
+  const {
+    tickets,
+    setTickets,
+    slots,
+    loading,
+    loadingMoreDone,
+    error,
+    setError,
+    doneTotal,
+    doneHasMore,
+    load,
+    loadMoreDone,
+  } = useTicketBoardData(projectId);
   const [showForm, setShowForm] = useState(false);
   const [showMondayPicker, setShowMondayPicker] = useState(false);
   const [mondayPickerStep, setMondayPickerStep] = useState<"browse" | "configure">("browse");
-  const [creating, setCreating] = useState(false);
-  const [triggeringPhase, setTriggeringPhase] = useState<string | null>(null);
-  const [responseDraft, setResponseDraft] = useState<Record<number, string>>({});
-  const [respondingTicket, setRespondingTicket] = useState<number | null>(null);
-  const [creatingFeedbackTicket, setCreatingFeedbackTicket] = useState<number | null>(null);
-  const [savingTicketContent, setSavingTicketContent] = useState<number | null>(null);
-  const [filesByTicket, setFilesByTicket] = useState<Record<number, TicketFile[]>>({});
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [viewer, setViewer] = useState<{ fileName: string | null } | null>(null);
   const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
   const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
   const [selectedPhaseAutoOpenKeyByTicket, setSelectedPhaseAutoOpenKeyByTicket] = useState<Record<number, string>>({});
-
-  const ticketFileRefreshTimers = useRef<Record<number, number>>({});
-  const fetchAndStoreTicketFiles = useCallback(
-    async (ticketId: number) => {
-      const files = await fetchTicketFiles(ticketId);
-      setFilesByTicket((cur) => ({ ...cur, [ticketId]: files }));
-    },
-    [],
-  );
+  const { filesByTicket, scheduleTicketFilesRefresh } = useTicketFiles(selectedTicketId);
 
   const handleSelectPhase = useCallback((ticketId: number, phase: TicketPhase) => {
     setSelectedPhaseByTicket((prev) => ({ ...prev, [ticketId]: phase }));
     setSelectedPhaseAutoOpenKeyByTicket((prev) => ({ ...prev, [ticketId]: `${ticketId}:${phase}:${Date.now()}` }));
   }, []);
 
-  const load = useCallback(async () => {
-    try {
-      setError(null);
-      const [ticketData, slotData] = await Promise.all([
-        fetchBoardTickets(projectId ?? undefined),
-        fetchSlots(projectId ?? undefined),
-      ]);
-      setTickets([...ticketData.nonDoneTickets, ...ticketData.doneTickets]);
-      setDonePage(ticketData.donePage);
-      setDoneTotal(ticketData.doneTotal);
-      setDoneHasMore(ticketData.doneHasMore);
-      setTotalCount(ticketData.totalCount);
-      setSlots(slotData);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    setLoading(true);
-    void load();
-  }, [load]);
-
   useEffect(() => {
     if (!canImportFromMonday && showMondayPicker) setShowMondayPicker(false);
   }, [canImportFromMonday, showMondayPicker]);
-
-  const scheduleTicketFilesRefresh = useCallback(
-    (ticketId: number) => {
-      if (selectedTicketId !== ticketId) return;
-      const existing = ticketFileRefreshTimers.current[ticketId];
-      if (existing) window.clearTimeout(existing);
-
-      ticketFileRefreshTimers.current[ticketId] = window.setTimeout(() => {
-        void fetchAndStoreTicketFiles(ticketId)
-          .catch(() => {
-            // ignore refresh errors
-          })
-          .finally(() => {
-            delete ticketFileRefreshTimers.current[ticketId];
-          });
-      }, 2000);
-    },
-    [fetchAndStoreTicketFiles, selectedTicketId],
-  );
-
-  useEffect(() => {
-    return () => {
-      Object.values(ticketFileRefreshTimers.current).forEach((timerId) => window.clearTimeout(timerId));
-      ticketFileRefreshTimers.current = {};
-    };
-  }, []);
-
-  useWebSocket(
-    useCallback(
-      (msg: WsMessage) => {
-        if (msg.type === "phase.updated") {
-          const updated = msg.phase as Phase;
-          setTickets((prev) =>
-            prev.map((ticket) =>
-              ticket.id !== msg.ticketId
-                ? ticket
-                : {
-                    ...ticket,
-                    phases: ticket.phases.map((phase) => (phase.id === updated.id ? { ...phase, ...updated } : phase)),
-                  },
-            ),
-          );
-          scheduleTicketFilesRefresh(msg.ticketId);
-          return;
-        }
-
-        if (msg.type === "ticket.updated") {
-          const ticket = msg.ticket as Ticket;
-          if (projectId != null && ticket.projectId != null && ticket.projectId !== projectId) return;
-          setTickets((prev) => {
-            const found = prev.some((x) => x.id === ticket.id);
-            if (found) return prev.map((x) => (x.id === ticket.id ? { ...x, ...ticket } : x));
-            return [ticket, ...prev];
-          });
-          return;
-        }
-
-        if (msg.type === "phase.log") {
-          const key = `${msg.ticketId}:${msg.phaseName}`;
-          setLiveLogs((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), msg.event].slice(-MAX_LIVE_LOG_EVENTS) }));
-          scheduleTicketFilesRefresh(msg.ticketId);
-          return;
-        }
-      },
-      [projectId, scheduleTicketFilesRefresh],
-    ),
-  );
+  useTicketLiveUpdates({ projectId, setTickets, setLiveLogs, scheduleTicketFilesRefresh });
 
   useEffect(() => {
     setSelectedPhaseByTicket((prev) => {
@@ -244,13 +73,6 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       return next;
     });
   }, [tickets]);
-
-  useEffect(() => {
-    if (selectedTicketId == null) return;
-    void fetchAndStoreTicketFiles(selectedTicketId).catch(() => {
-      setFilesByTicket((cur) => (selectedTicketId in cur ? cur : { ...cur, [selectedTicketId]: [] }));
-    });
-  }, [fetchAndStoreTicketFiles, selectedTicketId]);
 
   useEffect(() => {
     const actions: PaletteAction[] = [];
@@ -288,19 +110,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     setPaletteContextActions(actions);
   }, [handleSelectPhase, selectedTicketId, showForm, tickets, setPaletteContextActions]);
 
-  const getTicketGroup = useCallback((ticket: Ticket): TicketGroup => {
-    if (ticket.waitingForSlot) return "WAITING";
-    if (ticket.phases.some((phase) => !!phase.startedAt && !phase.completedAt)) return "RUNNING";
-    const shipPhase = ticket.phases.find((phase) => phase.phaseName === "SHIP");
-    if (shipPhase?.status === "COMPLETED") return "DONE";
-    return "RUNNING";
-  }, []);
-
-  const ticketsByGroup = useMemo(() => {
-    const groups: Record<TicketGroup, Ticket[]> = { RUNNING: [], WAITING: [], DONE: [] };
-    for (const ticket of tickets) groups[getTicketGroup(ticket)].push(ticket);
-    return groups;
-  }, [tickets, getTicketGroup]);
+  const ticketsByGroup = useMemo(() => groupTicketsByBoardState(tickets), [tickets]);
   const ticketCountsByGroup = useMemo(
     () => ({
       RUNNING: ticketsByGroup.RUNNING.length,
@@ -363,180 +173,37 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
     }
   }, [shortcutIntent, clearShortcutIntent, openTicket, canImportFromMonday]);
 
-  const handleCreate = useCallback(
-    async ({ title, description, cliType }: { title: string; description: string; cliType: "" | "CLAUDE" | "CODEX" }, files: File[]) => {
-      if (!title.trim()) return;
-      setCreating(true);
-      try {
-        const ticket = await createTicket({
-          title: title.trim(),
-          description: description.trim() || undefined,
-          projectId,
-          cliType: cliType || undefined,
-        });
-        const imageErrors: string[] = [];
-        for (const file of files) {
-          try {
-            await uploadTicketImage(ticket.id, file);
-          } catch {
-            imageErrors.push(file.name);
-          }
-        }
-        setShowForm(false);
-        await load();
-        if (imageErrors.length > 0) {
-          setError(`Ticket #${ticket.id} created. Failed to upload: ${imageErrors.join(", ")}. Retry via the ticket detail.`);
-        }
-      } catch (error: any) {
-        setError(error.message);
-      } finally {
-        setCreating(false);
-      }
-    },
-    [projectId, load],
-  );
-
-  const handleTriggerPhase = useCallback(
-    async (ticketId: number, phase: TicketPhase) => {
-      const key = `${ticketId}:${phase}`;
-      setTriggeringPhase(key);
-      try {
-        await triggerPhase(ticketId, phase);
-        await load();
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setTriggeringPhase(null);
-      }
-    },
-    [load],
-  );
-
-  const handleDelete = useCallback(
-    async (ticketId: number) => {
-      if (!confirm("Remove this ticket?")) return;
-      try {
-        await deleteTicket(ticketId);
-        if (selectedTicketId === ticketId) {
-          setSelectedTicketId(null);
-          setViewer(null);
-        }
-        await load();
-      } catch (e: any) {
-        setError(e.message);
-      }
-    },
-    [load, selectedTicketId],
-  );
-
-  const handleUpdateTicketContent = useCallback(
-    async (ticketId: number, patch: { title: string; description: string }) => {
-      setSavingTicketContent(ticketId);
-      setError(null);
-      try {
-        const updated = await updateTicket(ticketId, patch);
-        setTickets((prev) => prev.map((ticket) => (ticket.id === updated.id ? { ...ticket, ...updated } : ticket)));
-        await load();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Failed to update ticket";
-        setError(message);
-        await load();
-        throw new Error(message);
-      } finally {
-        setSavingTicketContent(null);
-      }
-    },
-    [load],
-  );
-
-  const handleRespond = useCallback(
-    async (ticketId: number) => {
-      const message = (responseDraft[ticketId] ?? "").trim();
-      if (!message) return;
-
-      const ticket = tickets.find((item) => item.id === ticketId);
-      const pausedPhase = ticket?.phases.find(
-        (phase) => !!phase.startedAt && !phase.completedAt && PAUSED_STATUSES.includes(phase.status),
-      );
-      if (pausedPhase) {
-        const key = `${ticketId}:${pausedPhase.phaseName}`;
-        setLiveLogs((prev) => ({
-          ...prev,
-          [key]: [...(prev[key] ?? []), { type: "user_message", text: message }].slice(-MAX_LIVE_LOG_EVENTS),
-        }));
-      }
-
-      setRespondingTicket(ticketId);
-      try {
-        await respondPhase(ticketId, message);
-        setResponseDraft((prev) => {
-          const next = { ...prev };
-          delete next[ticketId];
-          return next;
-        });
-        await load();
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setRespondingTicket(null);
-      }
-    },
-    [responseDraft, tickets, load],
-  );
-
-  const handleCreateFeedback = useCallback(
-    async (ticketId: number, comment: string) => {
-      setCreatingFeedbackTicket(ticketId);
-      setError(null);
-      try {
-        const updated = await createFeedback(ticketId, comment);
-        setTickets((prev) => prev.map((ticket) => (ticket.id === updated.id ? { ...ticket, ...updated } : ticket)));
-        await load();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Failed to create feedback";
-        setError(message);
-        await load();
-        throw new Error(message);
-      } finally {
-        setCreatingFeedbackTicket(null);
-      }
-    },
-    [load],
-  );
-
-  const handleLoadMoreDone = useCallback(async () => {
-    if (loadingMoreDone || !doneHasMore) return;
-
-    setLoadingMoreDone(true);
-    try {
-      setError(null);
-      const boardData = await fetchBoardTickets(projectId ?? undefined, donePage + 1);
-      setTickets((prev) => {
-        const loadedDoneTickets = prev.filter((ticket) => getTicketGroup(ticket) === "DONE");
-        const doneTickets = sortTicketsByNewest([...loadedDoneTickets, ...boardData.doneTickets]).filter(
-          (ticket, index, all) => all.findIndex((candidate) => candidate.id === ticket.id) === index,
-        );
-        return [...boardData.nonDoneTickets, ...doneTickets];
-      });
-      setDonePage(boardData.donePage);
-      setDoneTotal(boardData.doneTotal);
-      setDoneHasMore(boardData.doneHasMore);
-      setTotalCount(boardData.totalCount);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoadingMoreDone(false);
-    }
-  }, [doneHasMore, donePage, getTicketGroup, loadingMoreDone, projectId]);
+  const {
+    creating,
+    triggeringPhase,
+    responseDraft,
+    respondingTicket,
+    creatingFeedbackTicket,
+    savingTicketContent,
+    handleCreate,
+    handleTriggerPhase,
+    handleDelete,
+    handleUpdateTicketContent,
+    handleRespond,
+    handleCreateFeedback,
+    handleResponseDraftChange,
+  } = useTicketMutations({
+    projectId,
+    tickets,
+    selectedTicketId,
+    selectedTicket,
+    setSelectedTicketId,
+    setViewer,
+    setTickets,
+    setLiveLogs,
+    setError,
+    load,
+    onCreateSuccess: () => setShowForm(false),
+  });
 
   const closeForm = useCallback(() => {
     setShowForm(false);
   }, []);
-
-  const handleResponseDraftChange = useCallback((value: string) => {
-    if (!selectedTicket) return;
-    setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
-  }, [selectedTicket]);
 
   const handleCloseMondayPicker = useCallback(() => {
     setShowMondayPicker(false);
@@ -600,7 +267,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
                 action={group === "DONE" && doneHasMore ? {
                   label: loadingMoreDone ? "Loading..." : "Load more",
                   disabled: loadingMoreDone,
-                  onClick: handleLoadMoreDone,
+                  onClick: loadMoreDone,
                 } : null}
               />
             ))}
@@ -608,43 +275,47 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
         )}
       </div>
 
-      <TicketDetailModal
-        open={selectedTicket != null}
-        paneWidth={paneWidth}
-        ticket={selectedTicket}
-        viewer={viewer}
-        selectedPhase={selectedTicket ? selectedPhaseByTicket[selectedTicket.id] : undefined}
-        selectedPhaseAutoOpenKey={selectedTicket ? selectedPhaseAutoOpenKeyByTicket[selectedTicket.id] : undefined}
-        liveLogs={liveLogs}
-        files={selectedTicket ? filesByTicket[selectedTicket.id] ?? [] : []}
-        filesLoading={selectedTicket != null && !(selectedTicket.id in filesByTicket)}
-        assignedSlotName={selectedTicket ? getSlotName(selectedTicket.slotId) : null}
-        projectName={selectedTicket ? getProjectName(selectedTicket.projectId ?? null) : null}
-        triggeringPhase={triggeringPhase}
-        respondingTicket={respondingTicket}
-        responseDraft={selectedTicket ? responseDraft[selectedTicket.id] ?? "" : ""}
-        onClose={() => {
-          setSelectedTicketId(null);
-          setViewer(null);
-        }}
-        onDelete={handleDelete}
-        onUpdateContent={handleUpdateTicketContent}
-        savingContent={selectedTicket ? savingTicketContent === selectedTicket.id : false}
-        onTriggerPhase={handleTriggerPhase}
-        onSelectPhase={handleSelectPhase}
-        onOpenFile={(fileName) => setViewer({ fileName })}
-        onCloseFile={() => setViewer(null)}
-        onResponseDraftChange={handleResponseDraftChange}
-        onRespond={handleRespond}
-        onCreateFeedback={handleCreateFeedback}
-        creatingFeedbackTicket={creatingFeedbackTicket}
-        phases={PHASES}
-        phaseLabels={PHASE_LABELS}
-        phaseColors={PHASE_COLORS}
-        statusLabels={STATUS_LABELS}
-        statusColors={STATUS_COLORS}
-        pausedStatuses={PAUSED_STATUSES}
-      />
+      {selectedTicket && (
+        <Suspense fallback={<Modal open onClose={() => setSelectedTicketId(null)} title="Ticket details" variant="right-pane" width={paneWidth}>Loading ticket details...</Modal>}>
+          <TicketDetailModal
+            open
+            paneWidth={paneWidth}
+            ticket={selectedTicket}
+            viewer={viewer}
+            selectedPhase={selectedPhaseByTicket[selectedTicket.id]}
+            selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKeyByTicket[selectedTicket.id]}
+            liveLogs={liveLogs}
+            files={filesByTicket[selectedTicket.id] ?? []}
+            filesLoading={!(selectedTicket.id in filesByTicket)}
+            assignedSlotName={getSlotName(selectedTicket.slotId)}
+            projectName={getProjectName(selectedTicket.projectId ?? null)}
+            triggeringPhase={triggeringPhase}
+            respondingTicket={respondingTicket}
+            responseDraft={responseDraft[selectedTicket.id] ?? ""}
+            onClose={() => {
+              setSelectedTicketId(null);
+              setViewer(null);
+            }}
+            onDelete={handleDelete}
+            onUpdateContent={handleUpdateTicketContent}
+            savingContent={savingTicketContent === selectedTicket.id}
+            onTriggerPhase={handleTriggerPhase}
+            onSelectPhase={handleSelectPhase}
+            onOpenFile={(fileName) => setViewer({ fileName })}
+            onCloseFile={() => setViewer(null)}
+            onResponseDraftChange={handleResponseDraftChange}
+            onRespond={handleRespond}
+            onCreateFeedback={handleCreateFeedback}
+            creatingFeedbackTicket={creatingFeedbackTicket}
+            phases={PHASES}
+            phaseLabels={PHASE_LABELS}
+            phaseColors={PHASE_COLORS}
+            statusLabels={STATUS_LABELS}
+            statusColors={STATUS_COLORS}
+            pausedStatuses={PAUSED_STATUSES}
+          />
+        </Suspense>
+      )}
 
       {canImportFromMonday && (
         <Modal
@@ -656,16 +327,20 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
           panelClassName={`monday-import-modal monday-import-modal--${mondayPickerStep}`}
           bodyClassName="monday-import-modal__body"
         >
-          <MondayPicker
-            onImported={load}
-            onClose={handleCloseMondayPicker}
-            projectId={projectId}
-            projects={projects}
-            availableCliTypes={availableCliTypes}
-            projectName={projects.find((p) => p.id === selectedProjectId)?.name}
-            step={mondayPickerStep}
-            onStepChange={setMondayPickerStep}
-          />
+          {showMondayPicker && (
+            <Suspense fallback={<div className="empty">Loading Monday import...</div>}>
+              <MondayPicker
+                onImported={load}
+                onClose={handleCloseMondayPicker}
+                projectId={projectId}
+                projects={projects}
+                availableCliTypes={availableCliTypes}
+                projectName={projects.find((p) => p.id === selectedProjectId)?.name}
+                step={mondayPickerStep}
+                onStepChange={setMondayPickerStep}
+              />
+            </Suspense>
+          )}
         </Modal>
       )}
 
