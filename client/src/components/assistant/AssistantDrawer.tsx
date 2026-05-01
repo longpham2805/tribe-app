@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { AssistantMessage, AssistantAction } from "../../types/assistant";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 import "./AssistantDrawer.css";
 
 interface AssistantDrawerProps {
@@ -54,7 +55,9 @@ function MessageBubble({ msg }: { msg: AssistantMessage }) {
               {msg.ticketId && <span className="asst-ticket-ref">#{msg.ticketId}</span>}
             </span>
           )}
-          <div className="asst-bubble__content">{msg.content}</div>
+          <div className={`asst-bubble__content${isUser ? "" : " asst-bubble__content--markdown"}`}>
+            {isUser ? msg.content : <AssistantMarkdown content={msg.content} role={msg.role === "system" ? "system" : "assistant"} />}
+          </div>
         </div>
         <span className="asst-bubble__time">
           {formatMessageTime(msg.createdAt)}
