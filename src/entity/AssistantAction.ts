@@ -8,7 +8,6 @@ import {
 
 export type ActionType =
   | "RETRY_PHASE"
-  | "REBASE_AND_CONTINUE"
   | "RESPOND_TO_PHASE"
   | "TRIGGER_PHASE"
   | "OTHER";
@@ -23,7 +22,7 @@ export class AssistantAction {
 
   @Column({
     type: "enum",
-    enum: ["RETRY_PHASE", "REBASE_AND_CONTINUE", "RESPOND_TO_PHASE", "TRIGGER_PHASE", "OTHER"],
+    enum: ["RETRY_PHASE", "RESPOND_TO_PHASE", "TRIGGER_PHASE", "OTHER"],
   })
   type!: ActionType;
 

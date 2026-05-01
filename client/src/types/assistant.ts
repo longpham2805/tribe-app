@@ -2,7 +2,6 @@ export type MessageRole = "user" | "assistant" | "system";
 export type MessageSeverity = "info" | "warn" | "error";
 export type ActionType =
   | "RETRY_PHASE"
-  | "REBASE_AND_CONTINUE"
   | "RESPOND_TO_PHASE"
   | "TRIGGER_PHASE"
   | "OTHER";

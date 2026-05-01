@@ -1,6 +1,7 @@
 import { spawnSync } from "child_process";
 import { readdirSync, existsSync, statSync } from "fs";
 import { isAbsolute, join, relative, resolve } from "path";
+import { resolveGitBin } from "../lib/gitEnv";
 import { Slot } from "../entity/Slot";
 import { Ticket } from "../entity/Ticket";
 import { SlotRepository } from "../repository/SlotRepository";
@@ -115,7 +116,7 @@ export class SlotService {
   }
 
   private runGit(slot: Slot, repoPath: string, args: string[], inheritOutput = true): { stdout: string; stderr: string } {
-    const result = spawnSync("git", ["-C", repoPath, ...args], {
+    const result = spawnSync(resolveGitBin(), ["-C", repoPath, ...args], {
       encoding: "utf8",
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
       stdio: inheritOutput ? ["ignore", "inherit", "pipe"] : ["ignore", "pipe", "pipe"],

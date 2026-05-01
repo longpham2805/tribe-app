@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam, Tool, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { execSync } from "child_process";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { SlotRepository } from "../repository/SlotRepository";
@@ -21,8 +20,6 @@ import { PhaseStatus } from "../enum/PhaseStatus";
 import { emit } from "../lib/events";
 import { getLogFile, getTicketDir } from "../lib/paths";
 import { PauseQuestionContextProvider } from "./PauseQuestionContextProvider";
-import type { Phase } from "../entity/Phase";
-import type { Slot } from "../entity/Slot";
 
 const DEFAULT_MODEL = "gpt-5.5";
 const MAX_TOOL_ITERATIONS = 10;
@@ -65,15 +62,6 @@ const ASSISTANT_TOOLS: Tool[] = [
     },
   },
   {
-    name: "get_workspace_status",
-    description: "Get git status and branch info for a ticket's slot workspace",
-    input_schema: {
-      type: "object",
-      properties: { ticketId: { type: "number" } },
-      required: ["ticketId"],
-    },
-  },
-  {
     name: "get_app_state",
     description: "Get the current Tribe application state",
     input_schema: {
@@ -92,17 +80,6 @@ const ASSISTANT_TOOLS: Tool[] = [
         reason: { type: "string", description: "Why this retry is needed" },
       },
       required: ["ticketId", "reason"],
-    },
-  },
-  {
-    name: "rebase_and_continue",
-    description: "Rebase the ticket's workspace branch onto origin/dev and resume the paused phase (policy-gated)",
-    input_schema: {
-      type: "object",
-      properties: {
-        ticketId: { type: "number" },
-      },
-      required: ["ticketId"],
     },
   },
   {
@@ -561,20 +538,6 @@ export class AssistantAgentService {
           return { phase: activePhase, logs: results, jsonlTail, pauseContext };
         }
 
-        case "get_workspace_status": {
-          const ticket = await this.ticketRepo.findById(input.ticketId as number);
-          if (!ticket?.slotId) return { error: "Ticket has no slot" };
-          const slot = await this.slotRepo.findById(ticket.slotId);
-          if (!slot?.rootPath) return { error: "Slot has no rootPath" };
-          try {
-            const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: slot.rootPath, encoding: "utf8" }).trim();
-            const status = execSync("git status --short", { cwd: slot.rootPath, encoding: "utf8" }).trim();
-            return { branch, status: status || "(clean)", slotRoot: slot.rootPath };
-          } catch (e: any) {
-            return { error: `git error: ${e.message}` };
-          }
-        }
-
         case "get_app_state": {
           return this.appStateRepo.get();
         }
@@ -622,56 +585,6 @@ export class AssistantAgentService {
             const updated = await this.actionRepo.findById(action.id);
             if (updated) emit({ type: "assistant.action.updated", action: updated });
             return { error: err.message };
-          }
-        }
-
-        case "rebase_and_continue": {
-          const ticketId = input.ticketId as number;
-          const ticket = await this.ticketRepo.findById(ticketId);
-          if (!ticket?.slotId) return { error: "Ticket has no slot" };
-          const slot = await this.slotRepo.findById(ticket.slotId);
-          if (!slot) return { error: "Slot not found" };
-          const activePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
-          if (!activePhase) return { error: "No active phase" };
-
-          const fingerprint = `rebase:${ticketId}:${slot.id}:${activePhase.id}`;
-          const policyResult = await this.policy.canRebaseAndContinue(activePhase, slot, fingerprint);
-
-          if (!policyResult.allowed) {
-            const action = await this.actionRepo.create({
-              type: "REBASE_AND_CONTINUE",
-              status: "proposed",
-              payload: { ticketId },
-              reason: policyResult.reason,
-              source,
-              fingerprint: source === "auto" ? fingerprint : null,
-              ticketId,
-            });
-            emit({ type: "assistant.action.updated", action });
-            return { proposed: true, reason: policyResult.reason, actionId: action.id };
-          }
-
-          const action = await this.actionRepo.create({
-            type: "REBASE_AND_CONTINUE",
-            status: "executed",
-            payload: { ticketId },
-            reason: policyResult.reason,
-            source,
-            fingerprint,
-            ticketId,
-          });
-
-          try {
-            execSync("git rebase origin/dev", { cwd: slot.rootPath!, encoding: "utf8" });
-            await this.phaseHandler.respond(ticketId, "Rebased onto origin/dev. Please continue.");
-            emit({ type: "assistant.action.updated", action });
-            return { success: true, message: `Rebased onto origin/dev and resumed phase for ticket #${ticketId}` };
-          } catch (err: any) {
-            try { execSync("git rebase --abort", { cwd: slot.rootPath! }); } catch {}
-            await this.actionRepo.updateStatus(action.id, "failed", err.message);
-            const updated = await this.actionRepo.findById(action.id);
-            if (updated) emit({ type: "assistant.action.updated", action: updated });
-            return { error: `Rebase failed: ${err.message}. Aborted.` };
           }
         }
 
@@ -873,13 +786,6 @@ export class AssistantAgentService {
 
       if (action.type === "RETRY_PHASE" && ticketId) {
         await this.phaseHandler.retry(ticketId, { newCliSession: true, reason: action.reason ?? "User approved retry" });
-      } else if (action.type === "REBASE_AND_CONTINUE" && ticketId) {
-        const ticket = await this.ticketRepo.findById(ticketId);
-        const slot = ticket?.slotId ? await this.slotRepo.findById(ticket.slotId) : null;
-        if (slot?.rootPath) {
-          execSync("git rebase origin/dev", { cwd: slot.rootPath, encoding: "utf8" });
-          await this.phaseHandler.respond(ticketId, "Rebased onto origin/dev. Please continue.");
-        }
       } else if (action.type === "TRIGGER_PHASE" && ticketId) {
         const phaseName = payload.phaseName as TicketPhase;
         const ticket = await this.ticketRepo.findById(ticketId);
