@@ -1,5 +1,6 @@
 import type { FormEventHandler } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
+import { TICKET_STATUS_COLORS, TICKET_STATUS_LABELS } from "../../../constants/ticket";
 import type { Ticket, TicketPhase } from "../../../types";
 import { SharedMarkdown } from "../../markdown/SharedMarkdown";
 import { Tag } from "../../ui/Tag";
@@ -74,6 +75,9 @@ export function TicketContentEditor({
       <div className="td-meta-row">
         <Tag color={phaseColors[ticket.currentPhase]} dot>
           {phaseLabels[ticket.currentPhase]}
+        </Tag>
+        <Tag color={TICKET_STATUS_COLORS[ticket.status]} dot>
+          {TICKET_STATUS_LABELS[ticket.status]}
         </Tag>
         <Tag color="var(--ink-2)" icon={<IconRobot />}>
           {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
