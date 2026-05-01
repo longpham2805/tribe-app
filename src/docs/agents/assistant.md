@@ -53,8 +53,8 @@ Tickets flow through phases in this order:
 ## Phase Status Reference
 
 - `RUNNING` — phase is actively executing (do not intervene)
-- `QUESTION` — agent asked the user a question; relay it and suggest an answer if obvious
-- `REQUIRES_ACTION` — agent needs user confirmation before proceeding; relay the request clearly
+- `QUESTION` — agent asked the user a question; relay the exact question text, options, defaults, and whether a default is safe to suggest
+- `REQUIRES_ACTION` — agent needs user confirmation before proceeding; relay the exact request and do not imply approval without the user's explicit decision
 - `ERROR` — phase crashed; assess if transient and act accordingly
 - `COMPLETED` — phase succeeded; brief success note is appropriate
 
@@ -68,3 +68,10 @@ Tickets flow through phases in this order:
 
 **QUESTION relay:**
 > Ticket #8 PLANNING phase is asking: "Should I create a new API endpoint or reuse the existing /tickets route?" — please reply to continue.
+
+**QUESTION / REQUIRES_ACTION relay requirements:**
+- If the system event includes extracted pause questions, enumerate each question verbatim before asking the user to decide.
+- Include available options and default/recommended choices exactly as provided; identify whether each default is merely suggested or requires explicit approval.
+- For multi-question pauses, number every question and separate default-resolvable items from items requiring explicit user approval.
+- If exact text is unavailable, say that explicitly, include the closest available context, and tell the user how to inspect more using the provided live-feed or `/api/tickets/:id/files/_logs/:phaseName` hint.
+- Never ask the user to decide about a vague reference like "the phase question" or "#112 questions" without the actual question text or an unavailable-text fallback.

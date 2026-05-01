@@ -19,13 +19,15 @@ import { TicketStatus } from "../enum/TicketStatus";
 import { CliType } from "../enum/CliType";
 import { PhaseStatus } from "../enum/PhaseStatus";
 import { emit } from "../lib/events";
-import { getTicketDir } from "../lib/paths";
+import { getLogFile, getTicketDir } from "../lib/paths";
+import { PauseQuestionContextProvider } from "./PauseQuestionContextProvider";
 import type { Phase } from "../entity/Phase";
 import type { Slot } from "../entity/Slot";
 
 const DEFAULT_MODEL = "gpt-5.5";
 const MAX_TOOL_ITERATIONS = 10;
 const SYSTEM_PROMPT_PATH = join(__dirname, "../docs/agents/assistant.md");
+const MAX_PHASE_LOG_BYTES = 256 * 1024;
 
 const log = (msg: string) => console.log(`[AssistantAgent] ${msg}`);
 
@@ -312,6 +314,7 @@ export class AssistantAgentService {
   private actionRepo: AssistantActionRepository;
   private sessionRepo: AssistantSessionRepository;
   private policy: AssistantPolicyService;
+  private pauseContextProvider: PauseQuestionContextProvider;
   private phaseHandler: PhaseHandler;
   private ticketMutationService: TicketMutationService;
   private mondayImportService: MondayImportService;
@@ -327,6 +330,7 @@ export class AssistantAgentService {
     this.actionRepo = new AssistantActionRepository();
     this.sessionRepo = new AssistantSessionRepository();
     this.policy = new AssistantPolicyService();
+    this.pauseContextProvider = new PauseQuestionContextProvider(this.ticketRepo);
     this.phaseHandler = new PhaseHandler();
     this.ticketMutationService = new TicketMutationService();
     this.mondayImportService = new MondayImportService();
@@ -353,6 +357,13 @@ export class AssistantAgentService {
     const tribe = projects.find((p) => p.name.toLowerCase() === "tribe");
     if (tribe) return { id: tribe.id, name: tribe.name };
     return { id: projects[0].id, name: projects[0].name };
+  }
+
+  private redactLogText(text: string): string {
+    return text
+      .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[REDACTED]")
+      .replace(/\b(api[_-]?key|token|password|secret|credential|cookie)\b\s*[:=]\s*\S+/gi, "$1=[REDACTED]")
+      .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]");
   }
 
   /** Entry point for event-driven auto-actions */
@@ -531,16 +542,23 @@ export class AssistantAgentService {
           if (!activePhase) return { error: "No active phase found" };
           const logFiles = ["planning.md", "implementation.md", "ship.md"];
           const results: Record<string, string> = {};
+          const limit = (input.lines as number) ?? 100;
           for (const f of logFiles) {
             const fp = join(logDir, f);
             if (existsSync(fp)) {
               const content = readFileSync(fp, "utf-8");
               const lines = content.split("\n");
-              const limit = (input.lines as number) ?? 100;
-              results[f] = lines.slice(-limit).join("\n");
+              results[f] = this.redactLogText(lines.slice(-limit).join("\n"));
             }
           }
-          return { phase: activePhase, logs: results };
+          const jsonlPath = getLogFile(ticket.uid, String(activePhase.phaseName));
+          const jsonlTail = existsSync(jsonlPath)
+            ? this.redactLogText(readFileSync(jsonlPath, "utf-8").slice(-MAX_PHASE_LOG_BYTES).split("\n").slice(-limit).join("\n"))
+            : null;
+          const pauseContext = activePhase.status === PhaseStatus.QUESTION || activePhase.status === PhaseStatus.REQUIRES_ACTION
+            ? await this.pauseContextProvider.getContext(ticket.id, activePhase)
+            : null;
+          return { phase: activePhase, logs: results, jsonlTail, pauseContext };
         }
 
         case "get_workspace_status": {
