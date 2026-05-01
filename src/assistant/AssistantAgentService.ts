@@ -118,6 +118,27 @@ const ASSISTANT_TOOLS: Tool[] = [
         content: { type: "string" },
         severity: { type: "string", enum: ["info", "warn", "error"] },
         ticketId: { type: "number" },
+        embeds: {
+          type: "array",
+          description: "Structured attachments shown below the message. Use to attach plan/implementation summaries, questions, branch names, or PRs.",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["ticket", "plan", "implementation", "branch", "pull_request", "question"] },
+              ticketId: { type: "number" },
+              phaseId: { type: "number" },
+              title: { type: "string" },
+              phase: { type: "string" },
+              summary: { type: "string" },
+              name: { type: "string" },
+              url: { type: "string" },
+              number: { type: "number" },
+              state: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["type"],
+          },
+        },
       },
       required: ["content"],
     },
@@ -635,6 +656,7 @@ export class AssistantAgentService {
             ticketId: (input.ticketId as number) ?? ctx.ticketId ?? null,
             phaseId: ctx.phaseId ?? null,
             sourceEventKey: ctx.sourceEventKey ?? null,
+            embeds: (input.embeds as any[]) ?? null,
           });
           emit({ type: "assistant.message.created", message: msg });
           return { success: true, messageId: msg.id };

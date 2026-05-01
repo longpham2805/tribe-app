@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from "typeorm";
+import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 export type MessageRole = "user" | "assistant" | "system";
 export type MessageSeverity = "info" | "warn" | "error";
+export type { AssistantMessageEmbed };
 
 @Entity()
 export class AssistantMessage {
@@ -38,6 +40,9 @@ export class AssistantMessage {
 
   @Column({ type: "json", nullable: true })
   metadata!: Record<string, unknown> | null;
+
+  @Column({ type: "json", nullable: true })
+  embeds!: AssistantMessageEmbed[] | null;
 
   @CreateDateColumn()
   createdAt!: Date;

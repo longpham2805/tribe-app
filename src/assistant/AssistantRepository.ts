@@ -3,14 +3,56 @@ import { AppDataSource } from "../data-source";
 import { AssistantMessage } from "../entity/AssistantMessage";
 import { AssistantAction } from "../entity/AssistantAction";
 import { AssistantSession } from "../entity/AssistantSession";
+import { Ticket } from "../entity/Ticket";
 import type { ActionStatus, ActionType, ActionSource } from "../entity/AssistantAction";
 import type { MessageRole, MessageSeverity } from "../entity/AssistantMessage";
+import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 export class AssistantMessageRepository {
   private repo: Repository<AssistantMessage>;
+  private ticketRepo: Repository<Ticket>;
 
   constructor() {
     this.repo = AppDataSource.getRepository(AssistantMessage);
+    this.ticketRepo = AppDataSource.getRepository(Ticket);
+  }
+
+  private async buildAutoEmbeds(
+    ticketId: number | null | undefined,
+    suppliedEmbeds: AssistantMessageEmbed[] | null | undefined,
+  ): Promise<AssistantMessageEmbed[] | null> {
+    if (!ticketId) return suppliedEmbeds ?? null;
+
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    if (!ticket) return suppliedEmbeds ?? null;
+
+    const embeds: AssistantMessageEmbed[] = [];
+
+    const hasTicketEmbed = suppliedEmbeds?.some((e) => e.type === "ticket" && e.ticketId === ticketId) ?? false;
+    if (!hasTicketEmbed) {
+      embeds.push({ type: "ticket", ticketId, title: ticket.title, phase: ticket.currentPhase });
+    }
+
+    if (ticket.branchName) {
+      const hasBranchEmbed = suppliedEmbeds?.some((e) => e.type === "branch") ?? false;
+      if (!hasBranchEmbed) {
+        embeds.push({ type: "branch", name: ticket.branchName, ticketId });
+      }
+    }
+
+    if (ticket.pullRequests?.length) {
+      const existingPrUrls = new Set(
+        suppliedEmbeds?.filter((e) => e.type === "pull_request").map((e) => (e as Extract<AssistantMessageEmbed, { type: "pull_request" }>).url) ?? [],
+      );
+      for (const pr of ticket.pullRequests) {
+        if (existingPrUrls.has(pr.prUrl)) continue;
+        const match = pr.prUrl.match(/\/pull\/(\d+)/);
+        embeds.push({ type: "pull_request", url: pr.prUrl, number: match ? Number(match[1]) : undefined, ticketId });
+      }
+    }
+
+    const combined = [...embeds, ...(suppliedEmbeds ?? [])];
+    return combined.length > 0 ? combined : null;
   }
 
   async create(data: {
@@ -21,7 +63,9 @@ export class AssistantMessageRepository {
     severity?: MessageSeverity;
     sourceEventKey?: string | null;
     metadata?: Record<string, unknown> | null;
+    embeds?: AssistantMessageEmbed[] | null;
   }): Promise<AssistantMessage> {
+    const embeds = await this.buildAutoEmbeds(data.ticketId, data.embeds);
     const msg = this.repo.create({
       role: data.role,
       content: data.content,
@@ -30,6 +74,7 @@ export class AssistantMessageRepository {
       severity: data.severity ?? "info",
       sourceEventKey: data.sourceEventKey ?? null,
       metadata: data.metadata ?? null,
+      embeds,
     });
     return this.repo.save(msg);
   }

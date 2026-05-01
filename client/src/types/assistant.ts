@@ -8,6 +8,14 @@ export type ActionType =
 export type ActionStatus = "proposed" | "approved" | "rejected" | "executed" | "failed";
 export type ActionSource = "auto" | "chat" | "user";
 
+export type AssistantMessageEmbed =
+  | { type: "ticket"; ticketId: number; title?: string; phase?: string }
+  | { type: "plan"; ticketId: number; phaseId?: number; summary: string }
+  | { type: "implementation"; ticketId: number; phaseId?: number; summary: string }
+  | { type: "branch"; name: string; ticketId?: number }
+  | { type: "pull_request"; url: string; number?: number; title?: string; state?: string; ticketId?: number }
+  | { type: "question"; text: string; ticketId?: number; phaseId?: number };
+
 export interface AssistantMessage {
   id: number;
   role: MessageRole;
@@ -18,6 +26,7 @@ export interface AssistantMessage {
   readAt: string | null;
   sourceEventKey: string | null;
   metadata: Record<string, unknown> | null;
+  embeds: AssistantMessageEmbed[] | null;
   createdAt: string;
   updatedAt: string;
 }
