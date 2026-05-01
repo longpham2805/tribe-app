@@ -9,6 +9,7 @@ interface AssistantDrawerProps {
   onPinnedChange: (pinned: boolean) => void;
   newMessages: AssistantMessage[];
   newActions: AssistantAction[];
+  projectId?: number | null;
 }
 
 const SEVERITY_LABEL: Record<string, string> = {
@@ -108,6 +109,7 @@ export function AssistantDrawer({
   onPinnedChange,
   newMessages,
   newActions,
+  projectId,
 }: AssistantDrawerProps) {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [actions, setActions] = useState<AssistantAction[]>([]);
@@ -162,14 +164,19 @@ export function AssistantDrawer({
       await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, projectId: projectId ?? undefined }),
       });
+      // Refetch actions after response to pick up any newly proposed actions
+      fetch("/api/assistant/actions")
+        .then((r) => r.json())
+        .then((data: AssistantAction[]) => setActions(data))
+        .catch(console.error);
     } catch (err) {
       console.error(err);
     } finally {
       setSending(false);
     }
-  }, [input, sending]);
+  }, [input, sending, projectId]);
 
   const handleApprove = useCallback(async (id: number) => {
     await fetch(`/api/assistant/actions/${id}/approve`, { method: "POST" }).catch(console.error);

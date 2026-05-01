@@ -7,10 +7,16 @@ import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { SlotRepository } from "../repository/SlotRepository";
 import { AppStateRepository } from "../repository/AppStateRepository";
+import { ProjectRepository } from "../repository/ProjectRepository";
 import { AssistantMessageRepository, AssistantActionRepository, AssistantSessionRepository } from "./AssistantRepository";
 import { AssistantPolicyService } from "./AssistantPolicyService";
 import { PhaseHandler } from "../handler/PhaseHandler";
+import { TicketMutationService } from "../service/tickets/TicketMutationService";
+import { MondayImportService } from "../service/MondayImportService";
+import { MondayHelper } from "../monday/MondayHelper";
 import { TicketPhase } from "../enum/TicketPhase";
+import { TicketStatus } from "../enum/TicketStatus";
+import { CliType } from "../enum/CliType";
 import { PhaseStatus } from "../enum/PhaseStatus";
 import { emit } from "../lib/events";
 import { getTicketDir } from "../lib/paths";
@@ -111,7 +117,7 @@ const ASSISTANT_TOOLS: Tool[] = [
   },
   {
     name: "trigger_phase",
-    description: "Trigger a specific phase for a ticket (policy-gated for non-current phases)",
+    description: "Trigger a specific phase for a ticket (policy-gated). Only use on tickets that are already initialized (have a workspace/uid). For unstarted tickets, use publish_ticket instead — it runs CREATED which initializes the workspace, then auto-starts PLANNING.",
     input_schema: {
       type: "object",
       properties: {
@@ -137,6 +143,160 @@ const ASSISTANT_TOOLS: Tool[] = [
       required: ["content"],
     },
   },
+  {
+    name: "list_tickets",
+    description: "List all tickets, optionally filtered by phase and project",
+    input_schema: {
+      type: "object",
+      properties: {
+        phase: { type: "string", enum: Object.values(TicketPhase), description: "Filter by current phase" },
+        projectId: { type: "number", description: "Filter by project ID" },
+      },
+    },
+  },
+  {
+    name: "create_ticket",
+    description: "Create a new ticket. By default tickets are created as READY and immediately enter the workflow (PLANNING → IMPLEMENTATION → SHIP). Only use DRAFT if the user explicitly asks to save without triggering.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short summary of the work" },
+        description: { type: "string", description: "Detailed description" },
+        projectId: { type: "number", description: "Project ID to assign" },
+        cliType: { type: "string", enum: Object.values(CliType), description: "CLI type to use" },
+        status: { type: "string", enum: Object.values(TicketStatus), description: "READY = immediately triggers workflow (default). DRAFT = save without triggering." },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "update_ticket",
+    description: "Update a ticket's title, description, or current phase",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "number", description: "Ticket ID" },
+        title: { type: "string", description: "New title" },
+        description: { type: "string", description: "New description" },
+        currentPhase: { type: "string", enum: Object.values(TicketPhase), description: "Move ticket to this phase" },
+        status: { type: "string", enum: Object.values(TicketStatus), description: "Ticket readiness status" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "delete_ticket",
+    description: "Delete a ticket and all its phase records",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "number", description: "Ticket ID" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "list_phases",
+    description: "List all phase records for a ticket",
+    input_schema: {
+      type: "object",
+      properties: { ticketId: { type: "number", description: "Ticket ID" } },
+      required: ["ticketId"],
+    },
+  },
+  {
+    name: "get_phase",
+    description: "Get a single phase record by ID",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "number", description: "Phase ID" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "create_phase",
+    description: "Create a new phase record for a ticket",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticketId: { type: "number", description: "Ticket ID" },
+        phaseName: { type: "string", enum: Object.values(TicketPhase), description: "Phase name" },
+        startedAt: { type: "string", description: "ISO datetime for when the phase started" },
+      },
+      required: ["ticketId", "phaseName"],
+    },
+  },
+  {
+    name: "update_phase",
+    description: "Update a phase record (e.g. mark it completed)",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "number", description: "Phase ID" },
+        phaseName: { type: "string", enum: Object.values(TicketPhase), description: "Change phase name" },
+        startedAt: { type: "string", description: "ISO datetime for start" },
+        completedAt: { type: "string", description: "ISO datetime for completion, or null to re-open" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "delete_phase",
+    description: "Delete a phase record",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "number", description: "Phase ID" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "publish_ticket",
+    description: "Publish a draft ticket so it can enter the workflow",
+    input_schema: {
+      type: "object",
+      properties: { ticketId: { type: "number", description: "Ticket ID" } },
+      required: ["ticketId"],
+    },
+  },
+  {
+    name: "monday_not_started_tickets",
+    description: "Fetch all not-started tickets from Monday.com (groups: Dev Bugs, Prod Bugs Next, Next)",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectId: { type: "number", description: "Use this project's Monday board settings" },
+        boardIds: { type: "array", items: { type: "number" }, description: "Override board IDs" },
+        people: { type: "array", items: { type: "string" }, description: "Filter by people names/IDs" },
+      },
+    },
+  },
+  {
+    name: "monday_import_ticket",
+    description: "Fetch a Monday.com ticket by ID and import/update it in the database",
+    input_schema: {
+      type: "object",
+      properties: {
+        mondayItemId: { type: "string", description: "Monday item ID or URL" },
+        projectId: { type: "number", description: "Project to import into" },
+        cliType: { type: "string", enum: Object.values(CliType), description: "CLI type for new tickets" },
+        status: { type: "string", enum: Object.values(TicketStatus), description: "Ticket readiness status" },
+        clues: { type: "string", description: "Additional context saved as ticket description" },
+        titleOverride: { type: "string", description: "Override Monday item title" },
+      },
+      required: ["mondayItemId"],
+    },
+  },
+  {
+    name: "get_projects",
+    description: "List all projects with their Monday board settings",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "list_slots",
+    description: "List all workspace slots with their current ticket assignment and free/occupied status",
+    input_schema: {
+      type: "object",
+      properties: { projectId: { type: "number", description: "Filter slots by project ID" } },
+    },
+  },
 ];
 
 // ── Service ────────────────────────────────────────────────────────────
@@ -147,11 +307,14 @@ export class AssistantAgentService {
   private phaseRepo: PhaseRepository;
   private slotRepo: SlotRepository;
   private appStateRepo: AppStateRepository;
+  private projectRepo: ProjectRepository;
   private msgRepo: AssistantMessageRepository;
   private actionRepo: AssistantActionRepository;
   private sessionRepo: AssistantSessionRepository;
   private policy: AssistantPolicyService;
   private phaseHandler: PhaseHandler;
+  private ticketMutationService: TicketMutationService;
+  private mondayImportService: MondayImportService;
 
   constructor() {
     this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -159,11 +322,14 @@ export class AssistantAgentService {
     this.phaseRepo = new PhaseRepository();
     this.slotRepo = new SlotRepository();
     this.appStateRepo = new AppStateRepository();
+    this.projectRepo = new ProjectRepository();
     this.msgRepo = new AssistantMessageRepository();
     this.actionRepo = new AssistantActionRepository();
     this.sessionRepo = new AssistantSessionRepository();
     this.policy = new AssistantPolicyService();
     this.phaseHandler = new PhaseHandler();
+    this.ticketMutationService = new TicketMutationService();
+    this.mondayImportService = new MondayImportService();
   }
 
   private get systemPrompt(): string {
@@ -175,6 +341,18 @@ export class AssistantAgentService {
 
   private get model(): string {
     return DEFAULT_MODEL;
+  }
+
+  private async resolveDefaultProject(projectId?: number): Promise<{ id: number; name: string } | null> {
+    const projects = await this.projectRepo.findAll();
+    if (!projects.length) return null;
+    if (projectId != null) {
+      const found = projects.find((p) => p.id === projectId);
+      if (found) return { id: found.id, name: found.name };
+    }
+    const tribe = projects.find((p) => p.name.toLowerCase() === "tribe");
+    if (tribe) return { id: tribe.id, name: tribe.name };
+    return { id: projects[0].id, name: projects[0].name };
   }
 
   /** Entry point for event-driven auto-actions */
@@ -235,6 +413,18 @@ export class AssistantAgentService {
       return "Assistant is not configured. Please set ANTHROPIC_API_KEY in your environment.";
     }
 
+    // Load recent chat history for context (before saving current message)
+    const recentMsgs = await this.msgRepo.findRecent({ limit: 40 });
+    const historyMessages: MessageParam[] = recentMsgs
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
+    // Resolve active project for context injection
+    const activeProject = await this.resolveDefaultProject(opts.projectId);
+    const contextNote = activeProject
+      ? `[UI CONTEXT] Active project: "${activeProject.name}" (ID: ${activeProject.id}). When the user asks to create a ticket or perform any project-scoped action without specifying a project, use this project by default.`
+      : undefined;
+
     // Save the user's message
     const userMsg = await this.msgRepo.create({
       role: "user",
@@ -244,8 +434,8 @@ export class AssistantAgentService {
     emit({ type: "assistant.message.created", message: userMsg });
 
     const response = await this.runAgentLoop(
-      [{ role: "user", content: opts.message }],
-      { source: "chat" },
+      [...historyMessages, { role: "user", content: opts.message }],
+      { source: "chat", contextNote },
     );
 
     const reply = response ?? "I wasn't able to process that request.";
@@ -264,10 +454,11 @@ export class AssistantAgentService {
 
   private async runAgentLoop(
     initialMessages: MessageParam[],
-    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user" },
+    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user"; contextNote?: string },
   ): Promise<string | null> {
     const messages: MessageParam[] = [...initialMessages];
     let iterations = 0;
+    const system = ctx.contextNote ? `${this.systemPrompt}\n\n${ctx.contextNote}` : this.systemPrompt;
 
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
@@ -275,7 +466,7 @@ export class AssistantAgentService {
       const response = await this.client.messages.create({
         model: this.model,
         max_tokens: 2048,
-        system: this.systemPrompt,
+        system,
         tools: ASSISTANT_TOOLS,
         messages,
       });
@@ -515,6 +706,133 @@ export class AssistantAgentService {
           return { success: true, messageId: msg.id };
         }
 
+        case "list_tickets": {
+          const projectId = input.projectId as number | undefined;
+          const opts = projectId != null ? { projectId } : undefined;
+          const tickets = (input.phase as string | undefined)
+            ? await this.ticketRepo.findByPhase(input.phase as TicketPhase, opts)
+            : await this.ticketRepo.findAll(opts);
+          return tickets;
+        }
+
+        case "create_ticket": {
+          return this.ticketMutationService.create({
+            title: input.title as string,
+            description: input.description as string | undefined,
+            projectId: (input.projectId as number | undefined) ?? null,
+            cliType: input.cliType as CliType | undefined,
+            status: (input.status as TicketStatus | undefined) ?? TicketStatus.READY,
+            activationContext: "mcp-ticket-create",
+          });
+        }
+
+        case "update_ticket": {
+          return this.ticketMutationService.update({
+            id: input.id as number,
+            title: input.title as string | undefined,
+            description: input.description as string | undefined,
+            currentPhase: input.currentPhase as TicketPhase | undefined,
+            status: input.status as TicketStatus | undefined,
+          });
+        }
+
+        case "delete_ticket": {
+          const deleted = await this.ticketRepo.delete(input.id as number);
+          return deleted
+            ? { success: true, message: `Ticket ${input.id} deleted` }
+            : { error: `Ticket ${input.id} not found` };
+        }
+
+        case "list_phases": {
+          return this.phaseRepo.findByTicketId(input.ticketId as number);
+        }
+
+        case "get_phase": {
+          const phase = await this.phaseRepo.findById(input.id as number);
+          if (!phase) return { error: `Phase ${input.id} not found` };
+          return phase;
+        }
+
+        case "create_phase": {
+          return this.phaseRepo.create({
+            ticketId: input.ticketId as number,
+            phaseName: input.phaseName as TicketPhase,
+            startedAt: input.startedAt ? new Date(input.startedAt as string) : undefined,
+          });
+        }
+
+        case "update_phase": {
+          const existing = await this.phaseRepo.findById(input.id as number);
+          if (!existing) return { error: `Phase ${input.id} not found` };
+          return this.phaseRepo.update(input.id as number, {
+            phaseName: input.phaseName as TicketPhase | undefined,
+            startedAt: input.startedAt ? new Date(input.startedAt as string) : undefined,
+            completedAt: input.completedAt === null ? null : input.completedAt ? new Date(input.completedAt as string) : undefined,
+          });
+        }
+
+        case "delete_phase": {
+          const deleted = await this.phaseRepo.delete(input.id as number);
+          return deleted
+            ? { success: true, message: `Phase ${input.id} deleted` }
+            : { error: `Phase ${input.id} not found` };
+        }
+
+        case "publish_ticket": {
+          return this.phaseHandler.publish(input.ticketId as number);
+        }
+
+        case "monday_not_started_tickets": {
+          const projectId = input.projectId as number | undefined;
+          const boardIds = input.boardIds as number[] | undefined;
+          let monday: MondayHelper;
+          if (projectId != null) {
+            const project = await this.projectRepo.findById(projectId);
+            monday = new MondayHelper({
+              accessToken: process.env.MONDAY_ACCESS_TOKEN,
+              apiUrl: process.env.MONDAY_API_URL,
+              defaultBoardIds: boardIds ?? (project?.mondayBoardIds ?? undefined),
+              ewebinarDevPeople: project?.mondayDevPeople ?? undefined,
+            });
+          } else {
+            monday = MondayHelper.fromEnv();
+          }
+          const { items } = await monday.getNotStartedItems({
+            boardIds,
+            peopleOverride: input.people as string[] | undefined,
+          });
+          return { count: items.length, items };
+        }
+
+        case "monday_import_ticket": {
+          return this.mondayImportService.importTicket({
+            mondayItemId: input.mondayItemId as string,
+            projectId: (input.projectId as number | undefined) ?? null,
+            cliType: input.cliType as CliType | undefined,
+            status: (input.status as TicketStatus | undefined) ?? TicketStatus.READY,
+            ...(input.clues ? { clues: input.clues as string } : {}),
+            ...(input.titleOverride ? { titleOverride: input.titleOverride as string } : {}),
+            activationContext: "mcp-monday-import",
+          });
+        }
+
+        case "get_projects": {
+          return this.projectRepo.findAll();
+        }
+
+        case "list_slots": {
+          const projectId = input.projectId as number | undefined;
+          const slots = await this.slotRepo.findAll(projectId != null ? { projectId } : undefined);
+          return slots.map((slot) => ({
+            id: slot.id,
+            name: slot.name,
+            rootPath: slot.rootPath,
+            projectId: slot.projectId,
+            status: slot.currentTicketId ? "occupied" : "free",
+            currentTicketId: slot.currentTicketId,
+          }));
+        }
+
         default:
           return { error: `Unknown tool: ${name}` };
       }
@@ -545,7 +863,14 @@ export class AssistantAgentService {
         }
       } else if (action.type === "TRIGGER_PHASE" && ticketId) {
         const phaseName = payload.phaseName as TicketPhase;
-        await this.phaseHandler.trigger(ticketId, phaseName);
+        const ticket = await this.ticketRepo.findById(ticketId);
+        if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+        if (!ticket.uid || ticket.slotId == null) {
+          // Ticket not yet initialized — publish handles slot assignment, uid, and workspace setup
+          await this.phaseHandler.publish(ticketId);
+        } else {
+          await this.phaseHandler.trigger(ticketId, phaseName);
+        }
       } else if (action.type === "RESPOND_TO_PHASE" && ticketId) {
         const message = payload.message as string;
         await this.phaseHandler.respond(ticketId, message);

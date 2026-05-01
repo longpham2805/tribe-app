@@ -174,6 +174,7 @@ export default function App() {
         onPinnedChange={handleAssistantPinnedChange}
         newMessages={liveMessages}
         newActions={liveActions}
+        projectId={selectedProjectId}
       />
     </div>
   );

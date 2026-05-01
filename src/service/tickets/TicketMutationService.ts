@@ -73,7 +73,9 @@ export class TicketMutationService {
     });
 
     new TicketActivationService(this.phaseHandler).activateCreatedIfReady(ticket, input.activationContext);
-    return this.ticketRepo.findById(ticket.id);
+    const full = await this.ticketRepo.findById(ticket.id);
+    if (full) emit({ type: "ticket.updated", ticket: full });
+    return full;
   }
 
   async update(input: {
