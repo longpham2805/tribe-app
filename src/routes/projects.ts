@@ -209,7 +209,7 @@ router.post("/", async (req: Request, res: Response) => {
       introduction: agentContext.introduction,
       rules: agentContext.rules,
       techStack: agentContext.techStack,
-      fastTrack: fastTrack.value,
+      fastTrack: typeof payload.fastTrack === "boolean" ? payload.fastTrack : undefined,
     });
     res.status(201).json(project);
   } catch (error: unknown) {
@@ -257,7 +257,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
       introduction: agentContext.introduction,
       rules: agentContext.rules,
       techStack: agentContext.techStack,
-      fastTrack: fastTrack.value,
+      fastTrack: typeof payload.fastTrack === "boolean" ? payload.fastTrack : undefined,
     });
     if (!updated) {
       res.status(404).json({ error: `Project ${id} not found` });

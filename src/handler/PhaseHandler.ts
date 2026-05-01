@@ -15,7 +15,8 @@ import { getTicketDir } from "../lib/paths";
 import { emit } from "../lib/events";
 import { getAgent, MARKER_TRAILER } from "../agent";
 import { runPhaseCompletedHooks, runPhaseEnteredHooks } from "../hooks/registry";
-import { persistFeedbackArtifacts, persistShipArtifacts } from "./phase/artifactPersistence";
+import { autoMergeShipPRs, persistFeedbackArtifacts, persistShipArtifacts } from "./phase/artifactPersistence";
+import { ProjectRepository } from "../repository/ProjectRepository";
 import { PhaseCliRunner, type SpawnResult } from "./phase/phaseCli";
 import { feedbackOutputFile, phaseOutputFile, suggestFeedbackBranchName } from "./phase/phaseFiles";
 import { phaseLog as log, persistPhaseSystemEvent, type PhaseLogContext } from "./phase/phaseLogging";
@@ -60,8 +61,15 @@ export class PhaseHandler {
   }
 
   private async finalizeShip(ticket: Ticket, shipOutputPath: string): Promise<void> {
-    await persistShipArtifacts(this.ticketRepo, ticket, shipOutputPath, log);
+    const pullRequests = await persistShipArtifacts(this.ticketRepo, ticket, shipOutputPath, log);
     await this.ticketRepo.update(ticket.id, { isDone: true });
+
+    if (ticket.projectId != null && pullRequests.length > 0) {
+      const project = await new ProjectRepository().findById(ticket.projectId);
+      if (project?.fastTrack) {
+        autoMergeShipPRs(pullRequests, log);
+      }
+    }
     if (ticket.slotId == null) {
       log(`ticket #${ticket.id} has no slot — skipping release`);
       return;

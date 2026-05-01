@@ -180,6 +180,7 @@ export class ProjectRepository {
     if (data.techStack !== undefined) project.techStack = data.techStack;
     if (data.fastTrack !== undefined) project.fastTrack = data.fastTrack;
     if (data.logoPath !== undefined) project.logoPath = data.logoPath;
+    if (data.fastTrack !== undefined) project.fastTrack = data.fastTrack;
 
     return this.repo.save(project);
   }

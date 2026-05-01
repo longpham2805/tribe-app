@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "fs";
+import { spawnSync } from "child_process";
 import { Phase } from "../../entity/Phase";
 import { Ticket } from "../../entity/Ticket";
 import { TicketRepository } from "../../repository/TicketRepository";
@@ -13,10 +14,10 @@ export async function persistShipArtifacts(
   ticket: Ticket,
   shipOutputPath: string,
   log: Log,
-): Promise<void> {
+): Promise<PullRequestArtifact[]> {
   if (!existsSync(shipOutputPath)) {
     log(`ship output missing at ${shipOutputPath} — skipping artifact persistence`);
-    return;
+    return [];
   }
 
   const shipContent = readFileSync(shipOutputPath, "utf-8");
@@ -25,6 +26,24 @@ export async function persistShipArtifacts(
     branchName,
     pullRequests: pullRequests.length ? pullRequests : null,
   });
+  return pullRequests;
+}
+
+export function autoMergeShipPRs(pullRequests: PullRequestArtifact[], log: Log): void {
+  if (!pullRequests.length) return;
+
+  for (const pr of pullRequests) {
+    log(`fast-track: merging PR ${pr.prUrl}`);
+    const result = spawnSync("gh", ["pr", "merge", pr.prUrl, "--squash", "--delete-branch"], {
+      encoding: "utf-8",
+      timeout: 60_000,
+    });
+    if (result.status === 0) {
+      log(`fast-track: merged ${pr.prUrl}`);
+    } else {
+      log(`fast-track: merge failed for ${pr.prUrl} — ${result.stderr?.trim() ?? "unknown error"}`);
+    }
+  }
 }
 
 export async function persistFeedbackArtifacts({
