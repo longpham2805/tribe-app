@@ -7,10 +7,13 @@ export interface TicketFile {
   mtime: string;
 }
 
+export type TicketStatus = "DRAFT" | "READY";
+
 export interface Ticket {
   id: number;
   title: string;
   description: string | null;
+  status: TicketStatus;
   currentPhase: TicketPhase;
   cliType: CliType;
   mondayItemId: string | null;
