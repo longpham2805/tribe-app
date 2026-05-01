@@ -1,7 +1,9 @@
 import { subscribe } from "../lib/events";
 import { AssistantAgentService } from "./AssistantAgentService";
 import { PauseQuestionContextProvider, type PauseQuestionContext } from "./PauseQuestionContextProvider";
+import { PhaseCompletionSummaryReader, type PhaseCompletionSummary } from "./PhaseCompletionSummary";
 import { PhaseStatus } from "../enum/PhaseStatus";
+import { TicketRepository } from "../repository/TicketRepository";
 import type { Phase } from "../entity/Phase";
 
 const log = (msg: string) => console.log(`[AssistantMonitor] ${msg}`);
@@ -16,10 +18,19 @@ const WATCHED_STATUSES: PhaseStatus[] = [
 export class AssistantMonitorService {
   private agent: AssistantAgentService;
   private pauseContextProvider: PauseQuestionContextProvider;
+  private summaryReader: PhaseCompletionSummaryReader;
+  private ticketRepo: TicketRepository;
 
-  constructor() {
-    this.agent = new AssistantAgentService();
-    this.pauseContextProvider = new PauseQuestionContextProvider();
+  constructor(
+    agent = new AssistantAgentService(),
+    pauseContextProvider = new PauseQuestionContextProvider(),
+    summaryReader = new PhaseCompletionSummaryReader(),
+    ticketRepo = new TicketRepository(),
+  ) {
+    this.agent = agent;
+    this.pauseContextProvider = pauseContextProvider;
+    this.summaryReader = summaryReader;
+    this.ticketRepo = ticketRepo;
   }
 
   start(): void {
@@ -46,7 +57,10 @@ export class AssistantMonitorService {
     const pauseContext = phase.status === PhaseStatus.QUESTION || phase.status === PhaseStatus.REQUIRES_ACTION
       ? await this.pauseContextProvider.getContext(ticketId, phase)
       : null;
-    const description = this.buildEventDescription(ticketId, phase, statusLabel, pauseContext);
+    const completionSummary = phase.status === PhaseStatus.COMPLETED
+      ? await this.readCompletionSummary(ticketId, phase)
+      : null;
+    const description = this.buildEventDescription(ticketId, phase, statusLabel, pauseContext, completionSummary);
 
     const isAutoAction = phase.status === PhaseStatus.ERROR;
 
@@ -59,7 +73,25 @@ export class AssistantMonitorService {
     });
   }
 
-  private buildEventDescription(ticketId: number, phase: Phase, statusLabel: string, pauseContext: PauseQuestionContext | null): string {
+  private async readCompletionSummary(ticketId: number, phase: Phase): Promise<PhaseCompletionSummary | null> {
+    try {
+      const ticket = await this.ticketRepo.findById(ticketId);
+      if (!ticket?.uid) return null;
+      return this.summaryReader.read(ticket.uid, phase.phaseName);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`completion summary unavailable: ${message}`);
+      return null;
+    }
+  }
+
+  private buildEventDescription(
+    ticketId: number,
+    phase: Phase,
+    statusLabel: string,
+    pauseContext: PauseQuestionContext | null,
+    completionSummary: PhaseCompletionSummary | null,
+  ): string {
     if (phase.status === PhaseStatus.ERROR) {
       return [
         `Ticket #${ticketId} phase ${phase.phaseName} has entered ERROR state.`,
@@ -78,10 +110,12 @@ export class AssistantMonitorService {
     }
 
     if (phase.status === PhaseStatus.COMPLETED) {
+      const summaryText = completionSummary ? this.summaryReader.formatForPrompt(completionSummary) : "";
       return [
         `Ticket #${ticketId} phase ${phase.phaseName} completed successfully.`,
-        "Call post_assistant_message with a brief success note. Severity should be 'info'.",
-      ].join("\n");
+        summaryText,
+        "Call post_assistant_message with a brief success note using the artifact summary when present. Keep it concise: <=5 bullets, severity 'info'.",
+      ].filter(Boolean).join("\n");
     }
 
     return `Ticket #${ticketId} phase ${phase.phaseName} status changed to ${statusLabel}.`;
