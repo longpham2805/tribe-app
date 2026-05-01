@@ -122,6 +122,12 @@ export default function App() {
     }
   }, []);
 
+  const handleAssistantOpenTicket = useCallback((ticketId: number) => {
+    setView("tickets");
+    setShortcutIntent({ type: "open-ticket", ticketId });
+    setAssistantOpen(false);
+  }, [setShortcutIntent]);
+
   return (
     <div className="app">
       <AppHeader onSearchClick={() => setCommandPaletteOpen(true)} />
@@ -175,6 +181,7 @@ export default function App() {
         newMessages={liveMessages}
         newActions={liveActions}
         projectId={selectedProjectId}
+        onOpenTicket={handleAssistantOpenTicket}
       />
     </div>
   );

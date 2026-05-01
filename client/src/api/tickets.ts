@@ -19,6 +19,12 @@ export async function fetchBoardTickets(projectId?: number, donePage = 1): Promi
   return res.json();
 }
 
+export async function fetchTicket(id: number): Promise<Ticket> {
+  const res = await fetch(`${API_BASE}/tickets/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch ticket");
+  return res.json();
+}
+
 export async function createTicket(data: {
   title: string;
   description?: string;

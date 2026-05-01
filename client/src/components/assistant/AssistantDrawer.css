@@ -380,6 +380,58 @@
   word-break: break-word;
 }
 
+.asst-ticket-cards {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asst-ticket-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--paper) 72%, var(--cream));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  box-shadow: 0 1px 0 rgba(25, 25, 25, 0.03);
+}
+
+.asst-ticket-card--button {
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+
+.asst-ticket-card--button:hover {
+  background: var(--cream);
+  border-color: color-mix(in srgb, var(--claude) 34%, var(--hairline-strong));
+  transform: translateY(-1px);
+}
+
+.asst-ticket-card__meta {
+  color: var(--claude-deep);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.asst-ticket-card__title {
+  overflow: hidden;
+  color: var(--ink-1);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .asst-bubble__time {
   font-size: 10.5px;
   color: var(--ink-5);

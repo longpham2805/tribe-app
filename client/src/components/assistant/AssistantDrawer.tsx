@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { AssistantMessage, AssistantAction } from "../../types/assistant";
+import type { Ticket } from "../../types";
+import { extractTicketMentionIds } from "./ticketMentions";
+import { useTicketReferences } from "./useTicketReferences";
 import "./AssistantDrawer.css";
 
 interface AssistantDrawerProps {
@@ -10,6 +13,7 @@ interface AssistantDrawerProps {
   newMessages: AssistantMessage[];
   newActions: AssistantAction[];
   projectId?: number | null;
+  onOpenTicket?: (ticketId: number) => void;
 }
 
 const SEVERITY_LABEL: Record<string, string> = {
@@ -39,8 +43,57 @@ function AssistantAvatar({ role }: { role: AssistantMessage["role"] }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: AssistantMessage }) {
+function getPhaseLabel(value: string) {
+  return value.toLowerCase().replace(/_/g, " ");
+}
+
+function TicketReferenceCards({ tickets, onOpenTicket }: {
+  tickets: Ticket[];
+  onOpenTicket?: (ticketId: number) => void;
+}) {
+  if (tickets.length === 0) return null;
+  return (
+    <div className="asst-ticket-cards" aria-label="Referenced tickets">
+      {tickets.map((ticket) => {
+        const clickable = !!onOpenTicket;
+        const content = (
+          <>
+            <span className="asst-ticket-card__meta">#{ticket.id} · {getPhaseLabel(ticket.currentPhase)}</span>
+            <span className="asst-ticket-card__title">{ticket.title}</span>
+          </>
+        );
+
+        return clickable ? (
+          <button
+            key={ticket.id}
+            type="button"
+            className="asst-ticket-card asst-ticket-card--button"
+            onClick={() => onOpenTicket(ticket.id)}
+          >
+            {content}
+          </button>
+        ) : (
+          <div key={ticket.id} className="asst-ticket-card">
+            {content}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MessageBubble({ msg, ticketsById, onOpenTicket }: {
+  msg: AssistantMessage;
+  ticketsById: Map<number, Ticket>;
+  onOpenTicket?: (ticketId: number) => void;
+}) {
   const isUser = msg.role === "user";
+  const referencedTickets = isUser
+    ? []
+    : extractTicketMentionIds(msg).flatMap((id) => {
+      const ticket = ticketsById.get(id);
+      return ticket ? [ticket] : [];
+    });
   return (
     <div className={`asst-message asst-message--${msg.role}`}>
       <AssistantAvatar role={msg.role} />
@@ -56,6 +109,7 @@ function MessageBubble({ msg }: { msg: AssistantMessage }) {
           )}
           <div className="asst-bubble__content">{msg.content}</div>
         </div>
+        <TicketReferenceCards tickets={referencedTickets} onOpenTicket={onOpenTicket} />
         <span className="asst-bubble__time">
           {formatMessageTime(msg.createdAt)}
         </span>
@@ -110,12 +164,14 @@ export function AssistantDrawer({
   newMessages,
   newActions,
   projectId,
+  onOpenTicket,
 }: AssistantDrawerProps) {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [actions, setActions] = useState<AssistantAction[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const ticketsById = useTicketReferences(messages);
 
   // Load initial state when opened
   useEffect(() => {
@@ -256,7 +312,7 @@ export function AssistantDrawer({
             </div>
           )}
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} />
+            <MessageBubble key={msg.id} msg={msg} ticketsById={ticketsById} onOpenTicket={onOpenTicket} />
           ))}
           <div ref={bottomRef} />
         </div>
