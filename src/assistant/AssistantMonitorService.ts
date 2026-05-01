@@ -1,5 +1,6 @@
 import { subscribe } from "../lib/events";
 import { AssistantAgentService } from "./AssistantAgentService";
+import { PauseQuestionContextProvider, type PauseQuestionContext } from "./PauseQuestionContextProvider";
 import { PhaseStatus } from "../enum/PhaseStatus";
 import type { Phase } from "../entity/Phase";
 
@@ -14,9 +15,11 @@ const WATCHED_STATUSES: PhaseStatus[] = [
 
 export class AssistantMonitorService {
   private agent: AssistantAgentService;
+  private pauseContextProvider: PauseQuestionContextProvider;
 
   constructor() {
     this.agent = new AssistantAgentService();
+    this.pauseContextProvider = new PauseQuestionContextProvider();
   }
 
   start(): void {
@@ -40,7 +43,10 @@ export class AssistantMonitorService {
     const sourceEventKey = `${ticketId}:${phase.id}:${phase.status}:${errorFingerprint}`;
 
     const statusLabel = phase.status.toLowerCase().replace("_", " ");
-    const description = this.buildEventDescription(ticketId, phase, statusLabel);
+    const pauseContext = phase.status === PhaseStatus.QUESTION || phase.status === PhaseStatus.REQUIRES_ACTION
+      ? await this.pauseContextProvider.getContext(ticketId, phase)
+      : null;
+    const description = this.buildEventDescription(ticketId, phase, statusLabel, pauseContext);
 
     const isAutoAction = phase.status === PhaseStatus.ERROR;
 
@@ -53,7 +59,7 @@ export class AssistantMonitorService {
     });
   }
 
-  private buildEventDescription(ticketId: number, phase: Phase, statusLabel: string): string {
+  private buildEventDescription(ticketId: number, phase: Phase, statusLabel: string, pauseContext: PauseQuestionContext | null): string {
     if (phase.status === PhaseStatus.ERROR) {
       return [
         `Ticket #${ticketId} phase ${phase.phaseName} has entered ERROR state.`,
@@ -66,8 +72,8 @@ export class AssistantMonitorService {
     if (phase.status === PhaseStatus.QUESTION || phase.status === PhaseStatus.REQUIRES_ACTION) {
       return [
         `Ticket #${ticketId} phase ${phase.phaseName} is paused and ${statusLabel}.`,
-        phase.lastMessage ? `Message: ${phase.lastMessage.slice(0, 500)}` : "",
-        "Call post_assistant_message to relay this to the user with clear context and any suggestions.",
+        this.formatPauseContext(pauseContext),
+        "Call post_assistant_message to relay the exact question text, options/defaults, and required approval context before asking the user to decide.",
       ].filter(Boolean).join("\n");
     }
 
@@ -79,5 +85,30 @@ export class AssistantMonitorService {
     }
 
     return `Ticket #${ticketId} phase ${phase.phaseName} status changed to ${statusLabel}.`;
+  }
+
+  private formatPauseContext(context: PauseQuestionContext | null): string {
+    if (!context) return "Exact pause question text unavailable. Inspect phase logs before asking the user to decide.";
+
+    if (context.exactQuestions.length > 0) {
+      const questions = context.exactQuestions.map((question, index) => [
+        `${index + 1}. ${question.text}`,
+        question.options.length > 0 ? `   Options: ${question.options.join(" | ")}` : "",
+        question.defaultOption ? `   Default/recommended: ${question.defaultOption}` : "",
+        `   Decision mode: ${question.requiresExplicitApproval ? "requires explicit user approval" : "default-resolvable, but relay before proceeding"}`,
+        `   Source: ${question.source}`,
+      ].filter(Boolean).join("\n"));
+
+      return [
+        "Pause questions extracted from phase context:",
+        ...questions,
+        `Inspect hint: ${context.inspectHint}`,
+      ].join("\n");
+    }
+
+    return [
+      context.fallbackContext ?? "Exact pause question text unavailable.",
+      `Inspect hint: ${context.inspectHint}`,
+    ].join("\n");
   }
 }
