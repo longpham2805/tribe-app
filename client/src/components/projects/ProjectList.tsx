@@ -27,6 +27,11 @@ export function ProjectList({
               <h3 className="serif" style={{ margin: 0, fontSize: 17, color: "var(--ink)", fontWeight: 500 }}>{project.name}</h3>
               <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>/{project.slug ?? ""}</div>
             </div>
+            {project.fastTrack && (
+              <span className="sc-tag" style={{ background: "color-mix(in srgb, var(--claude-deep) 10%, transparent)", color: "var(--claude-deep)" }}>
+                Fast Track
+              </span>
+            )}
             {running > 0 && (
               <span className="sc-tag" style={{ background: "color-mix(in srgb, var(--claude-deep) 12%, transparent)", color: "var(--claude-deep)", display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--claude)", animation: "tp-pulse 1.4s infinite" }} />

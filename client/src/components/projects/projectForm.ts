@@ -10,6 +10,7 @@ export type EditState = {
   introduction: string;
   rules: string;
   techStack: string;
+  fastTrack: boolean;
 };
 
 export type ProjectModalMode = "create" | "configure";
@@ -50,6 +51,7 @@ export function toEditState(project: Project): EditState {
     introduction: project.introduction ?? "",
     rules: project.rules ?? "",
     techStack: project.techStack ?? "",
+    fastTrack: project.fastTrack ?? false,
   };
 }
 
@@ -64,5 +66,6 @@ export function emptyEditState(): EditState {
     introduction: "",
     rules: "",
     techStack: "",
+    fastTrack: false,
   };
 }
