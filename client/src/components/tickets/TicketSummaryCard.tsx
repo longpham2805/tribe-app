@@ -1,5 +1,5 @@
 import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
-import { PHASES } from "../../constants/ticket";
+import { PHASES, TICKET_STATUS_COLORS, TICKET_STATUS_LABELS } from "../../constants/ticket";
 import { Tag } from "../ui/Tag";
 import type { CliType, PhaseStatus, Ticket, TicketPhase } from "../../types";
 
@@ -209,6 +209,9 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
           {projectName && (
             <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{projectName}</span>
           )}
+          <Tag color={TICKET_STATUS_COLORS[ticket.status]} dot>
+            {TICKET_STATUS_LABELS[ticket.status]}
+          </Tag>
 
           {/* Paused/waiting status tags */}
           {pausedPhase && (

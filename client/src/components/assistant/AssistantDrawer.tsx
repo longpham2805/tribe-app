@@ -3,6 +3,7 @@ import type { AssistantMessage, AssistantAction } from "../../types/assistant";
 import type { Ticket } from "../../types";
 import { extractTicketMentionIds } from "./ticketMentions";
 import { useTicketReferences } from "./useTicketReferences";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 import "./AssistantDrawer.css";
 
 interface AssistantDrawerProps {
@@ -107,7 +108,9 @@ function MessageBubble({ msg, ticketsById, onOpenTicket }: {
               {msg.ticketId && <span className="asst-ticket-ref">#{msg.ticketId}</span>}
             </span>
           )}
-          <div className="asst-bubble__content">{msg.content}</div>
+          <div className={`asst-bubble__content${isUser ? "" : " asst-bubble__content--markdown"}`}>
+            {isUser ? msg.content : <AssistantMarkdown content={msg.content} role={msg.role === "system" ? "system" : "assistant"} />}
+          </div>
         </div>
         <TicketReferenceCards tickets={referencedTickets} onOpenTicket={onOpenTicket} />
         <span className="asst-bubble__time">

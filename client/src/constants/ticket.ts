@@ -1,4 +1,4 @@
-import type { PhaseStatus, Ticket, TicketPhase } from "../types";
+import type { PhaseStatus, Ticket, TicketPhase, TicketStatus } from "../types";
 
 export const PHASES: TicketPhase[] = ["CREATED", "PLANNING", "IMPLEMENTATION", "SHIP"];
 
@@ -36,6 +36,16 @@ export const STATUS_COLORS: Record<PhaseStatus, string | null> = {
   REQUIRES_ACTION: "#B07634",
   QUESTION: "#B07634",
   ERROR: "#B14B3F",
+};
+
+export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  DRAFT: "Draft",
+  READY: "Ready",
+};
+
+export const TICKET_STATUS_COLORS: Record<TicketStatus, string> = {
+  DRAFT: "#B07634",
+  READY: "#6F8E5E",
 };
 
 export const TICKET_GROUPS = ["RUNNING", "WAITING", "DONE"] as const;
