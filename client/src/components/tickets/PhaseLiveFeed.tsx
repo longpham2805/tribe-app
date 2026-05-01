@@ -98,7 +98,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
           setExpanded((prev) => !prev);
         }}
       >
-        Activity ({allEvents.length})
+        Activity ({activityEntries.length})
       </button>
       {expanded && (
         <div
@@ -106,7 +106,7 @@ export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpe
           className="phase-live-feed__body file-viewer__body--markdown"
         >
           {activityEntries.length === 0 ? (
-            <div className="phase-live-feed__empty">No events yet.</div>
+            <div className="phase-live-feed__empty">No activity to show.</div>
           ) : (
             <div className="phase-live-feed__entries phase-live-feed__entries--prose">
               {activityEntries.map((entry) => (
