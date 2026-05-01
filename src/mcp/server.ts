@@ -14,7 +14,9 @@ import projectRoutes from "../routes/projects";
 import appStateRoutes from "../routes/appState";
 import filesRoutes from "../routes/files";
 import uploadsRoutes from "../routes/uploads";
+import assistantRoutes from "../routes/assistant";
 import { attachWebSocket } from "../ws/server";
+import { AssistantMonitorService } from "../assistant/AssistantMonitorService";
 import { registerTicketTools } from "./tools/ticketTools";
 import { registerPhaseTools } from "./tools/phaseTools";
 import { registerMondayTools } from "./tools/mondayTools";
@@ -41,6 +43,8 @@ function createServer(): McpServer {
 async function main() {
   await AppDataSource.initialize();
   console.log("Tribe: Database connected.");
+
+  new AssistantMonitorService().start();
 
   const mcpServer = createServer();
   const app = createMcpExpressApp();
@@ -108,6 +112,7 @@ async function main() {
   app.use("/api/projects", projectRoutes);
   app.use("/api/app-state", appStateRoutes);
   app.use("/api/uploads", uploadsRoutes);
+  app.use("/api/assistant", assistantRoutes);
 
   // ── SPA Static Files ─────────────────────────────────────────────
   const publicDir = path.join(__dirname, "../../public");

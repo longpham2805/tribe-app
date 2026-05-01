@@ -5,3 +5,72 @@
 @import "./styles/markdown.css";
 @import "./styles/slots.css";
 @import "./styles/projects.css";
+
+/* ── Assistant FAB ──────────────────────────────────────────── */
+.asst-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  height: 44px;
+  padding: 0 16px 0 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--cream);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  box-shadow: 0 1px 2px rgba(25,25,25,0.08), 0 12px 28px -12px rgba(60,55,40,0.35);
+  z-index: 34;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  transition: transform 0.12s, background 0.15s;
+}
+
+.asst-fab:hover {
+  transform: translateY(-1px);
+}
+
+.asst-fab__icon {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--claude);
+  color: var(--cream);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.asst-fab__label {
+  white-space: nowrap;
+}
+
+.asst-fab__badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--status-error);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 2px solid var(--ink);
+}

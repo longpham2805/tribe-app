@@ -21,6 +21,12 @@ export class AppState {
   @CreateDateColumn()
   createdAt!: Date;
 
+  @Column({ type: "boolean", default: true })
+  assistantAutoActionsEnabled!: boolean;
+
+  @Column({ type: "varchar", length: 100, nullable: true })
+  assistantModel!: string | null;
+
   @UpdateDateColumn()
   updatedAt!: Date;
 }

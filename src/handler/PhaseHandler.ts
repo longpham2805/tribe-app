@@ -214,6 +214,28 @@ export class PhaseHandler {
     }
   }
 
+  /** Retry the active ERROR phase in a fresh CLI session (assistant auto-retry). */
+  async retry(ticketId: number, opts: { newCliSession?: boolean; reason?: string } = {}): Promise<TriggerResult> {
+    log(`retry → ticket #${ticketId} newCliSession=${opts.newCliSession ?? false} reason=${opts.reason ?? ""}`);
+
+    const ticket = await this.ticketRepo.findById(ticketId);
+    if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+
+    const activePhase = await this.phaseRepo.findActiveByTicketId(ticketId);
+    if (!activePhase) throw new Error(`Ticket ${ticketId} has no active phase to retry`);
+
+    if (activePhase.status !== PhaseStatus.ERROR) {
+      throw new Error(`Phase ${activePhase.phaseName} is not in ERROR state (status=${activePhase.status})`);
+    }
+
+    if (opts.newCliSession) {
+      await this.phaseRepo.update(activePhase.id, { cliSessionId: null });
+      activePhase.cliSessionId = null;
+    }
+
+    return this.trigger(ticketId, activePhase.phaseName);
+  }
+
   /** Resume an in-flight phase with a user reply (QUESTION / REQUIRES_ACTION / ERROR). */
   async respond(ticketId: number, message: string): Promise<TriggerResult> {
     log(`respond → ticket #${ticketId}`);

@@ -22,6 +22,8 @@ export class AppStateRepository {
       id: APP_STATE_ID,
       autoTriggerEnabled: true,
       availableCliTypes: DEFAULT_AVAILABLE_CLI_TYPES,
+      assistantAutoActionsEnabled: true,
+      assistantModel: null,
     });
     return this.repo.save(state);
   }
@@ -29,6 +31,8 @@ export class AppStateRepository {
   async update(data: {
     autoTriggerEnabled?: boolean;
     availableCliTypes?: CliType[];
+    assistantAutoActionsEnabled?: boolean;
+    assistantModel?: string | null;
   }): Promise<AppState> {
     const state = await this.get();
 
@@ -37,6 +41,12 @@ export class AppStateRepository {
     }
     if (data.availableCliTypes !== undefined) {
       state.availableCliTypes = [...new Set(data.availableCliTypes)];
+    }
+    if (data.assistantAutoActionsEnabled !== undefined) {
+      state.assistantAutoActionsEnabled = data.assistantAutoActionsEnabled;
+    }
+    if (data.assistantModel !== undefined) {
+      state.assistantModel = data.assistantModel;
     }
 
     return this.repo.save(state);
