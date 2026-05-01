@@ -375,8 +375,10 @@ export class AssistantAgentService {
         { role: "user", content: opts.description },
       ], { ticketId: opts.ticketId, phaseId: opts.phaseId, sourceEventKey: opts.sourceEventKey });
 
-      // Save assistant's final text response as a message
-      if (response) {
+      // If the agent already posted a user-visible message for this event via
+      // post_assistant_message, treat its final text as an internal acknowledgement.
+      const alreadyPostedForEvent = await this.msgRepo.existsBySourceEventKey(opts.sourceEventKey);
+      if (response && !alreadyPostedForEvent) {
         const msg = await this.msgRepo.create({
           role: "assistant",
           content: response,
@@ -632,6 +634,7 @@ export class AssistantAgentService {
             severity: (input.severity as "info" | "warn" | "error") ?? "info",
             ticketId: (input.ticketId as number) ?? ctx.ticketId ?? null,
             phaseId: ctx.phaseId ?? null,
+            sourceEventKey: ctx.sourceEventKey ?? null,
           });
           emit({ type: "assistant.message.created", message: msg });
           return { success: true, messageId: msg.id };
