@@ -670,6 +670,90 @@
   gap: 12px;
 }
 
+.project-fast-track-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+.project-fast-track-toggle:hover {
+  border-color: var(--claude);
+  background: color-mix(in srgb, var(--claude) 5%, var(--paper));
+}
+
+.project-fast-track-toggle__input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.project-fast-track-toggle__control {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 6px;
+  background: var(--cream);
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+.project-fast-track-toggle__control::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 2px solid var(--cream);
+  border-bottom: 2px solid var(--cream);
+  transform: rotate(-45deg) scale(0);
+  transition: transform 0.12s ease-out;
+}
+
+.project-fast-track-toggle__input:checked + .project-fast-track-toggle__control {
+  border-color: var(--claude-deep);
+  background: var(--claude-deep);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--claude-deep) 14%, transparent);
+}
+
+.project-fast-track-toggle__input:checked + .project-fast-track-toggle__control::after {
+  transform: rotate(-45deg) scale(1);
+}
+
+.project-fast-track-toggle__input:focus-visible + .project-fast-track-toggle__control {
+  outline: 2px solid var(--claude);
+  outline-offset: 2px;
+}
+
+.project-fast-track-toggle__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.project-fast-track-toggle__title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.project-fast-track-toggle__description {
+  color: var(--ink-4);
+  font-size: 12.5px;
+}
+
 @keyframes tp-pop {
   from { transform: translateY(8px) scale(0.985); opacity: 0; }
   to   { transform: none; opacity: 1; }

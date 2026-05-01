@@ -130,16 +130,17 @@ export const ProjectModal = memo(function ProjectModal({
           </PSection>
 
           <PSection label="Workflow">
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, color: "var(--ink)", fontSize: 13 }}>
+            <label className="project-fast-track-toggle">
               <input
+                className="project-fast-track-toggle__input"
                 type="checkbox"
                 checked={form.fastTrack}
                 onChange={(e) => setField("fastTrack", e.target.checked)}
-                style={{ marginTop: 2 }}
               />
-              <span>
-                <span style={{ display: "block", fontWeight: 600 }}>Fast Track mode</span>
-                <span style={{ display: "block", color: "var(--ink-4)", marginTop: 2 }}>Run this project through accelerated ticket flow.</span>
+              <span className="project-fast-track-toggle__control" aria-hidden="true" />
+              <span className="project-fast-track-toggle__copy">
+                <span className="project-fast-track-toggle__title">Fast Track mode</span>
+                <span className="project-fast-track-toggle__description">Run this project through accelerated ticket flow.</span>
               </span>
             </label>
           </PSection>
