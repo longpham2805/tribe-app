@@ -21,6 +21,7 @@ type ProjectActivityRow = {
   project_introduction: string | null;
   project_rules: string | null;
   project_techStack: string | null;
+  project_fastTrack: boolean | number | string;
   project_logoPath: string | null;
   project_createdAt: Date | string;
   project_updatedAt: Date | string;
@@ -39,6 +40,7 @@ type ProjectWriteData = {
   introduction?: string | null;
   rules?: string | null;
   techStack?: string | null;
+  fastTrack?: boolean;
   logoPath?: string | null;
 };
 
@@ -126,6 +128,7 @@ export class ProjectRepository {
     project.introduction = raw.project_introduction == null ? null : String(raw.project_introduction);
     project.rules = raw.project_rules == null ? null : String(raw.project_rules);
     project.techStack = raw.project_techStack == null ? null : String(raw.project_techStack);
+    project.fastTrack = raw.project_fastTrack === true || raw.project_fastTrack === 1 || raw.project_fastTrack === "1";
     project.logoPath = raw.project_logoPath == null ? null : String(raw.project_logoPath);
     project.createdAt = new Date(String(raw.project_createdAt));
     project.updatedAt = new Date(String(raw.project_updatedAt));
@@ -152,6 +155,7 @@ export class ProjectRepository {
       introduction: data.introduction ?? null,
       rules: data.rules ?? null,
       techStack: data.techStack ?? null,
+      fastTrack: data.fastTrack ?? false,
       logoPath: data.logoPath ?? null,
     });
     return this.repo.save(project);
@@ -174,6 +178,7 @@ export class ProjectRepository {
     if (data.introduction !== undefined) project.introduction = data.introduction;
     if (data.rules !== undefined) project.rules = data.rules;
     if (data.techStack !== undefined) project.techStack = data.techStack;
+    if (data.fastTrack !== undefined) project.fastTrack = data.fastTrack;
     if (data.logoPath !== undefined) project.logoPath = data.logoPath;
 
     return this.repo.save(project);

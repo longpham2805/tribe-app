@@ -61,6 +61,7 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
           introduction: normalizeProjectContextInput(form.introduction),
           rules: normalizeProjectContextInput(form.rules),
           techStack: normalizeProjectContextInput(form.techStack),
+          fastTrack: form.fastTrack,
         };
         if (modal.mode === "configure" && modal.project) {
           await updateProject(modal.project.id, payload);

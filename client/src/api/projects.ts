@@ -12,6 +12,7 @@ export type ProjectPayload = {
   introduction?: string | null;
   rules?: string | null;
   techStack?: string | null;
+  fastTrack?: boolean;
 };
 
 export async function fetchProjects(): Promise<Project[]> {

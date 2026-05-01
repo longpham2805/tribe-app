@@ -70,7 +70,7 @@ export const ProjectModal = memo(function ProjectModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const setField = useCallback((field: keyof EditState, value: string) => {
+  const setField = useCallback((field: keyof EditState, value: EditState[keyof EditState]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   }, []);
 
@@ -127,6 +127,21 @@ export const ProjectModal = memo(function ProjectModal({
               autoFocus
               required
             />
+          </PSection>
+
+          <PSection label="Workflow">
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, color: "var(--ink)", fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={form.fastTrack}
+                onChange={(e) => setField("fastTrack", e.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                <span style={{ display: "block", fontWeight: 600 }}>Fast Track mode</span>
+                <span style={{ display: "block", color: "var(--ink-4)", marginTop: 2 }}>Run this project through accelerated ticket flow.</span>
+              </span>
+            </label>
           </PSection>
 
           <PSection label="Appearance">

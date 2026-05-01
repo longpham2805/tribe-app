@@ -16,10 +16,17 @@ type ProjectPayload = {
   introduction?: unknown;
   rules?: unknown;
   techStack?: unknown;
+  fastTrack?: unknown;
 };
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
+}
+
+function parseProjectFastTrack(payload: ProjectPayload): { value: boolean | undefined; error?: string } {
+  if (payload.fastTrack === undefined) return { value: undefined };
+  if (typeof payload.fastTrack !== "boolean") return { value: undefined, error: "fastTrack must be a boolean" };
+  return { value: payload.fastTrack };
 }
 
 function normalizeProjectColor(
@@ -182,6 +189,11 @@ router.post("/", async (req: Request, res: Response) => {
       res.status(400).json({ error: agentContext.error });
       return;
     }
+    const fastTrack = parseProjectFastTrack(payload);
+    if (fastTrack.error) {
+      res.status(400).json({ error: fastTrack.error });
+      return;
+    }
     const repo = new ProjectRepository();
     const project = await repo.create({
       name,
@@ -197,6 +209,7 @@ router.post("/", async (req: Request, res: Response) => {
       introduction: agentContext.introduction,
       rules: agentContext.rules,
       techStack: agentContext.techStack,
+      fastTrack: fastTrack.value,
     });
     res.status(201).json(project);
   } catch (error: unknown) {
@@ -225,6 +238,11 @@ router.patch("/:id", async (req: Request, res: Response) => {
       res.status(400).json({ error: agentContext.error });
       return;
     }
+    const fastTrack = parseProjectFastTrack(payload);
+    if (fastTrack.error) {
+      res.status(400).json({ error: fastTrack.error });
+      return;
+    }
     const updated = await repo.update(id, {
       name: typeof name === "string" ? name : undefined,
       slug: typeof slug === "string" || slug == null ? slug : undefined,
@@ -239,6 +257,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
       introduction: agentContext.introduction,
       rules: agentContext.rules,
       techStack: agentContext.techStack,
+      fastTrack: fastTrack.value,
     });
     if (!updated) {
       res.status(404).json({ error: `Project ${id} not found` });

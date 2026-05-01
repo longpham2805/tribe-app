@@ -10,6 +10,7 @@ export interface Project {
   introduction: string | null;
   rules: string | null;
   techStack: string | null;
+  fastTrack: boolean;
   logoPath: string | null;
   ticketCount?: number;
   runningTicketCount?: number;
