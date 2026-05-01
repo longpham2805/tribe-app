@@ -542,7 +542,7 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
 
 export function isDisplayableActivityItem(item: ActivityItem): boolean {
   const rawType = isRecord(item.raw) ? asString(item.raw.type) : undefined;
-  if (rawType === "user" && item.title === "User message" && !item.summary) return false;
+  if (rawType === "user" || rawType === "user_message") return false;
   return !(item.kind === "system" && (item.title === "System event" || item.title === "User event"));
 }
 
