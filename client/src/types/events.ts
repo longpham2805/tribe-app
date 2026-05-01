@@ -8,6 +8,7 @@ export type WsMessage =
   | { type: "phase.updated"; ticketId: number; phase: Phase }
   | { type: "phase.log"; ticketId: number; phaseName: TicketPhase; event: any }
   | { type: "ticket.updated"; ticket: Ticket }
+  | { type: "ticket.deleted"; ticketId: number }
   | { type: "app-state.updated"; appState: AppState }
   | { type: "assistant.message.created"; message: AssistantMessage }
   | { type: "assistant.action.updated"; action: AssistantAction };

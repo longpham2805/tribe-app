@@ -739,7 +739,7 @@ export class AssistantAgentService {
             description: input.description as string | undefined,
             projectId: (input.projectId as number | undefined) ?? null,
             cliType: input.cliType as CliType | undefined,
-            status: (input.status as TicketStatus | undefined) ?? TicketStatus.READY,
+            status: TicketStatus.READY,
             activationContext: "mcp-ticket-create",
           });
         }
@@ -755,10 +755,11 @@ export class AssistantAgentService {
         }
 
         case "delete_ticket": {
-          const deleted = await this.ticketRepo.delete(input.id as number);
+          const ticketId = input.id as number;
+          const deleted = await this.ticketRepo.delete(ticketId);
           return deleted
-            ? { success: true, message: `Ticket ${input.id} deleted` }
-            : { error: `Ticket ${input.id} not found` };
+            ? { success: true, message: `Ticket ${ticketId} deleted` }
+            : { error: `Ticket ${ticketId} not found` };
         }
 
         case "list_phases": {

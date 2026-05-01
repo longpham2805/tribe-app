@@ -45,6 +45,11 @@ export function useTicketLiveUpdates({
           return;
         }
 
+        if (msg.type === "ticket.deleted") {
+          setTickets((prev) => prev.filter((x) => x.id !== msg.ticketId));
+          return;
+        }
+
         if (msg.type === "phase.log") {
           const key = `${msg.ticketId}:${msg.phaseName}`;
           setLiveLogs((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), msg.event].slice(-MAX_LIVE_LOG_EVENTS) }));

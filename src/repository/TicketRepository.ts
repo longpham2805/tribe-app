@@ -182,7 +182,9 @@ export class TicketRepository {
   }
 
   async delete(id: number): Promise<boolean> {
-    const result = await this.repo.delete(id);
-    return (result.affected ?? 0) > 0;
+    const ticket = await this.repo.findOne({ where: { id } });
+    if (!ticket) return false;
+    await this.repo.remove(ticket);
+    return true;
   }
 }

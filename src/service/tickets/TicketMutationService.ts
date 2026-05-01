@@ -1,4 +1,3 @@
-import { emit } from "../../lib/events";
 import { pickCliForNewTicket } from "../../cli";
 import { CliType } from "../../enum/CliType";
 import { TicketPhase } from "../../enum/TicketPhase";
@@ -73,9 +72,7 @@ export class TicketMutationService {
     });
 
     new TicketActivationService(this.phaseHandler).activateCreatedIfReady(ticket, input.activationContext);
-    const full = await this.ticketRepo.findById(ticket.id);
-    if (full) emit({ type: "ticket.updated", ticket: full });
-    return full;
+    return this.ticketRepo.findById(ticket.id);
   }
 
   async update(input: {
@@ -144,7 +141,7 @@ export class TicketMutationService {
     }
 
     const full = await this.ticketRepo.findById(input.id);
-    if (input.emitAfterUpdate && full) emit({ type: "ticket.updated", ticket: full });
+    // ticket.updated emitted automatically by TicketSubscriber.afterUpdate
     return full;
   }
 }

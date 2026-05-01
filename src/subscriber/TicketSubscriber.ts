@@ -2,11 +2,14 @@ import {
   EntitySubscriberInterface,
   EventSubscriber,
   InsertEvent,
+  UpdateEvent,
+  RemoveEvent,
 } from "typeorm";
 import { Ticket } from "../entity/Ticket";
 import { Phase } from "../entity/Phase";
 import { TicketPhase } from "../enum/TicketPhase";
 import { TicketStatus } from "../enum/TicketStatus";
+import { emit } from "../lib/events";
 
 const ALL_PHASES: TicketPhase[] = [
   TicketPhase.CREATED,
@@ -36,7 +39,26 @@ export class TicketSubscriber implements EntitySubscriberInterface<Ticket> {
     );
 
     await event.manager.save(Phase, phases);
-    // Slot assignment and workspace setup are handled by PhaseHandler.handleCreated,
-    // called from the POST /api/tickets route after the insert transaction commits.
+
+    const full = await event.manager.findOne(Ticket, {
+      where: { id: ticketId },
+      relations: ["phases"],
+    });
+    if (full) emit({ type: "ticket.updated", ticket: full });
+  }
+
+  async afterUpdate(event: UpdateEvent<Ticket>): Promise<void> {
+    const ticketId = (event.entity as Ticket | undefined)?.id ?? (event.databaseEntity as Ticket | undefined)?.id;
+    if (!ticketId) return;
+    const full = await event.manager.findOne(Ticket, {
+      where: { id: ticketId },
+      relations: ["phases"],
+    });
+    if (full) emit({ type: "ticket.updated", ticket: full });
+  }
+
+  beforeRemove(event: RemoveEvent<Ticket>): void {
+    const ticketId = event.entity?.id;
+    if (ticketId) emit({ type: "ticket.deleted", ticketId });
   }
 }
