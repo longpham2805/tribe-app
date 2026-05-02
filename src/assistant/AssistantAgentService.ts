@@ -10,6 +10,7 @@ import { AppStateRepository } from "../repository/AppStateRepository";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { AssistantMessageRepository, AssistantActionRepository, AssistantSessionRepository } from "./AssistantRepository";
 import { AssistantPolicyService } from "./AssistantPolicyService";
+import { AssistantProjectSlotWriteService } from "./AssistantProjectSlotWriteService";
 import { PhaseHandler } from "../handler/PhaseHandler";
 import { TicketMutationService } from "../service/tickets/TicketMutationService";
 import { MondayImportService } from "../service/MondayImportService";
@@ -25,6 +26,7 @@ import { PauseQuestionContextProvider } from "./PauseQuestionContextProvider";
 import type { AssistantMessage, AssistantMessageMetadata } from "../entity/AssistantMessage";
 import type { Ticket } from "../entity/Ticket";
 import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
+import type { AssistantProjectSlotActionPayload, ProjectCreateInput, ProjectSlotWriteIntent, SlotCreateInput } from "./AssistantProjectSlotContracts";
 
 const DEFAULT_MODEL = "gpt-5.5";
 const MAX_TOOL_ITERATIONS = 10;
@@ -34,6 +36,15 @@ const SUPPORTED_VISION_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/
 
 const log = (msg: string) => console.log(`[AssistantAgent] ${msg}`);
 type ImageEmbed = Extract<AssistantMessageEmbed, { type: "image" }>;
+type AssistantToolContext = {
+  ticketId?: number;
+  phaseId?: number;
+  sourceEventKey?: string;
+  source?: "auto" | "chat" | "user";
+  contextNote?: string;
+  imageEmbeds?: ImageEmbed[];
+  activeProjectId?: number | null;
+};
 
 // ── Tool definitions ───────────────────────────────────────────────────
 
@@ -304,11 +315,81 @@ const ASSISTANT_TOOLS: Tool[] = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "create_project",
+    description: "Create a project after explaining the intended write to the user. Additive project creation executes directly and returns the created project ID and changed fields.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Project name" },
+        slug: { type: "string", description: "Optional unique project slug, or null to clear" },
+        mondayBoardIds: { type: "array", items: { type: "number" }, description: "Optional Monday board IDs" },
+        mondayDefaultPersonId: { type: "string", description: "Optional Monday default person ID" },
+        mondayDevPeople: { type: "array", items: { type: "string" }, description: "Optional Monday people names/IDs" },
+        primaryColor: { type: "string", description: "Optional #RRGGBB primary color" },
+        actionColor: { type: "string", description: "Optional #RRGGBB action color" },
+        introduction: { type: "string", description: "Optional assistant project introduction" },
+        rules: { type: "string", description: "Optional assistant project rules" },
+        techStack: { type: "string", description: "Optional assistant project tech stack" },
+        fastTrack: { type: "boolean", description: "Optional fast-track setting" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "update_project",
+    description: "Update project settings after explaining target fields. Risky updates to running projects are proposed for explicit approval instead of written immediately.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectId: { type: "number", description: "Project ID to update" },
+        name: { type: "string", description: "New project name" },
+        slug: { type: "string", description: "New unique project slug, or null to clear" },
+        mondayBoardIds: { type: "array", items: { type: "number" }, description: "Monday board IDs, or null to clear" },
+        mondayDefaultPersonId: { type: "string", description: "Monday default person ID, or null to clear" },
+        mondayDevPeople: { type: "array", items: { type: "string" }, description: "Monday people names/IDs, or null to clear" },
+        primaryColor: { type: "string", description: "#RRGGBB primary color, or null to clear" },
+        actionColor: { type: "string", description: "#RRGGBB action color, or null to clear" },
+        introduction: { type: "string", description: "Assistant project introduction, or null to clear" },
+        rules: { type: "string", description: "Assistant project rules, or null to clear" },
+        techStack: { type: "string", description: "Assistant project tech stack, or null to clear" },
+        fastTrack: { type: "boolean", description: "Fast-track setting" },
+      },
+      required: ["projectId"],
+    },
+  },
+  {
     name: "list_slots",
     description: "List all workspace slots with their current ticket assignment and free/occupied status",
     input_schema: {
       type: "object",
       properties: { projectId: { type: "number", description: "Filter slots by project ID" } },
+    },
+  },
+  {
+    name: "create_slot",
+    description: "Create a workspace slot after explaining name, absolute rootPath, and resolved project. Uses the active project by default when projectId is omitted.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Slot name" },
+        rootPath: { type: "string", description: "Absolute workspace root path; the assistant does not create directories" },
+        projectId: { type: "number", description: "Project ID; defaults to the active UI project when omitted" },
+      },
+      required: ["name", "rootPath"],
+    },
+  },
+  {
+    name: "update_slot",
+    description: "Update a workspace slot after explaining target fields. Occupied slot routing updates require explicit approval before write.",
+    input_schema: {
+      type: "object",
+      properties: {
+        slotId: { type: "number", description: "Slot ID to update" },
+        name: { type: "string", description: "New slot name" },
+        rootPath: { type: "string", description: "New absolute workspace root path" },
+        projectId: { type: "number", description: "Project ID, or null to unassign" },
+      },
+      required: ["slotId"],
     },
   },
 ];
@@ -326,6 +407,7 @@ export class AssistantAgentService {
   private actionRepo: AssistantActionRepository;
   private sessionRepo: AssistantSessionRepository;
   private policy: AssistantPolicyService;
+  private projectSlotWriteService: AssistantProjectSlotWriteService;
   private pauseContextProvider: PauseQuestionContextProvider;
   private phaseHandler: PhaseHandler;
   private ticketMutationService: TicketMutationService;
@@ -342,6 +424,7 @@ export class AssistantAgentService {
     this.actionRepo = new AssistantActionRepository();
     this.sessionRepo = new AssistantSessionRepository();
     this.policy = new AssistantPolicyService();
+    this.projectSlotWriteService = new AssistantProjectSlotWriteService();
     this.pauseContextProvider = new PauseQuestionContextProvider(this.ticketRepo);
     this.phaseHandler = new PhaseHandler();
     this.ticketMutationService = new TicketMutationService();
@@ -480,7 +563,7 @@ export class AssistantAgentService {
 
     const response = await this.runAgentLoop(
       [...historyMessages, { role: "user", content: agentUserContent }],
-      { source: "chat", contextNote, imageEmbeds },
+      { source: "chat", contextNote, imageEmbeds, activeProjectId: activeProject?.id ?? null },
     );
 
     const reply = response ?? "I wasn't able to process that request.";
@@ -558,7 +641,7 @@ export class AssistantAgentService {
 
   private async runAgentLoop(
     initialMessages: MessageParam[],
-    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user"; contextNote?: string; imageEmbeds?: ImageEmbed[] },
+    ctx: AssistantToolContext,
   ): Promise<string | null> {
     const messages: MessageParam[] = [...initialMessages];
     let iterations = 0;
@@ -655,7 +738,7 @@ export class AssistantAgentService {
   private async executeTool(
     name: string,
     input: Record<string, unknown>,
-    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user"; imageEmbeds?: ImageEmbed[] },
+    ctx: AssistantToolContext,
   ): Promise<unknown> {
     const source = ctx.source ?? "auto";
 
@@ -934,6 +1017,15 @@ export class AssistantAgentService {
           return this.projectRepo.findAll();
         }
 
+        case "create_project": {
+          return this.handleProjectSlotWrite({ operation: "create_project", input: input as ProjectCreateInput }, source);
+        }
+
+        case "update_project": {
+          const { projectId, ...projectInput } = input;
+          return this.handleProjectSlotWrite({ operation: "update_project", projectId: projectId as number, input: projectInput }, source);
+        }
+
         case "list_slots": {
           const projectId = input.projectId as number | undefined;
           const slots = await this.slotRepo.findAll(projectId != null ? { projectId } : undefined);
@@ -947,6 +1039,15 @@ export class AssistantAgentService {
           }));
         }
 
+        case "create_slot": {
+          return this.handleProjectSlotWrite({ operation: "create_slot", input: input as SlotCreateInput, defaultProjectId: ctx.activeProjectId ?? null }, source);
+        }
+
+        case "update_slot": {
+          const { slotId, ...slotInput } = input;
+          return this.handleProjectSlotWrite({ operation: "update_slot", slotId: slotId as number, input: slotInput }, source);
+        }
+
         default:
           return { error: `Unknown tool: ${name}` };
       }
@@ -954,6 +1055,43 @@ export class AssistantAgentService {
       log(`tool ${name} error: ${err?.message ?? err}`);
       return { error: String(err?.message ?? err) };
     }
+  }
+
+  private async handleProjectSlotWrite(intent: ProjectSlotWriteIntent, source: "auto" | "chat" | "user"): Promise<unknown> {
+    const policy = await this.policy.classifyProjectSlotWrite(intent);
+    if (!policy.allowed) {
+      return { operation: intent.operation, error: policy.reason, approvalRequired: false };
+    }
+
+    if (policy.requiresApproval) {
+      const payload: AssistantProjectSlotActionPayload = { kind: "project_slot_write", intent };
+      const action = await this.actionRepo.create({
+        type: "OTHER",
+        status: "proposed",
+        payload,
+        reason: policy.reason,
+        source,
+        confidence: 0.82,
+      });
+      emit({ type: "assistant.action.updated", action });
+      return {
+        proposed: true,
+        approvalRequired: true,
+        actionId: action.id,
+        operation: intent.operation,
+        reason: policy.reason,
+        blastRadius: policy.blastRadius,
+        message: `${intent.operation} requires approval before Tribe writes project or slot settings.`,
+      };
+    }
+
+    const result = await this.projectSlotWriteService.execute(intent);
+    return {
+      ...result,
+      approvalRequired: false,
+      reason: policy.reason,
+      blastRadius: policy.blastRadius,
+    };
   }
 
   /** Execute an approved proposed action */
@@ -981,6 +1119,9 @@ export class AssistantAgentService {
       } else if (action.type === "RESPOND_TO_PHASE" && ticketId) {
         const message = payload.message as string;
         await this.phaseHandler.respond(ticketId, message);
+      } else if (action.type === "OTHER" && this.isProjectSlotActionPayload(payload)) {
+        const result = await this.projectSlotWriteService.execute(payload.intent);
+        if (result.error) throw new Error(result.error);
       } else {
         return { success: false, error: `Cannot auto-execute action type ${action.type}` };
       }
@@ -996,5 +1137,16 @@ export class AssistantAgentService {
     const updated = await this.actionRepo.findById(actionId);
     if (updated) emit({ type: "assistant.action.updated", action: updated });
     return { success: true };
+  }
+
+  private isProjectSlotActionPayload(payload: Record<string, unknown>): payload is AssistantProjectSlotActionPayload {
+    if (payload.kind !== "project_slot_write") return false;
+    const intent = payload.intent as ProjectSlotWriteIntent | undefined;
+    if (!intent || typeof intent !== "object") return false;
+    if (intent.operation === "create_project") return typeof intent.input === "object" && intent.input !== null;
+    if (intent.operation === "update_project") return Number.isInteger(intent.projectId) && typeof intent.input === "object" && intent.input !== null;
+    if (intent.operation === "create_slot") return typeof intent.input === "object" && intent.input !== null;
+    if (intent.operation === "update_slot") return Number.isInteger(intent.slotId) && typeof intent.input === "object" && intent.input !== null;
+    return false;
   }
 }

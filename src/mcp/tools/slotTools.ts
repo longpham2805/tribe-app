@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SlotRepository } from "../../repository/SlotRepository";
+import { AssistantProjectSlotWriteService } from "../../assistant/AssistantProjectSlotWriteService";
 
 export function registerSlotTools(server: McpServer): void {
   server.tool(
@@ -23,6 +24,37 @@ export function registerSlotTools(server: McpServer): void {
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
+    },
+  );
+
+  server.tool(
+    "create_slot",
+    "Create a workspace slot with validated name, absolute rootPath, and optional project assignment. Trusted MCP clients execute directly.",
+    {
+      name: z.string().describe("Slot name"),
+      rootPath: z.string().describe("Absolute workspace root path; this tool does not create directories"),
+      projectId: z.number().nullable().optional().describe("Project ID, or null for unassigned"),
+    },
+    async (input) => {
+      const service = new AssistantProjectSlotWriteService();
+      const result = await service.execute({ operation: "create_slot", input });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "update_slot",
+    "Update workspace slot name, absolute rootPath, or project assignment. Caller owns confirmation in trusted MCP contexts.",
+    {
+      slotId: z.number().describe("Slot ID to update"),
+      name: z.string().optional().describe("New slot name"),
+      rootPath: z.string().optional().describe("New absolute workspace root path"),
+      projectId: z.number().nullable().optional().describe("Project ID, or null to unassign"),
+    },
+    async ({ slotId, ...input }) => {
+      const service = new AssistantProjectSlotWriteService();
+      const result = await service.execute({ operation: "update_slot", slotId, input });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     },
   );
 }

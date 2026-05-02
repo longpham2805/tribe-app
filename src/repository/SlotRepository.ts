@@ -43,12 +43,13 @@ export class SlotRepository {
 
   async update(
     id: number,
-    data: { name?: string; rootPath?: string }
+    data: { name?: string; rootPath?: string; projectId?: number | null }
   ): Promise<Slot | null> {
     const slot = await this.findById(id);
     if (!slot) return null;
     if (data.name !== undefined) slot.name = data.name;
     if (data.rootPath !== undefined) slot.rootPath = data.rootPath;
+    if (data.projectId !== undefined) slot.projectId = data.projectId;
     return this.repo.save(slot);
   }
 

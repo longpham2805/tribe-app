@@ -20,6 +20,7 @@ It provides:
 - **Project and slot management**
   - Group tickets by project
   - Assign or inspect workspace slots for parallel execution
+  - Assistant and MCP tools can create/update projects and slots through shared validation and policy gates
 - **Monday.com integration**
   - Import Monday items into local tickets
   - Fetch not-started items and map them into structured markdown
@@ -212,6 +213,7 @@ npm run start
   - Slots: `/api/slots`
   - Uploads/Files: `/api/uploads`, `/api/tickets/:ticketId/files`
 - **MCP endpoint:** `/mcp`
+- **Assistant project/slot writes:** additive project and slot creates execute directly; risky updates to running projects or occupied slots are proposed through the assistant approval queue before mutation.
 - **WebSocket endpoint:** `/ws`
 
 ## Notes

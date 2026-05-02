@@ -60,7 +60,7 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/slots/:id  { name?, rootPath? }
+// PATCH /api/slots/:id  { name?, rootPath?, projectId? }
 router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const repo = new SlotRepository();
@@ -70,8 +70,12 @@ router.patch("/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const { name, rootPath } = req.body;
-    const updated = await repo.update(id, { name, rootPath });
+    const { name, rootPath, projectId } = req.body;
+    const updated = await repo.update(id, {
+      name,
+      rootPath,
+      projectId: typeof projectId === "number" || projectId === null ? projectId : undefined,
+    });
     if (!updated) {
       res.status(404).json({ error: `Slot ${id} not found` });
       return;
