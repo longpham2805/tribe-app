@@ -1,10 +1,12 @@
-import { subscribe } from "../lib/events";
+import { emit, subscribe } from "../lib/events";
 import { AssistantAgentService } from "./AssistantAgentService";
+import { AssistantMessageRepository } from "./AssistantRepository";
 import { PauseQuestionContextProvider, type PauseQuestionContext } from "./PauseQuestionContextProvider";
 import { PhaseCompletionSummaryReader, type PhaseCompletionSummary } from "./PhaseCompletionSummary";
 import { PhaseStatus } from "../enum/PhaseStatus";
 import { TicketRepository } from "../repository/TicketRepository";
 import type { Phase } from "../entity/Phase";
+import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 const log = (msg: string) => console.log(`[AssistantMonitor] ${msg}`);
 
@@ -20,17 +22,20 @@ export class AssistantMonitorService {
   private pauseContextProvider: PauseQuestionContextProvider;
   private summaryReader: PhaseCompletionSummaryReader;
   private ticketRepo: TicketRepository;
+  private msgRepo: AssistantMessageRepository;
 
   constructor(
     agent = new AssistantAgentService(),
     pauseContextProvider = new PauseQuestionContextProvider(),
     summaryReader = new PhaseCompletionSummaryReader(),
     ticketRepo = new TicketRepository(),
+    msgRepo = new AssistantMessageRepository(),
   ) {
     this.agent = agent;
     this.pauseContextProvider = pauseContextProvider;
     this.summaryReader = summaryReader;
     this.ticketRepo = ticketRepo;
+    this.msgRepo = msgRepo;
   }
 
   start(): void {
@@ -57,6 +62,12 @@ export class AssistantMonitorService {
     const pauseContext = phase.status === PhaseStatus.QUESTION || phase.status === PhaseStatus.REQUIRES_ACTION
       ? await this.pauseContextProvider.getContext(ticketId, phase)
       : null;
+
+    if (pauseContext) {
+      await this.postPauseMessage(ticketId, phase, pauseContext, sourceEventKey);
+      return;
+    }
+
     const completionSummary = phase.status === PhaseStatus.COMPLETED
       ? await this.readCompletionSummary(ticketId, phase)
       : null;
@@ -71,6 +82,74 @@ export class AssistantMonitorService {
       sourceEventKey,
       isAutoAction,
     });
+  }
+
+  private async postPauseMessage(
+    ticketId: number,
+    phase: Phase,
+    pauseContext: PauseQuestionContext,
+    sourceEventKey: string,
+  ): Promise<void> {
+    if (await this.msgRepo.existsBySourceEventKey(sourceEventKey)) {
+      log(`sourceEventKey already handled: ${sourceEventKey}`);
+      return;
+    }
+
+    const { content, embeds } = this.buildPauseMessage(ticketId, phase, pauseContext);
+    const msg = await this.msgRepo.create({
+      role: "assistant",
+      content,
+      ticketId,
+      phaseId: phase.id,
+      severity: "warn",
+      sourceEventKey,
+      embeds,
+      metadata: { origin: "system" },
+    });
+    emit({ type: "assistant.message.created", message: msg });
+  }
+
+  private buildPauseMessage(ticketId: number, phase: Phase, pauseContext: PauseQuestionContext): {
+    content: string;
+    embeds: AssistantMessageEmbed[];
+  } {
+    const canonicalQuestion = this.canonicalPauseQuestion(phase, pauseContext);
+    const lines = [
+      `Ticket #${ticketId} ${phase.phaseName} is asking:`,
+      "",
+      this.quoteMarkdown(canonicalQuestion),
+    ];
+
+    const details = this.formatPauseMessageDetails(pauseContext, canonicalQuestion);
+    if (details) lines.push("", details);
+
+    return {
+      content: lines.join("\n"),
+      embeds: [{ type: "question", text: canonicalQuestion, ticketId, phaseId: phase.id }],
+    };
+  }
+
+  private canonicalPauseQuestion(phase: Phase, pauseContext: PauseQuestionContext): string {
+    const lastMessage = phase.lastMessage?.trim();
+    if (lastMessage) return lastMessage;
+    return pauseContext.exactQuestions[0]?.text ?? pauseContext.fallbackContext ?? "Exact pause question text unavailable.";
+  }
+
+  private quoteMarkdown(text: string): string {
+    return text.split("\n").map((line) => `> ${line}`).join("\n");
+  }
+
+  private formatPauseMessageDetails(context: PauseQuestionContext, canonicalQuestion: string): string {
+    if (context.exactQuestions.length === 0) return "Options/defaults unavailable. Inspect phase context before deciding.";
+
+    return context.exactQuestions.map((question, index) => {
+      const prefix = context.exactQuestions.length > 1 ? `Question ${index + 1}: ` : "";
+      return [
+        question.text === canonicalQuestion.trim() ? "" : `${prefix}${question.text}`,
+        question.options.length > 0 ? `Options: ${question.options.join(" | ")}` : "",
+        question.defaultOption ? `Default/recommended: ${question.defaultOption}` : "",
+      ].filter(Boolean).join("\n");
+    }).filter(Boolean).join("\n\n");
   }
 
   private async readCompletionSummary(ticketId: number, phase: Phase): Promise<PhaseCompletionSummary | null> {

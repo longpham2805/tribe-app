@@ -96,7 +96,7 @@ export class PauseQuestionContextProvider {
       const text = this.prepareSourceText(source.text);
       const blocks = this.questionBlocks(text);
       for (const block of blocks) {
-        const questionText = this.cleanLine(block[0]);
+        const questionText = this.cleanQuestionText(block[0]);
         if (!questionText || results.some((q) => q.text === questionText)) continue;
         const options = this.extractOptions(block);
         const defaultOption = this.extractDefault(block);
@@ -136,11 +136,11 @@ export class PauseQuestionContextProvider {
   private extractOptions(block: string[]): string[] {
     const options: string[] = [];
 
-    for (const line of block.slice(1)) {
+    for (const line of block) {
       const cleaned = this.cleanLine(line);
-      const inlineOptions = cleaned.match(/^(?:available\s+)?options?\s*:\s*(.+)$/i);
+      const inlineOptions = cleaned.match(/(?:available\s+)?options?\s*:\s*(.+?)(?=\s+(?:default|recommended)\b|$)/i);
       if (inlineOptions) {
-        options.push(...inlineOptions[1].split(/[,|]/).map((option) => option.trim()).filter(Boolean));
+        options.push(...inlineOptions[1].split(/[,|/]/).map((option) => option.trim()).filter(Boolean));
         continue;
       }
       if (/^(default|recommended)\b/i.test(cleaned)) continue;
@@ -233,6 +233,13 @@ export class PauseQuestionContextProvider {
 
   private isStatusMarker(line: string): boolean {
     return /^\s*\[STATUS:(COMPLETED|REQUIRES_ACTION|QUESTION|ERROR)\]\s*$/.test(line);
+  }
+
+  private cleanQuestionText(line: string): string {
+    return this.cleanLine(line)
+      .replace(/\s+(?:available\s+)?options?\s*:.+$/i, "")
+      .replace(/\s+(?:default|recommended)(?:\s+option)?\s*[:=\-].+$/i, "")
+      .trim();
   }
 
   private cleanLine(line: string): string {

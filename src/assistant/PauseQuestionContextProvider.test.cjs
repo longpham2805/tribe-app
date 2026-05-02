@@ -32,6 +32,16 @@ async function context(phase, ticket = null) {
 
   {
     const result = await context({
+      lastMessage: "Proceed with monitor-created assistant message? Options: yes/no Default: yes",
+    });
+    assert.equal(result.exactQuestions.length, 1);
+    assert.equal(result.exactQuestions[0].text, "Proceed with monitor-created assistant message?");
+    assert.deepEqual(result.exactQuestions[0].options, ["yes", "no"]);
+    assert.equal(result.exactQuestions[0].defaultOption, "yes");
+  }
+
+  {
+    const result = await context({
       lastMessage: [
         "1. Which log hint should be shown?",
         "- UI live feed",
