@@ -17,6 +17,7 @@ import uploadsRoutes from "../routes/uploads";
 import assistantRoutes from "../routes/assistant";
 import { attachWebSocket } from "../ws/server";
 import { AssistantMonitorService } from "../assistant/AssistantMonitorService";
+import { DiscordAssistantBridgeService } from "../discord/DiscordAssistantBridgeService";
 import { registerTicketTools } from "./tools/ticketTools";
 import { registerPhaseTools } from "./tools/phaseTools";
 import { registerMondayTools } from "./tools/mondayTools";
@@ -45,6 +46,9 @@ async function main() {
   console.log("Tribe: Database connected.");
 
   new AssistantMonitorService().start();
+  new DiscordAssistantBridgeService().start().catch((err) => {
+    console.error("[DiscordAssistantBridge] start error:", err);
+  });
 
   const mcpServer = createServer();
   const app = createMcpExpressApp();

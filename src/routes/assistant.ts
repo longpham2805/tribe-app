@@ -42,7 +42,7 @@ router.post("/chat", async (req: Request, res: Response) => {
       return;
     }
     const agent = new AssistantAgentService();
-    const reply = await agent.handleUserMessage({ message, projectId });
+    const reply = await agent.handleUserMessage({ message, projectId, metadata: { origin: "tribe_ui" } });
     res.json({ reply });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

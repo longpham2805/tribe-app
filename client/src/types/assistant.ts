@@ -1,5 +1,6 @@
 export type MessageRole = "user" | "assistant" | "system";
 export type MessageSeverity = "info" | "warn" | "error";
+export type AssistantMessageOrigin = "tribe_ui" | "discord" | "system";
 export type ActionType =
   | "RETRY_PHASE"
   | "RESPOND_TO_PHASE"
@@ -16,6 +17,18 @@ export type AssistantMessageEmbed =
   | { type: "pull_request"; url: string; number?: number; title?: string; state?: string; ticketId?: number }
   | { type: "question"; text: string; ticketId?: number; phaseId?: number };
 
+export interface AssistantMessageMetadata {
+  origin?: AssistantMessageOrigin;
+  discord?: {
+    authorId?: string;
+    authorUsername?: string;
+    authorDisplayName?: string;
+    channelId?: string;
+    messageId?: string;
+  };
+  [key: string]: unknown;
+}
+
 export interface AssistantMessage {
   id: number;
   role: MessageRole;
@@ -25,7 +38,7 @@ export interface AssistantMessage {
   severity: MessageSeverity;
   readAt: string | null;
   sourceEventKey: string | null;
-  metadata: Record<string, unknown> | null;
+  metadata: AssistantMessageMetadata | null;
   embeds: AssistantMessageEmbed[] | null;
   createdAt: string;
   updatedAt: string;

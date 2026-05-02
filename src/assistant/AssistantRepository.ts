@@ -5,7 +5,7 @@ import { AssistantAction } from "../entity/AssistantAction";
 import { AssistantSession } from "../entity/AssistantSession";
 import { Ticket } from "../entity/Ticket";
 import type { ActionStatus, ActionType, ActionSource } from "../entity/AssistantAction";
-import type { MessageRole, MessageSeverity } from "../entity/AssistantMessage";
+import type { AssistantMessageMetadata, MessageRole, MessageSeverity } from "../entity/AssistantMessage";
 import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 export class AssistantMessageRepository {
@@ -62,7 +62,7 @@ export class AssistantMessageRepository {
     phaseId?: number | null;
     severity?: MessageSeverity;
     sourceEventKey?: string | null;
-    metadata?: Record<string, unknown> | null;
+    metadata?: AssistantMessageMetadata | null;
     embeds?: AssistantMessageEmbed[] | null;
   }): Promise<AssistantMessage> {
     const embeds = await this.buildAutoEmbeds(data.ticketId, data.embeds);

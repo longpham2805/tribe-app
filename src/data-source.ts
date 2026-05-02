@@ -8,6 +8,7 @@ import { AppState } from "./entity/AppState";
 import { AssistantMessage } from "./entity/AssistantMessage";
 import { AssistantAction } from "./entity/AssistantAction";
 import { AssistantSession } from "./entity/AssistantSession";
+import { DiscordAssistantSync } from "./entity/DiscordAssistantSync";
 import { TicketSubscriber } from "./subscriber/TicketSubscriber";
 import * as dotenv from "dotenv";
 
@@ -22,7 +23,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_DATABASE || process.env.DATABASE_NAME || "tribe",
   synchronize: false,
   logging: ["error", "warn"],
-  entities: [Ticket, Phase, Slot, Project, AppState, AssistantMessage, AssistantAction, AssistantSession],
+  entities: [Ticket, Phase, Slot, Project, AppState, AssistantMessage, AssistantAction, AssistantSession, DiscordAssistantSync],
   migrations: ["src/migration/*.ts"],
   subscribers: [TicketSubscriber],
 });

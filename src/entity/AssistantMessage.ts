@@ -9,6 +9,17 @@ import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 export type MessageRole = "user" | "assistant" | "system";
 export type MessageSeverity = "info" | "warn" | "error";
+export type AssistantMessageOrigin = "tribe_ui" | "discord" | "system";
+export interface AssistantMessageMetadata extends Record<string, unknown> {
+  origin?: AssistantMessageOrigin;
+  discord?: {
+    authorId?: string;
+    authorUsername?: string;
+    authorDisplayName?: string;
+    channelId?: string;
+    messageId?: string;
+  };
+}
 export type { AssistantMessageEmbed };
 
 @Entity()
@@ -39,7 +50,7 @@ export class AssistantMessage {
   sourceEventKey!: string | null;
 
   @Column({ type: "json", nullable: true })
-  metadata!: Record<string, unknown> | null;
+  metadata!: AssistantMessageMetadata | null;
 
   @Column({ type: "json", nullable: true })
   embeds!: AssistantMessageEmbed[] | null;

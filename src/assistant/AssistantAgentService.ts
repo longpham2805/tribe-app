@@ -20,6 +20,7 @@ import { PhaseStatus } from "../enum/PhaseStatus";
 import { emit } from "../lib/events";
 import { getLogFile, getTicketDir } from "../lib/paths";
 import { PauseQuestionContextProvider } from "./PauseQuestionContextProvider";
+import type { AssistantMessage, AssistantMessageMetadata } from "../entity/AssistantMessage";
 
 const DEFAULT_MODEL = "gpt-5.5";
 const MAX_TOOL_ITERATIONS = 10;
@@ -407,6 +408,7 @@ export class AssistantAgentService {
           phaseId: opts.phaseId,
           severity: "info",
           sourceEventKey: opts.sourceEventKey,
+          metadata: { origin: "system" },
         });
         emit({ type: "assistant.message.created", message: msg });
       }
@@ -419,6 +421,8 @@ export class AssistantAgentService {
   async handleUserMessage(opts: {
     message: string;
     projectId?: number;
+    metadata?: AssistantMessageMetadata | null;
+    onUserMessageCreated?: (message: AssistantMessage) => void | Promise<void>;
   }): Promise<string> {
     if (!process.env.ANTHROPIC_API_KEY) {
       return "Assistant is not configured. Please set ANTHROPIC_API_KEY in your environment.";
@@ -435,17 +439,21 @@ export class AssistantAgentService {
     const contextNote = activeProject
       ? `[UI CONTEXT] Active project: "${activeProject.name}" (ID: ${activeProject.id}). When the user asks to create a ticket or perform any project-scoped action without specifying a project, use this project by default.`
       : undefined;
+    const metadata = this.normalizeUserMessageMetadata(opts.metadata);
+    const agentUserContent = this.formatUserMessageForAgent(opts.message, metadata);
 
     // Save the user's message
     const userMsg = await this.msgRepo.create({
       role: "user",
       content: opts.message,
       ticketId: null,
+      metadata,
     });
+    await opts.onUserMessageCreated?.(userMsg);
     emit({ type: "assistant.message.created", message: userMsg });
 
     const response = await this.runAgentLoop(
-      [...historyMessages, { role: "user", content: opts.message }],
+      [...historyMessages, { role: "user", content: agentUserContent }],
       { source: "chat", contextNote },
     );
 
@@ -455,10 +463,26 @@ export class AssistantAgentService {
       role: "assistant",
       content: reply,
       ticketId: null,
+      metadata: metadata.origin === "discord" ? metadata : { origin: "tribe_ui" },
     });
     emit({ type: "assistant.message.created", message: assistantMsg });
 
     return reply;
+  }
+
+  private normalizeUserMessageMetadata(metadata?: AssistantMessageMetadata | null): AssistantMessageMetadata {
+    const origin = metadata?.origin ?? "tribe_ui";
+    return {
+      ...(metadata ?? {}),
+      origin: origin === "discord" || origin === "system" ? origin : "tribe_ui",
+    };
+  }
+
+  private formatUserMessageForAgent(message: string, metadata: AssistantMessageMetadata): string {
+    if (metadata.origin !== "discord") return message;
+    const discord = metadata.discord;
+    const author = discord?.authorDisplayName ?? discord?.authorUsername ?? discord?.authorId ?? "Discord user";
+    return `[Discord message from ${author}]\n\n${message}`;
   }
 
   // ── Agent loop ──────────────────────────────────────────────────────
@@ -657,6 +681,7 @@ export class AssistantAgentService {
             phaseId: ctx.phaseId ?? null,
             sourceEventKey: ctx.sourceEventKey ?? null,
             embeds: (input.embeds as any[]) ?? null,
+            metadata: { origin: source === "auto" ? "system" : "tribe_ui" },
           });
           emit({ type: "assistant.message.created", message: msg });
           return { success: true, messageId: msg.id };
