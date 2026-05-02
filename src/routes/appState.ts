@@ -5,9 +5,33 @@ import { emit } from "../lib/events";
 
 const router = Router();
 const CLI_TYPE_VALUES = Object.values(CliType) as string[];
+const DISCORD_BOT_TOKEN_MAX_LENGTH = 255;
+const DISCORD_THREAD_ID_MAX_LENGTH = 64;
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
+}
+
+function parseNullableString(value: unknown, field: string, maxLength: number): { value?: string | null; error?: string } {
+  if (value === undefined) return {};
+  if (value !== null && typeof value !== "string") {
+    return { error: `${field} must be a string or null` };
+  }
+
+  const normalized = typeof value === "string" ? value.trim() : null;
+  if (!normalized) return { value: null };
+  if (normalized.length > maxLength) {
+    return { error: `${field} must be ${maxLength} characters or fewer` };
+  }
+  return { value: normalized };
+}
+
+function toAppStateResponse(state: Awaited<ReturnType<AppStateRepository["get"]>>) {
+  return {
+    ...state,
+    discordBotToken: null,
+    discordBotTokenConfigured: !!state.discordBotToken,
+  };
 }
 
 function parseAvailableCliTypes(value: unknown): { cliTypes?: CliType[]; error?: string } {
@@ -27,7 +51,7 @@ function parseAvailableCliTypes(value: unknown): { cliTypes?: CliType[]; error?:
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const state = await new AppStateRepository().get();
-    res.json(state);
+    res.json(toAppStateResponse(state));
   } catch (error: unknown) {
     res.status(500).json({ error: getErrorMessage(error) });
   }
@@ -38,6 +62,8 @@ router.patch("/", async (req: Request, res: Response) => {
     const payload = req.body as {
       autoTriggerEnabled?: unknown;
       availableCliTypes?: unknown;
+      discordBotToken?: unknown;
+      discordAssistantThreadId?: unknown;
     };
 
     if (
@@ -54,12 +80,35 @@ router.patch("/", async (req: Request, res: Response) => {
       return;
     }
 
+    const parsedDiscordBotToken = parseNullableString(
+      payload.discordBotToken,
+      "discordBotToken",
+      DISCORD_BOT_TOKEN_MAX_LENGTH,
+    );
+    if (parsedDiscordBotToken.error) {
+      res.status(400).json({ error: parsedDiscordBotToken.error });
+      return;
+    }
+
+    const parsedDiscordAssistantThreadId = parseNullableString(
+      payload.discordAssistantThreadId,
+      "discordAssistantThreadId",
+      DISCORD_THREAD_ID_MAX_LENGTH,
+    );
+    if (parsedDiscordAssistantThreadId.error) {
+      res.status(400).json({ error: parsedDiscordAssistantThreadId.error });
+      return;
+    }
+
     const state = await new AppStateRepository().update({
       autoTriggerEnabled: payload.autoTriggerEnabled,
       availableCliTypes: parsedCliTypes.cliTypes,
+      discordBotToken: parsedDiscordBotToken.value,
+      discordAssistantThreadId: parsedDiscordAssistantThreadId.value,
     });
-    emit({ type: "app-state.updated", appState: state });
-    res.json(state);
+    const responseState = toAppStateResponse(state);
+    emit({ type: "app-state.updated", appState: responseState });
+    res.json(responseState);
   } catch (error: unknown) {
     res.status(500).json({ error: getErrorMessage(error) });
   }

@@ -1,6 +1,7 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { CliType } from "../../types";
 import { useAppContext, type View } from "../../context/AppContext";
+import { Modal } from "../ui/Modal";
 
 const VIEWS: Array<{ key: View; label: string }> = [
   { key: "tickets", label: "Tickets" },
@@ -36,8 +37,33 @@ interface AppHeaderProps {
 }
 
 export const AppHeader = memo(function AppHeader({ onSearchClick }: AppHeaderProps) {
-  const { view, setView, appState, setAutoTriggerEnabled, setCliAvailable } = useAppContext();
+  const { view, setView, appState, setAutoTriggerEnabled, setCliAvailable, updateDiscordSettings } = useAppContext();
+  const [discordSettingsOpen, setDiscordSettingsOpen] = useState(false);
+  const [discordBotToken, setDiscordBotToken] = useState("");
+  const [discordAssistantThreadId, setDiscordAssistantThreadId] = useState("");
+  const [discordSettingsError, setDiscordSettingsError] = useState<string | null>(null);
   const viewButtons = useMemo(() => VIEWS, []);
+
+  useEffect(() => {
+    if (!discordSettingsOpen) return;
+    setDiscordBotToken("");
+    setDiscordAssistantThreadId(appState?.discordAssistantThreadId ?? "");
+    setDiscordSettingsError(null);
+  }, [appState?.discordAssistantThreadId, discordSettingsOpen]);
+
+  const handleDiscordSettingsSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setDiscordSettingsError(null);
+    try {
+      await updateDiscordSettings({
+        discordBotToken: discordBotToken.trim() || undefined,
+        discordAssistantThreadId: discordAssistantThreadId.trim() || null,
+      });
+      setDiscordSettingsOpen(false);
+    } catch (error) {
+      setDiscordSettingsError(error instanceof Error ? error.message : "Failed to update Discord settings");
+    }
+  };
 
   return (
     <header className="header">
@@ -109,9 +135,52 @@ export const AppHeader = memo(function AppHeader({ onSearchClick }: AppHeaderPro
                 );
               })}
             </div>
+            <button
+              className={`cli-toggle ${appState.discordBotTokenConfigured && appState.discordAssistantThreadId ? "cli-toggle--selected" : ""}`}
+              type="button"
+              onClick={() => setDiscordSettingsOpen(true)}
+              title="Configure Discord assistant settings"
+            >
+              <span className="cli-toggle__indicator" aria-hidden="true" />
+              <span>Discord</span>
+            </button>
           </div>
         )}
       </div>
+
+      <Modal
+        open={discordSettingsOpen}
+        title="Discord assistant settings"
+        onClose={() => setDiscordSettingsOpen(false)}
+      >
+        <form className="settings-form" onSubmit={handleDiscordSettingsSubmit}>
+          <label className="settings-field">
+            <span>Bot token</span>
+            <input
+              value={discordBotToken}
+              onChange={(event) => setDiscordBotToken(event.target.value)}
+              placeholder={appState?.discordBotTokenConfigured ? "Token configured — leave blank to keep current token" : "Paste Discord bot token"}
+              type="password"
+              autoComplete="off"
+            />
+          </label>
+          <label className="settings-field">
+            <span>Thread ID</span>
+            <input
+              value={discordAssistantThreadId}
+              onChange={(event) => setDiscordAssistantThreadId(event.target.value)}
+              placeholder="Discord thread or channel ID"
+              autoComplete="off"
+            />
+          </label>
+          <p className="settings-help">Settings override env vars after restart. The token is write-only and never returned by the API.</p>
+          {discordSettingsError && <p className="settings-error">{discordSettingsError}</p>}
+          <div className="settings-actions">
+            <button className="btn btn-secondary" type="button" onClick={() => setDiscordSettingsOpen(false)}>Cancel</button>
+            <button className="btn btn-primary" type="submit">Save settings</button>
+          </div>
+        </form>
+      </Modal>
     </header>
   );
 });

@@ -125,7 +125,7 @@ DB_DATABASE=tribe
 # API, MCP, and frontend integration
 MCP_PORT=8100
 
-# Optional Discord assistant bridge. Leave blank to disable Discord sync.
+# Optional Discord assistant bridge fallback. App settings override these values.
 DISCORD_BOT_TOKEN=
 DISCORD_ASSISTANT_THREAD_ID=
 DISCORD_COMMAND_PREFIX=!tribe
@@ -146,8 +146,8 @@ Environment contract:
 | `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE` | Yes | MySQL connection used by TypeORM |
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | No | Legacy aliases recognized by TypeORM config when DB vars are unset |
 | `MCP_PORT` | Yes | Backend REST/MCP/WebSocket port; defaults to `8100` when unset |
-| `DISCORD_BOT_TOKEN` | No | Discord bot token used to sync the Tribe assistant with one Discord thread |
-| `DISCORD_ASSISTANT_THREAD_ID` | No | Discord thread/channel ID for the global assistant bridge |
+| `DISCORD_BOT_TOKEN` | No | Fallback Discord bot token used when no token is saved in app settings |
+| `DISCORD_ASSISTANT_THREAD_ID` | No | Fallback Discord thread/channel ID used when no thread ID is saved in app settings |
 | `DISCORD_COMMAND_PREFIX` | No | Prefix for Discord fallback commands; defaults to `!tribe` |
 | `DISCORD_ENABLE_MESSAGE_CONTENT_INTENT` | No | Set to `true` only after enabling Message Content Intent in the Discord Developer Portal; required for free-text prompts and prefix commands |
 | `MONDAY_ACCESS_TOKEN` | No | Enables Monday import and eWebinar hooks when present |
@@ -161,7 +161,9 @@ CLI expectations:
 - Tribe orchestrates external coding CLIs through adapters in `src/cli`; configure those CLIs outside this repo.
 - `ClaudeAdapter` is a supported CLI integration name, not a dependency on any external documentation kit.
 - MCP clients should connect to `http://localhost:${MCP_PORT}/mcp`; web clients receive realtime updates on `/ws`.
-- Discord assistant sync is enabled only when both `DISCORD_BOT_TOKEN` and `DISCORD_ASSISTANT_THREAD_ID` are set. Outbound sync and action buttons need `Guilds` and `GuildMessages` plus permission to read and send messages in the configured thread. To make every non-bot thread message become an assistant prompt, enable Message Content Intent in the Discord Developer Portal and set `DISCORD_ENABLE_MESSAGE_CONTENT_INTENT=true`; otherwise Discord rejects startup with `Used disallowed intents`.
+- Discord assistant sync is enabled only when both bot token and thread ID are configured. Saved app settings take precedence; `DISCORD_BOT_TOKEN` and `DISCORD_ASSISTANT_THREAD_ID` remain fallback values for existing deployments. Blank saved values fall back to env, so existing env-only installs continue working after `npm run migration:run`.
+- Discord settings are loaded at process startup. After changing token or thread ID in the UI, restart the backend process to reconnect the bridge. The token is stored in MySQL as plaintext for this personal-dev deployment, is write-only in the UI/API response, and should be revoked in the Discord Developer Portal if exposed.
+- Outbound sync and action buttons need `Guilds` and `GuildMessages` plus permission to read and send messages in the configured thread. To make every non-bot thread message become an assistant prompt, enable Message Content Intent in the Discord Developer Portal and set `DISCORD_ENABLE_MESSAGE_CONTENT_INTENT=true`; otherwise Discord rejects startup with `Used disallowed intents`.
 
 ### 4) Run migrations
 

@@ -27,6 +27,12 @@ export class AppState {
   @Column({ type: "varchar", length: 100, nullable: true })
   assistantModel!: string | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  discordBotToken!: string | null;
+
+  @Column({ type: "varchar", length: 64, nullable: true })
+  discordAssistantThreadId!: string | null;
+
   @UpdateDateColumn()
   updatedAt!: Date;
 }

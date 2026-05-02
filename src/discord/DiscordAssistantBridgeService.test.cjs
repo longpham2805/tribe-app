@@ -152,6 +152,86 @@ function createDiscordMessage(overrides = {}) {
   };
 }
 
+function withDiscordEnv(env, run) {
+  const originalToken = process.env.DISCORD_BOT_TOKEN;
+  const originalThreadId = process.env.DISCORD_ASSISTANT_THREAD_ID;
+  if (env.token === undefined) delete process.env.DISCORD_BOT_TOKEN;
+  else process.env.DISCORD_BOT_TOKEN = env.token;
+  if (env.threadId === undefined) delete process.env.DISCORD_ASSISTANT_THREAD_ID;
+  else process.env.DISCORD_ASSISTANT_THREAD_ID = env.threadId;
+
+  return Promise.resolve()
+    .then(run)
+    .finally(() => {
+      if (originalToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
+      else process.env.DISCORD_BOT_TOKEN = originalToken;
+      if (originalThreadId === undefined) delete process.env.DISCORD_ASSISTANT_THREAD_ID;
+      else process.env.DISCORD_ASSISTANT_THREAD_ID = originalThreadId;
+    });
+}
+
+function createStartClient() {
+  const logins = [];
+  return {
+    logins,
+    on() {},
+    once(_event, handler) {
+      this.readyHandler = handler;
+    },
+    user: { tag: "test-bot" },
+    channels: { async fetch() { return { ...createThread(), isTextBased: () => true }; } },
+    async login(token) {
+      logins.push(token);
+      await this.readyHandler?.();
+    },
+  };
+}
+
+test("Discord startup prefers stored settings over env fallback", async () => withDiscordEnv(
+  { token: "env-token", threadId: "env-thread" },
+  async () => {
+    const client = createStartClient();
+    const service = new DiscordAssistantBridgeService({
+      client,
+      settingsResolver: async () => ({ token: "stored-token", threadId: "stored-thread" }),
+    });
+
+    await service.start();
+
+    assert.deepEqual(client.logins, ["stored-token"]);
+  },
+));
+
+test("Discord startup falls back to env when settings are blank", async () => withDiscordEnv(
+  { token: "env-token", threadId: "env-thread" },
+  async () => {
+    const client = createStartClient();
+    const service = new DiscordAssistantBridgeService({
+      client,
+      settingsResolver: async () => ({ token: " ", threadId: null }),
+    });
+
+    await service.start();
+
+    assert.deepEqual(client.logins, ["env-token"]);
+  },
+));
+
+test("Discord startup stays disabled when settings and env are missing", async () => withDiscordEnv(
+  { token: undefined, threadId: undefined },
+  async () => {
+    const client = createStartClient();
+    const service = new DiscordAssistantBridgeService({
+      client,
+      settingsResolver: async () => ({ token: null, threadId: null }),
+    });
+
+    await service.start();
+
+    assert.deepEqual(client.logins, []);
+  },
+));
+
 test("Discord inbound prompt creates a Tribe assistant message mapping", async () => {
   const { service, syncRepo, agentCalls } = createService();
   const message = createDiscordMessage();

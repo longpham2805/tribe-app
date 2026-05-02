@@ -15,6 +15,7 @@ import { AssistantActionRepository } from "../assistant/AssistantRepository";
 import type { AssistantAction } from "../entity/AssistantAction";
 import type { AssistantMessage, AssistantMessageMetadata } from "../entity/AssistantMessage";
 import { emit, subscribe, type TribeEvent } from "../lib/events";
+import { AppStateRepository, normalizeNullableSetting } from "../repository/AppStateRepository";
 import { DiscordAssistantSyncRepository } from "./DiscordAssistantSyncRepository";
 import {
   chunkDiscordText,
@@ -39,6 +40,9 @@ type DiscordThreadLike = {
 };
 
 type ActionOperation = "approve" | "reject";
+type DiscordSettingsSource = "settings" | "env" | "mixed" | "none";
+type DiscordSettings = { token: string | null; threadId: string | null };
+type DiscordSettingsResolver = () => Promise<DiscordSettings>;
 
 const log = (message: string) => console.log(`[DiscordAssistantBridge] ${message}`);
 
@@ -49,6 +53,8 @@ export class DiscordAssistantBridgeService {
   private syncRepo: DiscordAssistantSyncRepository;
   private token: string | null;
   private threadId: string | null;
+  private hasExplicitDiscordSettings: boolean;
+  private settingsResolver: DiscordSettingsResolver;
   private commandPrefix: string;
   private messageContentIntentEnabled: boolean;
   private startedAtMs: number;
@@ -65,9 +71,12 @@ export class DiscordAssistantBridgeService {
     agent?: AssistantAgentService;
     actionRepo?: AssistantActionRepository;
     syncRepo?: DiscordAssistantSyncRepository;
+    settingsResolver?: DiscordSettingsResolver;
   }) {
-    this.token = opts?.token ?? process.env.DISCORD_BOT_TOKEN?.trim() ?? null;
-    this.threadId = opts?.threadId ?? process.env.DISCORD_ASSISTANT_THREAD_ID?.trim() ?? null;
+    this.token = normalizeNullableSetting(opts?.token);
+    this.threadId = normalizeNullableSetting(opts?.threadId);
+    this.hasExplicitDiscordSettings = opts?.token !== undefined || opts?.threadId !== undefined;
+    this.settingsResolver = opts?.settingsResolver ?? getStoredDiscordSettings;
     this.commandPrefix = opts?.commandPrefix ?? process.env.DISCORD_COMMAND_PREFIX?.trim() ?? DEFAULT_COMMAND_PREFIX;
     this.messageContentIntentEnabled = opts?.messageContentIntentEnabled ?? readBooleanEnv(process.env.DISCORD_ENABLE_MESSAGE_CONTENT_INTENT);
     this.startedAtMs = opts?.startedAtMs ?? Date.now();
@@ -78,8 +87,12 @@ export class DiscordAssistantBridgeService {
   }
 
   async start(): Promise<void> {
+    const settings = await this.resolveEffectiveDiscordSettings();
+    this.token = settings.token;
+    this.threadId = settings.threadId;
+
     if (!this.token || !this.threadId) {
-      log("disabled; set DISCORD_BOT_TOKEN and DISCORD_ASSISTANT_THREAD_ID to enable sync");
+      log("disabled; configure discordBotToken and discordAssistantThreadId in settings, or set DISCORD_BOT_TOKEN and DISCORD_ASSISTANT_THREAD_ID env vars");
       return;
     }
     if (!this.messageContentIntentEnabled) {
@@ -94,7 +107,7 @@ export class DiscordAssistantBridgeService {
     try {
       this.client.once(Events.ClientReady, async () => {
         await this.resolveThread();
-        log(`connected as ${this.client.user?.tag ?? "Discord bot"}; syncing thread ${this.threadId}`);
+        log(`connected as ${this.client.user?.tag ?? "Discord bot"}; syncing thread ${this.threadId}; config source ${settings.source}`);
       });
       await this.client.login(this.token);
     } catch (err: any) {
@@ -102,6 +115,29 @@ export class DiscordAssistantBridgeService {
       this.unsubscribe = null;
       log(`failed to start: ${err?.message ?? err}`);
     }
+  }
+
+  private async resolveEffectiveDiscordSettings(): Promise<DiscordSettings & { source: DiscordSettingsSource }> {
+    const explicitSettings = this.hasExplicitDiscordSettings
+      ? { token: this.token, threadId: this.threadId }
+      : null;
+    const resolvedSettings = explicitSettings ?? await this.settingsResolver().catch((err) => {
+      log(`settings lookup failed; falling back to env: ${err?.message ?? err}`);
+      return { token: null, threadId: null };
+    });
+    const storedSettings = normalizeDiscordSettings(resolvedSettings);
+    const envSettings = {
+      token: normalizeNullableSetting(process.env.DISCORD_BOT_TOKEN),
+      threadId: normalizeNullableSetting(process.env.DISCORD_ASSISTANT_THREAD_ID),
+    };
+    const token = storedSettings.token ?? envSettings.token;
+    const threadId = storedSettings.threadId ?? envSettings.threadId;
+
+    return {
+      token,
+      threadId,
+      source: getDiscordSettingsSource(storedSettings, envSettings, token, threadId),
+    };
   }
 
   private registerDiscordHandlers(): void {
@@ -407,4 +443,35 @@ function asAssistantAction(value: unknown): AssistantAction | null {
 function readBooleanEnv(value: string | undefined): boolean {
   if (!value) return false;
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+async function getStoredDiscordSettings(): Promise<DiscordSettings> {
+  const state = await new AppStateRepository().get();
+  return normalizeDiscordSettings({
+    token: normalizeNullableSetting(state.discordBotToken),
+    threadId: normalizeNullableSetting(state.discordAssistantThreadId),
+  });
+}
+
+function normalizeDiscordSettings(settings: DiscordSettings): DiscordSettings {
+  return {
+    token: normalizeNullableSetting(settings.token),
+    threadId: normalizeNullableSetting(settings.threadId),
+  };
+}
+
+function getDiscordSettingsSource(
+  storedSettings: DiscordSettings,
+  envSettings: DiscordSettings,
+  token: string | null,
+  threadId: string | null,
+): DiscordSettingsSource {
+  if (!token || !threadId) return "none";
+  const hasStoredToken = storedSettings.token === token;
+  const hasStoredThreadId = storedSettings.threadId === threadId;
+  if (hasStoredToken && hasStoredThreadId) return "settings";
+  if (!hasStoredToken && !hasStoredThreadId && envSettings.token === token && envSettings.threadId === threadId) {
+    return "env";
+  }
+  return "mixed";
 }

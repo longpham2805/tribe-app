@@ -138,6 +138,52 @@
   background: var(--claude);
 }
 
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.settings-field input {
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 9px 11px;
+}
+
+.settings-help,
+.settings-error {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.settings-help {
+  color: var(--ink-4);
+}
+
+.settings-error {
+  color: var(--status-danger);
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .logo {
   height: 28px;
   width: auto;

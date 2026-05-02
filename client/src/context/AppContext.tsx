@@ -47,6 +47,7 @@ type AppContextValue = {
   loadAppState: () => Promise<void>;
   setAutoTriggerEnabled: (enabled: boolean) => Promise<void>;
   setCliAvailable: (cliType: CliType, available: boolean) => Promise<void>;
+  updateDiscordSettings: (settings: { discordBotToken?: string | null; discordAssistantThreadId?: string | null }) => Promise<void>;
   loadProjects: () => Promise<void>;
   shortcutIntent: ShortcutIntent;
   setShortcutIntent: (intent: ShortcutIntent) => void;
@@ -147,6 +148,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [appState],
   );
 
+  const updateDiscordSettings = useCallback(async (settings: { discordBotToken?: string | null; discordAssistantThreadId?: string | null }) => {
+    const next = await updateAppState(settings);
+    setAppState(next);
+  }, []);
+
   const clearShortcutIntent = useCallback(() => setShortcutIntent(null), []);
   const setPaletteContextActions = useCallback((actions: PaletteAction[]) => setPaletteContextActionsState(actions), []);
 
@@ -175,6 +181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadAppState,
       setAutoTriggerEnabled,
       setCliAvailable,
+      updateDiscordSettings,
       loadProjects,
       shortcutIntent,
       setShortcutIntent,
@@ -193,6 +200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadAppState,
       setAutoTriggerEnabled,
       setCliAvailable,
+      updateDiscordSettings,
       loadProjects,
       shortcutIntent,
       clearShortcutIntent,
