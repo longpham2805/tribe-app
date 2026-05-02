@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   open: boolean;
@@ -84,7 +85,7 @@ export function Modal({
     fontFamily: "inherit",
   };
 
-  return (
+  const modalContent = (
     <div className={`modal-backdrop modal-backdrop--${variant}`} onClick={isRightPane ? undefined : onClose}>
       <div
         ref={panelRef}
@@ -124,4 +125,6 @@ export function Modal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
