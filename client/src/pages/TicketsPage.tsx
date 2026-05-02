@@ -25,9 +25,10 @@ const TicketDetailModal = lazy(() => import("../components/tickets/TicketDetailM
 type TicketsPageProps = {
   projectId: number | null;
   canImportFromMonday: boolean;
+  assistantOpen: boolean;
 };
 
-export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps) {
+export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: TicketsPageProps) {
   const { appState, shortcutIntent, clearShortcutIntent, setPaletteContextActions, projects, selectedProjectId } = useAppContext();
   const paneWidth = 720;
   const {
@@ -142,6 +143,7 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
   );
   const availableCliTypes = useMemo(() => appState?.availableCliTypes ?? [], [appState]);
   const paneOpen = selectedTicket != null;
+  const rightPaneOffset = assistantOpen ? "var(--assistant-drawer-width)" : "0px";
   const layoutStyle = useMemo(
     () => ({ "--ticket-pane-width": `${paneWidth}px` }) as CSSProperties,
     [paneWidth],
@@ -276,10 +278,11 @@ export function TicketsPage({ projectId, canImportFromMonday }: TicketsPageProps
       </div>
 
       {selectedTicket && (
-        <Suspense fallback={<Modal open onClose={() => setSelectedTicketId(null)} title="Ticket details" variant="right-pane" width={paneWidth}>Loading ticket details...</Modal>}>
+        <Suspense fallback={<Modal open onClose={() => setSelectedTicketId(null)} title="Ticket details" variant="right-pane" width={paneWidth} rightOffset={rightPaneOffset}>Loading ticket details...</Modal>}>
           <TicketDetailModal
             open
             paneWidth={paneWidth}
+            rightPaneOffset={rightPaneOffset}
             ticket={selectedTicket}
             viewer={viewer}
             selectedPhase={selectedPhaseByTicket[selectedTicket.id]}

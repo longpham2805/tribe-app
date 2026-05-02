@@ -125,7 +125,6 @@ export default function App() {
   const handleAssistantOpenTicket = useCallback((ticketId: number) => {
     setView("tickets");
     setShortcutIntent({ type: "open-ticket", ticketId });
-    setAssistantOpen(false);
   }, [setShortcutIntent]);
 
   return (
@@ -141,7 +140,13 @@ export default function App() {
 
         <main className="main">
           <Suspense fallback={<div className="empty">Loading...</div>}>
-            {view === "tickets" && <TicketsPage projectId={selectedProjectId} canImportFromMonday={canImportFromMonday} />}
+            {view === "tickets" && (
+              <TicketsPage
+                projectId={selectedProjectId}
+                canImportFromMonday={canImportFromMonday}
+                assistantOpen={assistantOpen}
+              />
+            )}
             {view === "slots" && <SlotsPage projectId={selectedProjectId} />}
             {view === "projects" && <ProjectsPage onProjectsChanged={loadProjects} />}
           </Suspense>

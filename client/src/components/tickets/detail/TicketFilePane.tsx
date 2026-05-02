@@ -11,6 +11,7 @@ export function TicketFilePane({
   fileName,
   title,
   paneWidth,
+  rightPaneOffset = "0px",
   liveLogs,
   onCloseFile,
 }: {
@@ -19,6 +20,7 @@ export function TicketFilePane({
   fileName: string;
   title: string;
   paneWidth: number;
+  rightPaneOffset?: string;
   liveLogs: Record<string, any[]>;
   onCloseFile: () => void;
 }) {
@@ -26,7 +28,7 @@ export function TicketFilePane({
   const live = phaseName ? liveLogs[`${ticketId}:${phaseName}`] ?? [] : [];
 
   return (
-    <Modal open={open} onClose={onCloseFile} title={title} variant="right-pane" width={paneWidth} noHeader>
+    <Modal open={open} onClose={onCloseFile} title={title} variant="right-pane" width={paneWidth} rightOffset={rightPaneOffset} noHeader>
       <div className="td-file-shell">
         <div className="td-topbar td-topbar--file">
           <span className="mono td-topbar__id">#{ticketId}</span>

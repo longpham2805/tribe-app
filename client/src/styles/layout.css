@@ -1,5 +1,8 @@
-.app {
+:root {
   --assistant-drawer-width: clamp(380px, 38vw, 570px);
+}
+
+.app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -341,6 +344,12 @@
 @media (prefers-reduced-motion: reduce) {
   .modal-panel--right-pane {
     animation: none;
+  }
+}
+
+@media (max-width: 1120px) {
+  .modal-panel--right-pane {
+    --modal-right-offset: 0px !important;
   }
 }
 

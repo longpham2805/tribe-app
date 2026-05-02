@@ -21,6 +21,7 @@ interface TicketDetailModalProps {
   ticket: Ticket | null;
   open: boolean;
   paneWidth?: number;
+  rightPaneOffset?: string;
   viewer: TicketViewerState | null;
   selectedPhase: TicketPhase | undefined;
   selectedPhaseAutoOpenKey: string | undefined;
@@ -56,6 +57,7 @@ export function TicketDetailModal({
   ticket,
   open,
   paneWidth = 720,
+  rightPaneOffset = "0px",
   viewer,
   selectedPhase,
   selectedPhaseAutoOpenKey,
@@ -234,6 +236,7 @@ export function TicketDetailModal({
         fileName={viewer.fileName}
         title={title}
         paneWidth={paneWidth}
+        rightPaneOffset={rightPaneOffset}
         liveLogs={liveLogs}
         onCloseFile={onCloseFile}
       />
@@ -241,7 +244,7 @@ export function TicketDetailModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={paneWidth} noHeader>
+    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={paneWidth} rightOffset={rightPaneOffset} noHeader>
       <div className={`td-shell${hasActivityDock ? " td-shell--activity-dock" : ""}`}>
         <TicketDetailTopbar
           ticket={ticket}

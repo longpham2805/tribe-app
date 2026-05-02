@@ -14,6 +14,7 @@ interface ModalProps {
   noHeader?: boolean;
   panelClassName?: string;
   bodyClassName?: string;
+  rightOffset?: string;
 }
 
 export function Modal({
@@ -29,6 +30,7 @@ export function Modal({
   noHeader = false,
   panelClassName,
   bodyClassName,
+  rightOffset = "0px",
 }: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -53,7 +55,11 @@ export function Modal({
 
   const panelStyle: CSSProperties =
     variant === "right-pane"
-      ? { width: `min(100vw, ${width}px)` }
+      ? ({
+          "--modal-right-offset": rightOffset,
+          width: `min(calc(100vw - var(--modal-right-offset, 0px)), ${width}px)`,
+          marginRight: "var(--modal-right-offset, 0px)",
+        } as CSSProperties)
       : { width, maxWidth: "95vw" };
 
   const isRightPane = variant === "right-pane";
