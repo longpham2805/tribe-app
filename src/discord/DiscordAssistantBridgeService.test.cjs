@@ -2,6 +2,7 @@ require("ts-node/register");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { MessageFlags } = require("discord.js");
 const { DiscordAssistantBridgeService } = require("./DiscordAssistantBridgeService");
 
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "test-key";
@@ -281,7 +282,7 @@ test("Discord fallback commands list, approve, and reject actions", async () => 
   assert.match(rejectMessage.replies[0].content, /Rejected Tribe action #9/);
 });
 
-test("assistant messages mirror outbound once with allowed mentions disabled", async () => {
+test("assistant messages mirror outbound once as readable components with allowed mentions disabled", async () => {
   const { service, thread, syncRepo } = createService();
   const assistantMessage = {
     id: 51,
@@ -303,16 +304,56 @@ test("assistant messages mirror outbound once with allowed mentions disabled", a
 
   assert.equal(thread.sent.length, 1);
   assert.equal(thread.sent[0].options.allowedMentions.parse.length, 0);
-  assert.equal(thread.sent[0].options.components, undefined);
+  assert.equal(thread.sent[0].options.flags, MessageFlags.IsComponentsV2);
+  assert.equal(thread.sent[0].options.content, undefined);
+  const container = thread.sent[0].options.components[0].toJSON();
+  assert.equal(container.type, 17);
+  assert.equal(container.accent_color, 0x57f287);
+  assert.match(container.components[0].content, /Tribe assistant/);
+  assert.match(container.components[2].content, /Do not ping @everyone/);
   assert.equal(syncRepo.rows[0].direction, "tribe_to_discord");
 });
 
-test("assistant messages with PR embeds mirror with URL button on first chunk only", async () => {
+test("assistant messages with PR embeds mirror as components with context and URL button", async () => {
   const { service, thread } = createService();
   const assistantMessage = {
     id: 52,
     role: "assistant",
-    content: `${"x".repeat(2100)}\nDone`,
+    content: "Ready to ship.",
+    ticketId: 12,
+    phaseId: null,
+    severity: "info",
+    readAt: null,
+    sourceEventKey: null,
+    metadata: null,
+    embeds: [
+      { type: "pull_request", ticketId: 12, url: "https://github.com/org/repo/pull/12", number: 12 },
+    ],
+    createdAt: new Date(2000).toISOString(),
+    updatedAt: new Date(2000).toISOString(),
+  };
+
+  await service.mirrorAssistantMessage(assistantMessage);
+
+  assert.equal(thread.sent.length, 1);
+  assert.equal(thread.sent[0].options.flags, MessageFlags.IsComponentsV2);
+  const container = thread.sent[0].options.components[0].toJSON();
+  assert.match(container.components[0].content, /Ticket #12/);
+  assert.match(container.components[4].content, /PR #12 for ticket #12/);
+  const actionRow = container.components[5];
+  const button = actionRow.components[0];
+  assert.equal(button.type, 2);
+  assert.equal(button.style, 5);
+  assert.equal(button.label, "Open PR #12");
+  assert.equal(button.url, "https://github.com/org/repo/pull/12");
+});
+
+test("oversized assistant messages fall back to chunked text with URL button on first chunk only", async () => {
+  const { service, thread } = createService();
+  const assistantMessage = {
+    id: 53,
+    role: "assistant",
+    content: `${"x".repeat(4500)}\nDone`,
     ticketId: 12,
     phaseId: null,
     severity: "info",
@@ -329,13 +370,11 @@ test("assistant messages with PR embeds mirror with URL button on first chunk on
   await service.mirrorAssistantMessage(assistantMessage);
 
   assert.equal(thread.sent.length > 1, true);
+  assert.equal(thread.sent[0].options.flags, undefined);
   const firstComponents = thread.sent[0].options.components;
   assert.equal(firstComponents.length, 1);
   const button = firstComponents[0].toJSON().components[0];
-  assert.equal(button.type, 2);
-  assert.equal(button.style, 5);
   assert.equal(button.label, "Open PR #12");
-  assert.equal(button.url, "https://github.com/org/repo/pull/12");
   assert.equal(thread.sent[1].options.components, undefined);
 });
 

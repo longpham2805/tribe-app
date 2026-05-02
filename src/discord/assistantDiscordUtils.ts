@@ -3,6 +3,9 @@ import type { AssistantMessage } from "../entity/AssistantMessage";
 import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 export const DISCORD_MESSAGE_LIMIT = 2000;
+export const DISCORD_COMPONENT_TEXT_LIMIT = 4000;
+export const DISCORD_COMPONENT_BODY_LIMIT = 3400;
+export const DISCORD_COMPONENT_CONTEXT_LIMIT = 1200;
 
 export type DiscordAssistantCommand =
   | { type: "list_actions" }
@@ -27,6 +30,14 @@ export interface DiscordAssistantMessageButton {
 export interface DiscordAssistantMessagePayload {
   content: string;
   buttons: DiscordAssistantMessageButton[];
+  componentLayout: DiscordAssistantMessageComponentLayout | null;
+}
+
+export interface DiscordAssistantMessageComponentLayout {
+  accentColor: number;
+  header: string;
+  body: string;
+  context: string | null;
 }
 
 export type DiscordInboundDecision =
@@ -116,46 +127,115 @@ export function formatAssistantMessageForDiscord(message: AssistantMessage): str
 }
 
 export function formatAssistantMessagePayloadForDiscord(message: AssistantMessage): DiscordAssistantMessagePayload {
-  const label = message.role === "user"
-    ? "Tribe UI user"
-    : message.role === "system"
-      ? "Tribe system"
-      : "Tribe assistant";
+  const label = formatAssistantMessageLabel(message);
   const qualifiers = [
     message.severity !== "info" ? message.severity.toUpperCase() : "",
     message.ticketId ? `ticket #${message.ticketId}` : "",
   ].filter(Boolean);
   const header = qualifiers.length > 0 ? `**${label} (${qualifiers.join(", ")})**` : `**${label}**`;
   const embedText = formatAssistantEmbedsForDiscord(message.embeds ?? null);
+  const content = [header, message.content.trim(), embedText].filter(Boolean).join("\n\n");
+  const buttons = buildAssistantMessageButtonsForDiscord(message.embeds ?? null);
   return {
-    content: [header, message.content.trim(), embedText].filter(Boolean).join("\n\n"),
-    buttons: buildAssistantMessageButtonsForDiscord(message.embeds ?? null),
+    content,
+    buttons,
+    componentLayout: buildAssistantMessageComponentLayoutForDiscord(message),
   };
 }
 
 export function formatAssistantEmbedsForDiscord(embeds: AssistantMessageEmbed[] | null): string {
   if (!embeds?.length) return "";
 
-  const lines = embeds.map((embed) => {
+  const lines = formatAssistantEmbedContextLinesForDiscord(embeds, { includeUrls: true })
+    .map((line) => `- ${line}`);
+
+  return lines.length > 0 ? `Context:\n${lines.join("\n")}` : "";
+}
+
+export function buildAssistantMessageComponentLayoutForDiscord(
+  message: AssistantMessage,
+): DiscordAssistantMessageComponentLayout | null {
+  const body = normalizeComponentText(message.content);
+  const context = formatAssistantEmbedsForComponents(message.embeds ?? null);
+  if (body.length > DISCORD_COMPONENT_BODY_LIMIT) return null;
+  if (context && context.length > DISCORD_COMPONENT_CONTEXT_LIMIT) return null;
+
+  return {
+    accentColor: getAssistantMessageAccentColor(message),
+    header: formatAssistantComponentHeader(message),
+    body,
+    context,
+  };
+}
+
+function formatAssistantMessageLabel(message: AssistantMessage): string {
+  if (message.role === "user") return "Tribe UI user";
+  if (message.role === "system") return "Tribe system";
+  return "Tribe assistant";
+}
+
+function formatAssistantComponentHeader(message: AssistantMessage): string {
+  const detailParts = [
+    message.severity.toUpperCase(),
+    message.ticketId ? `Ticket #${message.ticketId}` : "",
+  ].filter(Boolean);
+  const details = detailParts.length > 0 ? `\n-# ${detailParts.join(" | ")}` : "";
+  return `### ${formatAssistantMessageLabel(message)}${details}`;
+}
+
+function getAssistantMessageAccentColor(message: AssistantMessage): number {
+  if (message.severity === "error") return 0xed4245;
+  if (message.severity === "warn") return 0xfee75c;
+  if (message.role === "user") return 0x5865f2;
+  if (message.role === "system") return 0x99aab5;
+  return 0x57f287;
+}
+
+function normalizeComponentText(text: string): string {
+  return text.trim() || "(empty)";
+}
+
+function formatAssistantEmbedsForComponents(embeds: AssistantMessageEmbed[] | null): string | null {
+  const lines = formatAssistantEmbedContextLinesForDiscord(embeds, { includeUrls: false })
+    .slice(0, 6)
+    .map((line) => `- ${truncateDiscordLine(line, 240)}`);
+  if (lines.length === 0) return null;
+  return ["**Context**", ...lines].join("\n");
+}
+
+function formatAssistantEmbedContextLinesForDiscord(
+  embeds: AssistantMessageEmbed[] | null,
+  opts: { includeUrls: boolean },
+): string[] {
+  if (!embeds?.length) return [];
+
+  return embeds.map((embed) => {
     switch (embed.type) {
       case "ticket":
-        return `- Ticket #${embed.ticketId}${embed.title ? `: ${embed.title}` : ""}${embed.phase ? ` (${embed.phase})` : ""}`;
+        return `Ticket #${embed.ticketId}${embed.title ? `: ${embed.title}` : ""}${embed.phase ? ` (${embed.phase})` : ""}`;
       case "plan":
-        return `- Plan for ticket #${embed.ticketId}: ${embed.summary}`;
+        return `Plan for ticket #${embed.ticketId}: ${embed.summary}`;
       case "implementation":
-        return `- Implementation for ticket #${embed.ticketId}: ${embed.summary}`;
+        return `Implementation for ticket #${embed.ticketId}: ${embed.summary}`;
       case "branch":
-        return `- Branch${embed.ticketId ? ` for ticket #${embed.ticketId}` : ""}: ${embed.name}`;
-      case "pull_request":
-        return `- PR${embed.number ? ` #${embed.number}` : ""}${embed.ticketId ? ` for ticket #${embed.ticketId}` : ""}: ${embed.url}`;
+        return `Branch${embed.ticketId ? ` for ticket #${embed.ticketId}` : ""}: ${embed.name}`;
+      case "pull_request": {
+        const title = embed.title ? `: ${embed.title}` : "";
+        const state = embed.state ? ` (${embed.state})` : "";
+        const url = opts.includeUrls ? `: ${embed.url}` : "";
+        return `PR${embed.number ? ` #${embed.number}` : ""}${embed.ticketId ? ` for ticket #${embed.ticketId}` : ""}${title}${state}${url}`;
+      }
       case "question":
-        return `- Question${embed.ticketId ? ` for ticket #${embed.ticketId}` : ""}: ${embed.text}`;
+        return `Question${embed.ticketId ? ` for ticket #${embed.ticketId}` : ""}: ${embed.text}`;
       default:
         return null;
     }
   }).filter((line): line is string => Boolean(line));
+}
 
-  return lines.length > 0 ? `Context:\n${lines.join("\n")}` : "";
+function truncateDiscordLine(line: string, maxLength: number): string {
+  if (line.length <= maxLength) return line;
+  return `${line.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
 export function buildAssistantMessageButtonsForDiscord(embeds: AssistantMessageEmbed[] | null): DiscordAssistantMessageButton[] {

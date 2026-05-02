@@ -3,8 +3,12 @@ import {
   ButtonBuilder,
   ButtonStyle,
   Client,
+  ContainerBuilder,
   Events,
   GatewayIntentBits,
+  MessageFlags,
+  SeparatorBuilder,
+  TextDisplayBuilder,
   type Interaction,
   type Message,
   type MessageCreateOptions,
@@ -25,7 +29,9 @@ import {
   formatPendingActionsForDiscord,
   shouldMirrorAssistantMessageToDiscord,
   type DiscordAssistantCommand,
+  type DiscordAssistantMessageComponentLayout,
   type DiscordAssistantMessageButton,
+  type DiscordAssistantMessagePayload,
 } from "./assistantDiscordUtils";
 
 const DEFAULT_COMMAND_PREFIX = "!tribe";
@@ -203,17 +209,27 @@ export class DiscordAssistantBridgeService {
     if (!thread) return;
 
     const payload = formatAssistantMessagePayloadForDiscord(message);
-    const chunks = chunkDiscordText(payload.content);
-    const components = this.buildAssistantMessageComponents(payload.buttons);
+    const componentOptions = this.buildAssistantMessageComponentOptions(payload);
     let firstDiscordMessageId: string | null = null;
 
-    for (const [index, chunk] of chunks.entries()) {
+    if (componentOptions) {
       const sent = await thread.send({
-        content: chunk,
-        components: index === 0 ? components : undefined,
+        ...componentOptions,
         allowedMentions: DISCORD_ALLOWED_MENTIONS,
       });
-      firstDiscordMessageId ??= sent.id;
+      firstDiscordMessageId = sent.id;
+    } else {
+      const chunks = chunkDiscordText(payload.content);
+      const components = this.buildAssistantMessageComponents(payload.buttons);
+
+      for (const [index, chunk] of chunks.entries()) {
+        const sent = await thread.send({
+          content: chunk,
+          components: index === 0 ? components : undefined,
+          allowedMentions: DISCORD_ALLOWED_MENTIONS,
+        });
+        firstDiscordMessageId ??= sent.id;
+      }
     }
 
     if (!firstDiscordMessageId) return;
@@ -404,6 +420,36 @@ export class DiscordAssistantBridgeService {
           .setURL(button.url)),
       ),
     ];
+  }
+
+  private buildAssistantMessageComponentOptions(payload: DiscordAssistantMessagePayload): MessageCreateOptions | null {
+    if (!payload.componentLayout) return null;
+    return {
+      flags: MessageFlags.IsComponentsV2,
+      components: [this.buildAssistantMessageContainer(payload.componentLayout, payload.buttons)],
+    };
+  }
+
+  private buildAssistantMessageContainer(
+    layout: DiscordAssistantMessageComponentLayout,
+    buttons: DiscordAssistantMessageButton[],
+  ): ContainerBuilder {
+    const container = new ContainerBuilder()
+      .setAccentColor(layout.accentColor)
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(layout.header))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(layout.body));
+
+    if (layout.context) {
+      container
+        .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(layout.context));
+    }
+
+    const buttonRows = this.buildAssistantMessageComponents(buttons);
+    if (buttonRows?.length) container.addActionRowComponents(...buttonRows);
+
+    return container;
   }
 
   private buildActionComponents(actionId: number, disabled: boolean): ActionRowBuilder<ButtonBuilder>[] {

@@ -104,6 +104,21 @@ test("formatAssistantMessagePayloadForDiscord adds safe PR buttons", () => {
   assert.deepEqual(payload.buttons, [
     { label: "Open PR #12", url: "https://github.com/org/repo/pull/12" },
   ]);
+  assert.equal(payload.componentLayout.accentColor, 0x57f287);
+  assert.match(payload.componentLayout.header, /Tribe assistant/);
+  assert.match(payload.componentLayout.body, /Ready to ship\./);
+  assert.match(payload.componentLayout.context, /PR #12 for ticket #12/);
+  assert.doesNotMatch(payload.componentLayout.context, /https:\/\/github\.com/);
+});
+
+test("formatAssistantMessagePayloadForDiscord skips component layout for oversized bodies", () => {
+  const payload = formatAssistantMessagePayloadForDiscord({
+    ...assistantMessageBase,
+    content: "x".repeat(3401),
+    embeds: null,
+  });
+
+  assert.equal(payload.componentLayout, null);
 });
 
 test("buildAssistantMessageButtonsForDiscord skips unsafe and duplicate PR urls", () => {
