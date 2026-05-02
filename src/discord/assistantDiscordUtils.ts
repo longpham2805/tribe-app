@@ -19,6 +19,16 @@ export interface DiscordInboundSnapshot {
   attachmentCount?: number;
 }
 
+export interface DiscordAssistantMessageButton {
+  label: string;
+  url: string;
+}
+
+export interface DiscordAssistantMessagePayload {
+  content: string;
+  buttons: DiscordAssistantMessageButton[];
+}
+
 export type DiscordInboundDecision =
   | { kind: "ignore"; reason: "wrong_thread" | "bot" | "webhook" | "old" | "empty" }
   | { kind: "command"; command: DiscordAssistantCommand }
@@ -102,6 +112,10 @@ export function chunkDiscordText(text: string, limit = DISCORD_MESSAGE_LIMIT): s
 }
 
 export function formatAssistantMessageForDiscord(message: AssistantMessage): string {
+  return formatAssistantMessagePayloadForDiscord(message).content;
+}
+
+export function formatAssistantMessagePayloadForDiscord(message: AssistantMessage): DiscordAssistantMessagePayload {
   const label = message.role === "user"
     ? "Tribe UI user"
     : message.role === "system"
@@ -113,7 +127,10 @@ export function formatAssistantMessageForDiscord(message: AssistantMessage): str
   ].filter(Boolean);
   const header = qualifiers.length > 0 ? `**${label} (${qualifiers.join(", ")})**` : `**${label}**`;
   const embedText = formatAssistantEmbedsForDiscord(message.embeds ?? null);
-  return [header, message.content.trim(), embedText].filter(Boolean).join("\n\n");
+  return {
+    content: [header, message.content.trim(), embedText].filter(Boolean).join("\n\n"),
+    buttons: buildAssistantMessageButtonsForDiscord(message.embeds ?? null),
+  };
 }
 
 export function formatAssistantEmbedsForDiscord(embeds: AssistantMessageEmbed[] | null): string {
@@ -139,6 +156,37 @@ export function formatAssistantEmbedsForDiscord(embeds: AssistantMessageEmbed[] 
   }).filter((line): line is string => Boolean(line));
 
   return lines.length > 0 ? `Context:\n${lines.join("\n")}` : "";
+}
+
+export function buildAssistantMessageButtonsForDiscord(embeds: AssistantMessageEmbed[] | null): DiscordAssistantMessageButton[] {
+  if (!embeds?.length) return [];
+
+  const buttons: DiscordAssistantMessageButton[] = [];
+  const seenUrls = new Set<string>();
+
+  for (const embed of embeds) {
+    if (embed.type !== "pull_request" || !isSafeDiscordButtonUrl(embed.url)) continue;
+    if (seenUrls.has(embed.url)) continue;
+
+    seenUrls.add(embed.url);
+    buttons.push({
+      label: embed.number ? `Open PR #${embed.number}` : "Open PR",
+      url: embed.url,
+    });
+
+    if (buttons.length >= 5) break;
+  }
+
+  return buttons;
+}
+
+function isSafeDiscordButtonUrl(url: string): boolean {
+  if (url.length > 512) return false;
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function formatAssistantActionForDiscord(action: AssistantAction): string {

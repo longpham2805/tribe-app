@@ -303,7 +303,40 @@ test("assistant messages mirror outbound once with allowed mentions disabled", a
 
   assert.equal(thread.sent.length, 1);
   assert.equal(thread.sent[0].options.allowedMentions.parse.length, 0);
+  assert.equal(thread.sent[0].options.components, undefined);
   assert.equal(syncRepo.rows[0].direction, "tribe_to_discord");
+});
+
+test("assistant messages with PR embeds mirror with URL button on first chunk only", async () => {
+  const { service, thread } = createService();
+  const assistantMessage = {
+    id: 52,
+    role: "assistant",
+    content: `${"x".repeat(2100)}\nDone`,
+    ticketId: 12,
+    phaseId: null,
+    severity: "info",
+    readAt: null,
+    sourceEventKey: null,
+    metadata: null,
+    embeds: [
+      { type: "pull_request", ticketId: 12, url: "https://github.com/org/repo/pull/12", number: 12 },
+    ],
+    createdAt: new Date(2000).toISOString(),
+    updatedAt: new Date(2000).toISOString(),
+  };
+
+  await service.mirrorAssistantMessage(assistantMessage);
+
+  assert.equal(thread.sent.length > 1, true);
+  const firstComponents = thread.sent[0].options.components;
+  assert.equal(firstComponents.length, 1);
+  const button = firstComponents[0].toJSON().components[0];
+  assert.equal(button.type, 2);
+  assert.equal(button.style, 5);
+  assert.equal(button.label, "Open PR #12");
+  assert.equal(button.url, "https://github.com/org/repo/pull/12");
+  assert.equal(thread.sent[1].options.components, undefined);
 });
 
 test("proposed actions mirror with buttons and stale action updates edit the Discord message", async () => {

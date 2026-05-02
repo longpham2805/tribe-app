@@ -3,10 +3,12 @@ require("ts-node/register");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  buildAssistantMessageButtonsForDiscord,
   chunkDiscordText,
   classifyDiscordInboundMessage,
   formatAssistantActionForDiscord,
   formatAssistantMessageForDiscord,
+  formatAssistantMessagePayloadForDiscord,
   parseDiscordAssistantCommand,
   shouldMirrorAssistantMessageToDiscord,
 } = require("./assistantDiscordUtils");
@@ -74,6 +76,47 @@ test("formatAssistantMessageForDiscord flattens context embeds", () => {
   assert.match(text, /Ready to ship\./);
   assert.match(text, /Ticket #12: Discord sync \(SHIP\)/);
   assert.match(text, /PR #12 for ticket #12/);
+});
+
+const assistantMessageBase = {
+  id: 1,
+  role: "assistant",
+  content: "Ready to ship.",
+  ticketId: 12,
+  phaseId: null,
+  severity: "info",
+  readAt: null,
+  sourceEventKey: null,
+  metadata: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+test("formatAssistantMessagePayloadForDiscord adds safe PR buttons", () => {
+  const payload = formatAssistantMessagePayloadForDiscord({
+    ...assistantMessageBase,
+    embeds: [
+      { type: "pull_request", ticketId: 12, url: "https://github.com/org/repo/pull/12", number: 12 },
+    ],
+  });
+
+  assert.match(payload.content, /PR #12 for ticket #12/);
+  assert.deepEqual(payload.buttons, [
+    { label: "Open PR #12", url: "https://github.com/org/repo/pull/12" },
+  ]);
+});
+
+test("buildAssistantMessageButtonsForDiscord skips unsafe and duplicate PR urls", () => {
+  const buttons = buildAssistantMessageButtonsForDiscord([
+    { type: "pull_request", url: "http://github.com/org/repo/pull/1", number: 1 },
+    { type: "pull_request", url: "notaurl", number: 2 },
+    { type: "pull_request", url: "https://github.com/org/repo/pull/3", number: 3 },
+    { type: "pull_request", url: "https://github.com/org/repo/pull/3", number: 3 },
+  ]);
+
+  assert.deepEqual(buttons, [
+    { label: "Open PR #3", url: "https://github.com/org/repo/pull/3" },
+  ]);
 });
 
 test("shouldMirrorAssistantMessageToDiscord suppresses Discord-origin user echo only", () => {

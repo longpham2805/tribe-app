@@ -21,10 +21,11 @@ import {
   chunkDiscordText,
   classifyDiscordInboundMessage,
   formatAssistantActionForDiscord,
-  formatAssistantMessageForDiscord,
+  formatAssistantMessagePayloadForDiscord,
   formatPendingActionsForDiscord,
   shouldMirrorAssistantMessageToDiscord,
   type DiscordAssistantCommand,
+  type DiscordAssistantMessageButton,
 } from "./assistantDiscordUtils";
 
 const DEFAULT_COMMAND_PREFIX = "!tribe";
@@ -201,11 +202,17 @@ export class DiscordAssistantBridgeService {
     const thread = await this.resolveThread();
     if (!thread) return;
 
-    const chunks = chunkDiscordText(formatAssistantMessageForDiscord(message));
+    const payload = formatAssistantMessagePayloadForDiscord(message);
+    const chunks = chunkDiscordText(payload.content);
+    const components = this.buildAssistantMessageComponents(payload.buttons);
     let firstDiscordMessageId: string | null = null;
 
-    for (const chunk of chunks) {
-      const sent = await thread.send({ content: chunk, allowedMentions: DISCORD_ALLOWED_MENTIONS });
+    for (const [index, chunk] of chunks.entries()) {
+      const sent = await thread.send({
+        content: chunk,
+        components: index === 0 ? components : undefined,
+        allowedMentions: DISCORD_ALLOWED_MENTIONS,
+      });
       firstDiscordMessageId ??= sent.id;
     }
 
@@ -385,6 +392,18 @@ export class DiscordAssistantBridgeService {
     for (const chunk of rest) {
       await channel.send({ content: chunk, allowedMentions: DISCORD_ALLOWED_MENTIONS });
     }
+  }
+
+  private buildAssistantMessageComponents(buttons: DiscordAssistantMessageButton[]): ActionRowBuilder<ButtonBuilder>[] | undefined {
+    if (buttons.length === 0) return undefined;
+    return [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        ...buttons.map((button) => new ButtonBuilder()
+          .setLabel(button.label)
+          .setStyle(ButtonStyle.Link)
+          .setURL(button.url)),
+      ),
+    ];
   }
 
   private buildActionComponents(actionId: number, disabled: boolean): ActionRowBuilder<ButtonBuilder>[] {
