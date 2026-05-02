@@ -81,6 +81,15 @@ function QuestionEmbedCallout({ embed }: { embed: Extract<AssistantMessageEmbed,
   );
 }
 
+function ImageEmbedPreview({ embed }: { embed: Extract<AssistantMessageEmbed, { type: "image" }> }) {
+  return (
+    <a href={embed.url} target="_blank" rel="noopener noreferrer" className="asst-image-embed">
+      <img src={embed.url} alt={embed.name ?? "Attached image"} className="asst-image-embed__img" />
+      {embed.name && <span className="asst-image-embed__name">{embed.name}</span>}
+    </a>
+  );
+}
+
 export function MessageEmbeds({ embeds, onOpenTicket }: {
   embeds: AssistantMessageEmbed[] | null | undefined;
   onOpenTicket?: (ticketId: number) => void;
@@ -106,6 +115,7 @@ export function MessageEmbeds({ embeds, onOpenTicket }: {
           case "branch": return <BranchEmbedChip key={i} embed={embed} />;
           case "pull_request": return <PullRequestEmbedChip key={i} embed={embed} />;
           case "question": return <QuestionEmbedCallout key={i} embed={embed} />;
+          case "image": return <ImageEmbedPreview key={i} embed={embed} />;
           default: return null;
         }
       })}

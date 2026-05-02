@@ -5,8 +5,8 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { TicketRepository } from "../repository/TicketRepository";
-import { saveGlobalImage, saveTicketImage } from "../lib/fileStorage";
-import { getGlobalImagesDir } from "../lib/paths";
+import { saveAssistantImage, saveGlobalImage, saveTicketImage } from "../lib/fileStorage";
+import { getAssistantImagesDir, getGlobalImagesDir } from "../lib/paths";
 
 const router = Router();
 
@@ -86,6 +86,54 @@ router.get("/projects/:id/logo", async (req: Request, res: Response) => {
     }
 
     res.sendFile(logoPath, { dotfiles: "allow" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/uploads/assistant/images
+router.post("/assistant/images", imageUpload.single("file"), async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "No file uploaded (field: file)" });
+      return;
+    }
+
+    const imagePath = await saveAssistantImage(file.buffer, file.originalname);
+    const imageName = basename(imagePath);
+    res.json({
+      embed: {
+        type: "image",
+        url: `/api/uploads/assistant/images/${encodeURIComponent(imageName)}`,
+        name: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        source: "tribe_ui",
+      },
+    });
+  } catch (err: any) {
+    const status = err.message?.includes("not allowed") ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// GET /api/uploads/assistant/images/:name
+router.get("/assistant/images/:name", async (req: Request, res: Response) => {
+  try {
+    const name = req.params.name as string;
+    if (name !== basename(name)) {
+      res.status(400).json({ error: "Invalid file name" });
+      return;
+    }
+
+    const filePath = join(getAssistantImagesDir(), name);
+    if (!existsSync(filePath)) {
+      res.status(404).json({ error: "Image not found" });
+      return;
+    }
+
+    res.sendFile(filePath, { dotfiles: "allow" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

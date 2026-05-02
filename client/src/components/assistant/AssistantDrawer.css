@@ -604,6 +604,37 @@
   line-height: 1.45;
 }
 
+.asst-image-embed {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  max-width: 240px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--cream);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 1px 0 rgba(25, 25, 25, 0.03);
+}
+
+.asst-image-embed__img {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+}
+
+.asst-image-embed__name {
+  display: block;
+  overflow: hidden;
+  padding: 5px 7px;
+  color: var(--ink-4);
+  font-size: 10.5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Branch chip */
 .asst-embed--branch {
   align-items: center;
@@ -684,6 +715,52 @@
   background: color-mix(in srgb, var(--paper) 96%, transparent);
 }
 
+.asst-composer-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.asst-composer-image {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--cream);
+}
+
+.asst-composer-image__img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.asst-composer-image__remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 19px;
+  height: 19px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink-2);
+  cursor: pointer;
+  padding: 0;
+}
+
+.asst-composer-image__remove:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .asst-input-row {
   display: flex;
   align-items: flex-end;
@@ -699,6 +776,37 @@
 .asst-input-row:focus-within {
   border-color: var(--claude);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--claude) 18%, transparent);
+}
+
+.asst-attach {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--ink-4);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.asst-attach:hover:not(:disabled) {
+  background: var(--paper);
+  border-color: var(--hairline);
+  color: var(--ink-2);
+}
+
+.asst-attach:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.asst-file-input {
+  display: none;
 }
 
 .asst-input {
@@ -764,6 +872,14 @@
 
 .asst-send__dots span:nth-child(3) {
   animation-delay: 0.32s;
+}
+
+.asst-composer-error {
+  margin-top: 7px;
+  padding: 0 4px;
+  color: var(--status-error);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .asst-composer-help {

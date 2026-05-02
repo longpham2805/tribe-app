@@ -153,6 +153,15 @@ function createDiscordMessage(overrides = {}) {
   };
 }
 
+function createDiscordAttachments(items) {
+  return {
+    size: items.length,
+    values() {
+      return items[Symbol.iterator]();
+    },
+  };
+}
+
 function withDiscordEnv(env, run) {
   const originalToken = process.env.DISCORD_BOT_TOKEN;
   const originalThreadId = process.env.DISCORD_ASSISTANT_THREAD_ID;
@@ -253,6 +262,80 @@ test("Discord inbound prompt creates a Tribe assistant message mapping", async (
   });
 });
 
+test("Discord inbound image attachments are saved and forwarded to the assistant", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    headers: { get: () => "image/png" },
+    async arrayBuffer() {
+      return new Uint8Array([137, 80, 78, 71]).buffer;
+    },
+  });
+
+  try {
+    const { service, agentCalls } = createService();
+    const message = createDiscordMessage({
+      content: "create a ticket from this screenshot",
+      attachments: createDiscordAttachments([
+        {
+          id: "att-1",
+          url: "https://cdn.discordapp.com/attachments/1/screenshot.png",
+          name: "screenshot.png",
+          contentType: "image/png",
+          size: 4,
+        },
+      ]),
+    });
+
+    await service.handleDiscordMessage(message);
+
+    assert.equal(agentCalls.length, 1);
+    assert.equal(agentCalls[0].message, "create a ticket from this screenshot");
+    assert.equal(agentCalls[0].embeds[0].type, "image");
+    assert.equal(agentCalls[0].embeds[0].name, "screenshot.png");
+    assert.equal(agentCalls[0].embeds[0].mimeType, "image/png");
+    assert.match(agentCalls[0].embeds[0].url, /^\/api\/uploads\/assistant\/images\//);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Discord attachment-only image messages become assistant prompts", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    headers: { get: () => "image/png" },
+    async arrayBuffer() {
+      return new Uint8Array([137, 80, 78, 71]).buffer;
+    },
+  });
+
+  try {
+    const { service, agentCalls } = createService();
+    const message = createDiscordMessage({
+      content: "",
+      attachments: createDiscordAttachments([
+        {
+          id: "att-2",
+          url: "https://cdn.discordapp.com/attachments/1/design.png",
+          name: "design.png",
+          contentType: "image/png",
+          size: 4,
+        },
+      ]),
+    });
+
+    await service.handleDiscordMessage(message);
+
+    assert.equal(agentCalls.length, 1);
+    assert.equal(agentCalls[0].message, "Uploaded image(s).");
+    assert.equal(agentCalls[0].embeds[0].source, "discord");
+    assert.equal(message.replies.length, 0);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("Discord inbound messages are ignored when MessageContent intent is disabled", async () => {
   const { service, agentCalls } = createService({ messageContentIntentEnabled: false });
   const message = createDiscordMessage();
@@ -261,6 +344,41 @@ test("Discord inbound messages are ignored when MessageContent intent is disable
 
   assert.equal(agentCalls.length, 0);
   assert.equal(message.replies.length, 0);
+});
+
+test("Discord image-only messages work when MessageContent intent is disabled", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    headers: { get: () => "image/png" },
+    async arrayBuffer() {
+      return new Uint8Array([137, 80, 78, 71]).buffer;
+    },
+  });
+
+  try {
+    const { service, agentCalls } = createService({ messageContentIntentEnabled: false });
+    const message = createDiscordMessage({
+      content: "unreadable without intent",
+      attachments: createDiscordAttachments([
+        {
+          id: "att-3",
+          url: "https://cdn.discordapp.com/attachments/1/no-intent.png",
+          name: "no-intent.png",
+          contentType: "image/png",
+          size: 4,
+        },
+      ]),
+    });
+
+    await service.handleDiscordMessage(message);
+
+    assert.equal(agentCalls.length, 1);
+    assert.equal(agentCalls[0].message, "Uploaded image(s).");
+    assert.equal(agentCalls[0].embeds[0].name, "no-intent.png");
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test("Discord fallback commands list, approve, and reject actions", async () => {

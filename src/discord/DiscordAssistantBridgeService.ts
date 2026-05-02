@@ -14,13 +14,16 @@ import {
   type MessageCreateOptions,
   type MessageEditOptions,
 } from "discord.js";
+import { basename } from "path";
 import { AssistantAgentService } from "../assistant/AssistantAgentService";
 import { AssistantActionRepository } from "../assistant/AssistantRepository";
 import type { AssistantAction } from "../entity/AssistantAction";
 import type { AssistantMessage, AssistantMessageMetadata } from "../entity/AssistantMessage";
 import { emit, subscribe, type TribeEvent } from "../lib/events";
+import { saveAssistantImage } from "../lib/fileStorage";
 import { AppStateRepository, normalizeNullableSetting } from "../repository/AppStateRepository";
 import { DiscordAssistantSyncRepository } from "./DiscordAssistantSyncRepository";
+import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 import {
   chunkDiscordText,
   classifyDiscordInboundMessage,
@@ -279,14 +282,15 @@ export class DiscordAssistantBridgeService {
 
   private async handleDiscordMessage(message: Message): Promise<void> {
     if (!this.threadId) return;
-    if (!this.messageContentIntentEnabled) return;
+    const attachmentCount = message.attachments?.size ?? 0;
+    if (!this.messageContentIntentEnabled && attachmentCount === 0) return;
     const decision = classifyDiscordInboundMessage({
       channelId: message.channelId,
-      content: message.content ?? "",
+      content: this.messageContentIntentEnabled ? message.content ?? "" : "",
       authorBot: message.author?.bot,
       webhookId: message.webhookId,
       createdTimestamp: message.createdTimestamp,
-      attachmentCount: message.attachments?.size ?? 0,
+      attachmentCount,
     }, {
       threadId: this.threadId,
       prefix: this.commandPrefix,
@@ -294,10 +298,6 @@ export class DiscordAssistantBridgeService {
     });
 
     if (decision.kind === "ignore") return;
-    if (decision.kind === "attachment_only") {
-      await this.replyToDiscordMessage(message, "Please send text for the Tribe assistant. Attachments are not synced yet.");
-      return;
-    }
     if (decision.kind === "command") {
       await this.handleDiscordCommand(decision.command, message);
       return;
@@ -306,10 +306,18 @@ export class DiscordAssistantBridgeService {
     const alreadySynced = await this.syncRepo.existsByDiscordMessageId(message.id);
     if (alreadySynced) return;
 
+    const imageEmbeds = await this.saveDiscordImageAttachments(message);
+    if (decision.kind === "attachment_only" && imageEmbeds.length === 0) {
+      await this.replyToDiscordMessage(message, "Please send text or image attachments for the Tribe assistant.");
+      return;
+    }
+
     const metadata = this.buildDiscordMetadata(message);
+    const content = decision.kind === "prompt" ? decision.content : "Uploaded image(s).";
     const reply = await this.agent.handleUserMessage({
-      message: decision.content,
+      message: content,
       metadata,
+      embeds: imageEmbeds.length > 0 ? imageEmbeds : null,
       onUserMessageCreated: async (assistantMessage) => {
         await this.createSyncSafe({
           entityType: "message",
@@ -380,6 +388,44 @@ export class DiscordAssistantBridgeService {
     const updated = await this.actionRepo.findById(actionId);
     if (updated) emit({ type: "assistant.action.updated", action: updated });
     return `Rejected Tribe action #${actionId}.`;
+  }
+
+  private async saveDiscordImageAttachments(message: Message): Promise<AssistantMessageEmbed[]> {
+    const attachments = typeof message.attachments?.values === "function"
+      ? Array.from(message.attachments.values())
+      : [];
+    const imageAttachments = attachments
+      .filter((attachment) => {
+        const contentType = attachment.contentType ?? "";
+        return contentType.startsWith("image/") || /\.(jpe?g|png|gif|webp|svg)$/i.test(attachment.name ?? "");
+      })
+      .slice(0, 6);
+
+    const embeds: AssistantMessageEmbed[] = [];
+    for (const attachment of imageAttachments) {
+      try {
+        const response = await fetch(attachment.url);
+        if (!response.ok) continue;
+
+        const mimeType = attachment.contentType ?? response.headers.get("content-type") ?? undefined;
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const originalName = ensureImageExtension(attachment.name ?? `discord-${attachment.id}`, mimeType);
+        const savedPath = await saveAssistantImage(buffer, originalName);
+        const imageName = basename(savedPath);
+        embeds.push({
+          type: "image",
+          url: `/api/uploads/assistant/images/${encodeURIComponent(imageName)}`,
+          name: originalName,
+          mimeType,
+          size: attachment.size,
+          source: "discord",
+        });
+      } catch (err: any) {
+        log(`failed to sync Discord image attachment ${attachment.id}: ${err?.message ?? err}`);
+      }
+    }
+
+    return embeds;
   }
 
   private buildDiscordMetadata(message: Message): AssistantMessageMetadata {
@@ -508,6 +554,18 @@ function asAssistantAction(value: unknown): AssistantAction | null {
 function readBooleanEnv(value: string | undefined): boolean {
   if (!value) return false;
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function ensureImageExtension(fileName: string, mimeType?: string): string {
+  if (/\.(jpe?g|png|gif|webp|svg)$/i.test(fileName)) return fileName;
+  const extByMime: Record<string, string> = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+  };
+  return `${fileName}${extByMime[mimeType ?? ""] ?? ".png"}`;
 }
 
 async function getStoredDiscordSettings(): Promise<DiscordSettings> {

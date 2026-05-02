@@ -48,6 +48,7 @@ export class TicketMutationService {
     cliType?: CliType;
     status?: TicketStatus;
     activationContext: TicketActivationContext;
+    deferActivation?: boolean;
   }): Promise<Ticket | null> {
     const status = input.status ?? TicketStatus.READY;
     let cliType = input.cliType ?? CliType.CLAUDE;
@@ -71,7 +72,9 @@ export class TicketMutationService {
       status,
     });
 
-    new TicketActivationService(this.phaseHandler).activateCreatedIfReady(ticket, input.activationContext);
+    if (!input.deferActivation) {
+      new TicketActivationService(this.phaseHandler).activateCreatedIfReady(ticket, input.activationContext);
+    }
     return this.ticketRepo.findById(ticket.id);
   }
 

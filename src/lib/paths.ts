@@ -9,6 +9,10 @@ export function getGlobalImagesDir(): string {
   return join(homedir(), ".tribe", "images");
 }
 
+export function getAssistantImagesDir(): string {
+  return join(homedir(), ".tribe", "assistant-images");
+}
+
 export function getTicketImagesDir(uid: string): string {
   return join(getTicketDir(uid), "images");
 }

@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, Tool, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import type { ContentBlockParam, ImageBlockParam, MessageParam, Tool, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import { randomUUID } from "crypto";
 import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { basename, join } from "path";
 import { TicketRepository } from "../repository/TicketRepository";
 import { PhaseRepository } from "../repository/PhaseRepository";
 import { SlotRepository } from "../repository/SlotRepository";
@@ -18,16 +19,21 @@ import { TicketStatus } from "../enum/TicketStatus";
 import { CliType } from "../enum/CliType";
 import { PhaseStatus } from "../enum/PhaseStatus";
 import { emit } from "../lib/events";
-import { getLogFile, getTicketDir } from "../lib/paths";
+import { saveTicketImage } from "../lib/fileStorage";
+import { getAssistantImagesDir, getLogFile, getTicketDir } from "../lib/paths";
 import { PauseQuestionContextProvider } from "./PauseQuestionContextProvider";
 import type { AssistantMessage, AssistantMessageMetadata } from "../entity/AssistantMessage";
+import type { Ticket } from "../entity/Ticket";
+import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 const DEFAULT_MODEL = "gpt-5.5";
 const MAX_TOOL_ITERATIONS = 10;
 const SYSTEM_PROMPT_PATH = join(__dirname, "../docs/agents/assistant.md");
 const MAX_PHASE_LOG_BYTES = 256 * 1024;
+const SUPPORTED_VISION_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
 const log = (msg: string) => console.log(`[AssistantAgent] ${msg}`);
+type ImageEmbed = Extract<AssistantMessageEmbed, { type: "image" }>;
 
 // ── Tool definitions ───────────────────────────────────────────────────
 
@@ -121,11 +127,11 @@ const ASSISTANT_TOOLS: Tool[] = [
         ticketId: { type: "number" },
         embeds: {
           type: "array",
-          description: "Structured attachments shown below the message. Use to attach plan/implementation summaries, questions, branch names, or PRs.",
+          description: "Structured attachments shown below the message. Use to attach plan/implementation summaries, questions, branch names, PRs, or image references.",
           items: {
             type: "object",
             properties: {
-              type: { type: "string", enum: ["ticket", "plan", "implementation", "branch", "pull_request", "question"] },
+              type: { type: "string", enum: ["ticket", "plan", "implementation", "branch", "pull_request", "question", "image"] },
               ticketId: { type: "number" },
               phaseId: { type: "number" },
               title: { type: "string" },
@@ -133,6 +139,8 @@ const ASSISTANT_TOOLS: Tool[] = [
               summary: { type: "string" },
               name: { type: "string" },
               url: { type: "string" },
+              mimeType: { type: "string" },
+              size: { type: "number" },
               number: { type: "number" },
               state: { type: "string" },
               text: { type: "string" },
@@ -166,6 +174,11 @@ const ASSISTANT_TOOLS: Tool[] = [
         projectId: { type: "number", description: "Project ID to assign" },
         cliType: { type: "string", enum: Object.values(CliType), description: "CLI type to use" },
         status: { type: "string", enum: Object.values(TicketStatus), description: "READY = immediately triggers workflow (default). DRAFT = save without triggering." },
+        imageUrls: {
+          type: "array",
+          items: { type: "string" },
+          description: "Assistant image embed URLs from the current user message to copy into the ticket. If omitted, all current-message images are attached.",
+        },
       },
       required: ["title"],
     },
@@ -422,6 +435,7 @@ export class AssistantAgentService {
     message: string;
     projectId?: number;
     metadata?: AssistantMessageMetadata | null;
+    embeds?: AssistantMessageEmbed[] | null;
     onUserMessageCreated?: (message: AssistantMessage) => void | Promise<void>;
   }): Promise<string> {
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -432,7 +446,16 @@ export class AssistantAgentService {
     const recentMsgs = await this.msgRepo.findRecent({ limit: 40 });
     const historyMessages: MessageParam[] = recentMsgs
       .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.role === "user"
+          ? this.formatUserMessageForAgent(
+            m.content,
+            this.normalizeUserMessageMetadata(m.metadata),
+            this.getImageEmbeds(m.embeds),
+          )
+          : m.content,
+      }));
 
     // Resolve active project for context injection
     const activeProject = await this.resolveDefaultProject(opts.projectId);
@@ -440,7 +463,9 @@ export class AssistantAgentService {
       ? `[UI CONTEXT] Active project: "${activeProject.name}" (ID: ${activeProject.id}). When the user asks to create a ticket or perform any project-scoped action without specifying a project, use this project by default.`
       : undefined;
     const metadata = this.normalizeUserMessageMetadata(opts.metadata);
-    const agentUserContent = this.formatUserMessageForAgent(opts.message, metadata);
+    const imageEmbeds = this.getImageEmbeds(opts.embeds);
+    const agentUserText = this.formatUserMessageForAgent(opts.message, metadata, imageEmbeds);
+    const agentUserContent = this.buildAgentUserContent(agentUserText, imageEmbeds);
 
     // Save the user's message
     const userMsg = await this.msgRepo.create({
@@ -448,13 +473,14 @@ export class AssistantAgentService {
       content: opts.message,
       ticketId: null,
       metadata,
+      embeds: opts.embeds ?? null,
     });
     await opts.onUserMessageCreated?.(userMsg);
     emit({ type: "assistant.message.created", message: userMsg });
 
     const response = await this.runAgentLoop(
       [...historyMessages, { role: "user", content: agentUserContent }],
-      { source: "chat", contextNote },
+      { source: "chat", contextNote, imageEmbeds },
     );
 
     const reply = response ?? "I wasn't able to process that request.";
@@ -478,18 +504,61 @@ export class AssistantAgentService {
     };
   }
 
-  private formatUserMessageForAgent(message: string, metadata: AssistantMessageMetadata): string {
-    if (metadata.origin !== "discord") return message;
+  private getImageEmbeds(embeds?: AssistantMessageEmbed[] | null): ImageEmbed[] {
+    return (embeds ?? []).filter((embed): embed is ImageEmbed => embed.type === "image");
+  }
+
+  private formatUserMessageForAgent(message: string, metadata: AssistantMessageMetadata, imageEmbeds: ImageEmbed[] = []): string {
+    const imageNote = imageEmbeds.length > 0
+      ? `\n\n[Attached images]\n${imageEmbeds.map((image, index) => `${index + 1}. ${image.name ?? "image"} (${image.url})`).join("\n")}`
+      : "";
+    const content = `${message}${imageNote}`;
+    if (metadata.origin !== "discord") return content;
     const discord = metadata.discord;
     const author = discord?.authorDisplayName ?? discord?.authorUsername ?? discord?.authorId ?? "Discord user";
-    return `[Discord message from ${author}]\n\n${message}`;
+    return `[Discord message from ${author}]\n\n${content}`;
+  }
+
+  private buildAgentUserContent(message: string, imageEmbeds: ImageEmbed[]): MessageParam["content"] {
+    const blocks: ContentBlockParam[] = [{ type: "text", text: message }];
+
+    for (const image of imageEmbeds) {
+      const imageBlock = this.buildImageBlock(image);
+      if (imageBlock) blocks.push(imageBlock);
+    }
+
+    return blocks.length === 1 ? message : blocks;
+  }
+
+  private buildImageBlock(image: ImageEmbed): ImageBlockParam | null {
+    const mediaType = image.mimeType;
+    if (!mediaType || !SUPPORTED_VISION_MEDIA_TYPES.has(mediaType)) return null;
+    const filePath = this.resolveAssistantImagePath(image.url);
+    if (!filePath || !existsSync(filePath)) return null;
+
+    return {
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+        data: readFileSync(filePath).toString("base64"),
+      },
+    };
+  }
+
+  private resolveAssistantImagePath(url: string): string | null {
+    const match = url.match(/^\/api\/uploads\/assistant\/images\/([^/?#]+)$/);
+    if (!match) return null;
+    const imageName = decodeURIComponent(match[1]);
+    if (imageName !== basename(imageName)) return null;
+    return join(getAssistantImagesDir(), imageName);
   }
 
   // ── Agent loop ──────────────────────────────────────────────────────
 
   private async runAgentLoop(
     initialMessages: MessageParam[],
-    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user"; contextNote?: string },
+    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user"; contextNote?: string; imageEmbeds?: ImageEmbed[] },
   ): Promise<string | null> {
     const messages: MessageParam[] = [...initialMessages];
     let iterations = 0;
@@ -536,12 +605,57 @@ export class AssistantAgentService {
     return null;
   }
 
+  private selectImagesForTicket(imageEmbeds: ImageEmbed[], value: unknown): ImageEmbed[] {
+    if (!Array.isArray(value)) return imageEmbeds;
+
+    const urls = new Set(value.filter((url): url is string => typeof url === "string"));
+    if (urls.size === 0) return [];
+    const currentImages = imageEmbeds.filter((image) => urls.has(image.url));
+    const currentUrls = new Set(currentImages.map((image) => image.url));
+    const referencedImages = Array.from(urls)
+      .filter((url) => !currentUrls.has(url) && this.resolveAssistantImagePath(url))
+      .map((url): ImageEmbed => ({ type: "image", url, name: basename(url), source: "tribe_ui" }));
+    return [...currentImages, ...referencedImages];
+  }
+
+  private async attachImagesToTicket(ticketId: number, imageEmbeds: ImageEmbed[]): Promise<Ticket | null> {
+    const ticket = await this.ticketRepo.findById(ticketId);
+    if (!ticket) return null;
+
+    let uid = ticket.uid;
+    if (!uid) {
+      uid = randomUUID();
+      await this.ticketRepo.update(ticketId, { uid });
+    }
+
+    const refs: string[] = [];
+    for (const image of imageEmbeds) {
+      const sourcePath = this.resolveAssistantImagePath(image.url);
+      if (!sourcePath || !existsSync(sourcePath)) continue;
+
+      const buffer = readFileSync(sourcePath);
+      const originalName = image.name ?? basename(sourcePath);
+      const imagePath = await saveTicketImage(uid, buffer, originalName);
+      const imageName = basename(imagePath);
+      const imageUrl = `/api/uploads/tickets/${ticketId}/images/${encodeURIComponent(imageName)}`;
+      refs.push(`![${originalName}](${imageUrl})`);
+    }
+
+    if (refs.length === 0) {
+      return this.ticketRepo.findById(ticketId);
+    }
+
+    const nextDescription = `${ticket.description ?? ""}${ticket.description ? "\n\n" : ""}${refs.join("\n\n")}`;
+    await this.ticketRepo.update(ticketId, { description: nextDescription });
+    return this.ticketRepo.findById(ticketId);
+  }
+
   // ── Tool execution ──────────────────────────────────────────────────
 
   private async executeTool(
     name: string,
     input: Record<string, unknown>,
-    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user" },
+    ctx: { ticketId?: number; phaseId?: number; sourceEventKey?: string; source?: "auto" | "chat" | "user"; imageEmbeds?: ImageEmbed[] },
   ): Promise<unknown> {
     const source = ctx.source ?? "auto";
 
@@ -697,14 +811,32 @@ export class AssistantAgentService {
         }
 
         case "create_ticket": {
-          return this.ticketMutationService.create({
+          const requestedStatus = (input.status as TicketStatus | undefined) ?? TicketStatus.READY;
+          const images = this.selectImagesForTicket(ctx.imageEmbeds ?? [], input.imageUrls);
+          const shouldDeferActivation = requestedStatus === TicketStatus.READY && images.length > 0;
+          const ticket = await this.ticketMutationService.create({
             title: input.title as string,
             description: input.description as string | undefined,
             projectId: (input.projectId as number | undefined) ?? null,
             cliType: input.cliType as CliType | undefined,
-            status: TicketStatus.READY,
+            status: requestedStatus,
             activationContext: "mcp-ticket-create",
+            deferActivation: shouldDeferActivation,
           });
+          if (!ticket) return null;
+
+          const updatedTicket = images.length > 0
+            ? await this.attachImagesToTicket(ticket.id, images)
+            : ticket;
+
+          if (shouldDeferActivation) {
+            this.phaseHandler.initCreated(updatedTicket ?? ticket).catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err);
+              log(`initCreated error after image attach for ticket #${ticket.id}: ${message}`);
+            });
+          }
+
+          return updatedTicket ?? ticket;
         }
 
         case "update_ticket": {

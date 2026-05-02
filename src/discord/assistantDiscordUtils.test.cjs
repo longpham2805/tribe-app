@@ -111,6 +111,19 @@ test("formatAssistantMessagePayloadForDiscord adds safe PR buttons", () => {
   assert.doesNotMatch(payload.componentLayout.context, /https:\/\/github\.com/);
 });
 
+test("formatAssistantMessagePayloadForDiscord includes image embeds as context", () => {
+  const payload = formatAssistantMessagePayloadForDiscord({
+    ...assistantMessageBase,
+    content: "Got it.",
+    embeds: [
+      { type: "image", url: "/api/uploads/assistant/images/screenshot.png", name: "screenshot.png", mimeType: "image/png" },
+    ],
+  });
+
+  assert.match(payload.content, /Image: screenshot\.png/);
+  assert.match(payload.componentLayout.context, /Image: screenshot\.png/);
+});
+
 test("formatAssistantMessagePayloadForDiscord skips component layout for oversized bodies", () => {
   const payload = formatAssistantMessagePayloadForDiscord({
     ...assistantMessageBase,

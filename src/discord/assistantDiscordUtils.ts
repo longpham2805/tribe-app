@@ -227,6 +227,11 @@ function formatAssistantEmbedContextLinesForDiscord(
       }
       case "question":
         return `Question${embed.ticketId ? ` for ticket #${embed.ticketId}` : ""}: ${embed.text}`;
+      case "image": {
+        const name = embed.name ? `: ${embed.name}` : "";
+        const url = opts.includeUrls ? ` (${embed.url})` : "";
+        return `Image${name}${url}`;
+      }
       default:
         return null;
     }

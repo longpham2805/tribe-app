@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { AssistantAgentService } from "../assistant/AssistantAgentService";
 import { AssistantMessageRepository, AssistantActionRepository } from "../assistant/AssistantRepository";
 import { emit } from "../lib/events";
+import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
 
 const router = Router();
 
@@ -36,13 +37,19 @@ router.post("/messages/:id/read", async (req: Request, res: Response) => {
 // POST /api/assistant/chat
 router.post("/chat", async (req: Request, res: Response) => {
   try {
-    const { message, projectId } = req.body;
-    if (!message || typeof message !== "string") {
-      res.status(400).json({ error: "message is required" });
+    const { message, projectId, embeds, imageEmbeds } = req.body;
+    const suppliedEmbeds = normalizeChatEmbeds(embeds ?? imageEmbeds);
+    if (typeof message !== "string" || (!message.trim() && suppliedEmbeds.length === 0)) {
+      res.status(400).json({ error: "message or image is required" });
       return;
     }
     const agent = new AssistantAgentService();
-    const reply = await agent.handleUserMessage({ message, projectId, metadata: { origin: "tribe_ui" } });
+    const reply = await agent.handleUserMessage({
+      message: message.trim() || "Uploaded image(s).",
+      projectId,
+      metadata: { origin: "tribe_ui" },
+      embeds: suppliedEmbeds.length > 0 ? suppliedEmbeds : null,
+    });
     res.json({ reply });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -99,3 +106,19 @@ router.post("/actions/:id/reject", async (req: Request, res: Response) => {
 });
 
 export default router;
+
+function normalizeChatEmbeds(value: unknown): AssistantMessageEmbed[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is AssistantMessageEmbed => {
+    if (!item || typeof item !== "object") return false;
+    const embed = item as Partial<Extract<AssistantMessageEmbed, { type: "image" }>>;
+    return (
+      embed.type === "image" &&
+      typeof embed.url === "string" &&
+      embed.url.startsWith("/api/uploads/assistant/images/") &&
+      (embed.name === undefined || typeof embed.name === "string") &&
+      (embed.mimeType === undefined || typeof embed.mimeType === "string") &&
+      (embed.size === undefined || typeof embed.size === "number")
+    );
+  });
+}

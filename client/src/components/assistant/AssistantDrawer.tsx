@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import type { AssistantMessage, AssistantAction } from "../../types/assistant";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import type { AssistantMessage, AssistantAction, AssistantMessageEmbed } from "../../types/assistant";
+import { uploadAssistantImage } from "../../api/uploads";
 import { MessageEmbeds } from "./MessageEmbeds";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import "./AssistantDrawer.css";
@@ -29,6 +30,7 @@ const SUGGESTIONS = [
 ];
 
 const ASSISTANT_INPUT_MAX_LINES = 4;
+const MAX_ASSISTANT_IMAGES = 6;
 
 function resizeAssistantInput(textarea: HTMLTextAreaElement | null) {
   if (!textarea) return;
@@ -81,7 +83,7 @@ function MessageBubble({ msg, onOpenTicket }: {
             {isUser ? msg.content : <AssistantMarkdown content={msg.content} role={msg.role === "system" ? "system" : "assistant"} />}
           </div>
         </div>
-        {!isUser && <MessageEmbeds embeds={msg.embeds} onOpenTicket={onOpenTicket} />}
+        <MessageEmbeds embeds={msg.embeds} onOpenTicket={onOpenTicket} />
         <span className="asst-bubble__time">
           {formatMessageTime(msg.createdAt)}
         </span>
@@ -141,9 +143,22 @@ export function AssistantDrawer({
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [actions, setActions] = useState<AssistantAction[]>([]);
   const [input, setInput] = useState("");
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [composerError, setComposerError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingImagePreviews = useMemo(
+    () => pendingImages.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [pendingImages],
+  );
+
+  useEffect(() => {
+    return () => {
+      pendingImagePreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [pendingImagePreviews]);
 
   // Load initial state when opened
   useEffect(() => {
@@ -188,17 +203,39 @@ export function AssistantDrawer({
     resizeAssistantInput(inputRef.current);
   }, [input, open]);
 
+  const addPendingImages = useCallback((incoming: FileList | File[]) => {
+    const images = Array.from(incoming).filter((file) => file.type.startsWith("image/"));
+    if (images.length === 0) return;
+    setPendingImages((prev) => [...prev, ...images].slice(0, MAX_ASSISTANT_IMAGES));
+    setComposerError(null);
+  }, []);
+
+  const removePendingImage = useCallback((index: number) => {
+    setPendingImages((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+  }, []);
+
   const sendMessage = useCallback(async (override?: string) => {
     const text = (override ?? input).trim();
-    if (!text || sending) return;
+    const files = override ? [] : pendingImages;
+    if ((!text && files.length === 0) || sending) return;
     setSending(true);
-    setInput("");
+    setComposerError(null);
     try {
+      const imageEmbeds: AssistantMessageEmbed[] = [];
+      for (const file of files) {
+        imageEmbeds.push(await uploadAssistantImage(file));
+      }
       await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, projectId: projectId ?? undefined }),
+        body: JSON.stringify({
+          message: text,
+          projectId: projectId ?? undefined,
+          embeds: imageEmbeds.length > 0 ? imageEmbeds : undefined,
+        }),
       });
+      setInput("");
+      if (!override) setPendingImages([]);
       // Refetch actions after response to pick up any newly proposed actions
       fetch("/api/assistant/actions")
         .then((r) => r.json())
@@ -206,10 +243,11 @@ export function AssistantDrawer({
         .catch(console.error);
     } catch (err) {
       console.error(err);
+      setComposerError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
       setSending(false);
     }
-  }, [input, sending, projectId]);
+  }, [input, pendingImages, sending, projectId]);
 
   const handleApprove = useCallback(async (id: number) => {
     await fetch(`/api/assistant/actions/${id}/approve`, { method: "POST" }).catch(console.error);
@@ -295,7 +333,62 @@ export function AssistantDrawer({
         </div>
 
         <div className="asst-composer">
-          <div className="asst-input-row">
+          {pendingImagePreviews.length > 0 && (
+            <div className="asst-composer-images" aria-label="Images to send">
+              {pendingImagePreviews.map((preview, index) => (
+                <div className="asst-composer-image" key={`${preview.file.name}-${preview.file.lastModified}-${index}`}>
+                  <img src={preview.url} alt={preview.file.name} className="asst-composer-image__img" />
+                  <button
+                    type="button"
+                    className="asst-composer-image__remove"
+                    onClick={() => removePendingImage(index)}
+                    disabled={sending}
+                    aria-label={`Remove ${preview.file.name}`}
+                    title="Remove image"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6 6 18" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div
+            className="asst-input-row"
+            onDragOver={(event) => {
+              event.preventDefault();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (!sending) addPendingImages(event.dataTransfer.files);
+            }}
+          >
+            <button
+              type="button"
+              className="asst-attach"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || pendingImages.length >= MAX_ASSISTANT_IMAGES}
+              aria-label="Attach images"
+              title="Attach images"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M15 8h.01" />
+                <rect width="18" height="18" x="3" y="3" rx="2.5" />
+                <path d="m3 16 5-5 4 4 2-2 7 7" />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef}
+              className="asst-file-input"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => {
+                if (event.target.files) addPendingImages(event.target.files);
+                event.target.value = "";
+              }}
+            />
             <textarea
               ref={inputRef}
               className="asst-input"
@@ -303,6 +396,13 @@ export function AssistantDrawer({
               placeholder="Ask about a ticket, slot, or phase…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onPaste={(event) => {
+                const files = event.clipboardData.files;
+                if (files.length > 0) {
+                  event.preventDefault();
+                  addPendingImages(files);
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -314,7 +414,7 @@ export function AssistantDrawer({
             <button
               className="asst-send"
               onClick={() => void sendMessage()}
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && pendingImages.length === 0)}
               aria-label="Send message"
             >
               {sending ? (
@@ -330,6 +430,7 @@ export function AssistantDrawer({
               )}
             </button>
           </div>
+          {composerError && <div className="asst-composer-error">{composerError}</div>}
           <div className="asst-composer-help">
             <span>Replies use this workspace's context</span>
             <span className="asst-composer-help__keys">
