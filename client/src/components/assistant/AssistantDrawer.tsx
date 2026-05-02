@@ -28,6 +28,23 @@ const SUGGESTIONS = [
   "Why is the current phase paused?",
 ];
 
+const ASSISTANT_INPUT_MAX_LINES = 4;
+
+function resizeAssistantInput(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) return;
+
+  const styles = window.getComputedStyle(textarea);
+  const fontSize = Number.parseFloat(styles.fontSize) || 13.5;
+  const lineHeight = Number.parseFloat(styles.lineHeight) || fontSize * 1.45;
+  const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+  const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
+  const maxHeight = lineHeight * ASSISTANT_INPUT_MAX_LINES + paddingTop + paddingBottom;
+
+  textarea.style.height = "auto";
+  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
 function formatMessageTime(createdAt: string) {
   return new Date(createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
@@ -126,6 +143,7 @@ export function AssistantDrawer({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Load initial state when opened
   useEffect(() => {
@@ -164,6 +182,11 @@ export function AssistantDrawer({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!open) return;
+    resizeAssistantInput(inputRef.current);
+  }, [input, open]);
 
   const sendMessage = useCallback(async (override?: string) => {
     const text = (override ?? input).trim();
@@ -274,6 +297,7 @@ export function AssistantDrawer({
         <div className="asst-composer">
           <div className="asst-input-row">
             <textarea
+              ref={inputRef}
               className="asst-input"
               rows={1}
               placeholder="Ask about a ticket, slot, or phase…"

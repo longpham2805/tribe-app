@@ -704,7 +704,8 @@
 .asst-input {
   flex: 1;
   min-width: 0;
-  max-height: 140px;
+  max-height: calc((1.45em * 4) + 8px);
+  overflow-y: hidden;
   background: transparent;
   border: none;
   border-radius: 0;
