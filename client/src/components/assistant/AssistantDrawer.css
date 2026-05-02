@@ -9,9 +9,7 @@
 }
 
 .asst-drawer {
-  width: 38vw;
-  min-width: 380px;
-  max-width: 570px;
+  width: var(--assistant-drawer-width, clamp(380px, 38vw, 570px));
   height: 100vh;
   background: var(--paper);
   border-left: 1px solid var(--hairline-strong);

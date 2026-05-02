@@ -34,9 +34,10 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 interface AppHeaderProps {
   onSearchClick: () => void;
+  assistantOpen: boolean;
 }
 
-export const AppHeader = memo(function AppHeader({ onSearchClick }: AppHeaderProps) {
+export const AppHeader = memo(function AppHeader({ onSearchClick, assistantOpen }: AppHeaderProps) {
   const { view, setView, appState, setAutoTriggerEnabled, setCliAvailable, updateDiscordSettings } = useAppContext();
   const [discordSettingsOpen, setDiscordSettingsOpen] = useState(false);
   const [discordBotToken, setDiscordBotToken] = useState("");
@@ -66,7 +67,7 @@ export const AppHeader = memo(function AppHeader({ onSearchClick }: AppHeaderPro
   };
 
   return (
-    <header className="header">
+    <header className="header" data-assistant-open={assistantOpen}>
       <div className="header-inner">
         <div className="header-brand">
           {/* Logo disc */}

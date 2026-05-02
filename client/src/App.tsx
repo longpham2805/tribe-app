@@ -129,8 +129,8 @@ export default function App() {
   }, [setShortcutIntent]);
 
   return (
-    <div className="app">
-      <AppHeader onSearchClick={() => setCommandPaletteOpen(true)} />
+    <div className={`app ${assistantOpen ? "app--assistant-open" : ""}`} data-assistant-open={assistantOpen}>
+      <AppHeader onSearchClick={() => setCommandPaletteOpen(true)} assistantOpen={assistantOpen} />
 
       <div className="app-shell">
         <ProjectPane
