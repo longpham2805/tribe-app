@@ -1,5 +1,5 @@
 import type { Project } from "../types";
-import { API_BASE, readJsonError } from "./request";
+import { API_BASE, readApiError, readJson } from "./request";
 
 export type ProjectPayload = {
   name: string;
@@ -18,7 +18,7 @@ export type ProjectPayload = {
 export async function fetchProjects(): Promise<Project[]> {
   const res = await fetch(`${API_BASE}/projects`);
   if (!res.ok) throw new Error("Failed to fetch projects");
-  return res.json();
+  return readJson<Project[]>(res);
 }
 
 export async function createProject(data: ProjectPayload): Promise<Project> {
@@ -27,8 +27,8 @@ export async function createProject(data: ProjectPayload): Promise<Project> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await readJsonError(res, "Failed to create project"));
-  return res.json();
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to create project"));
+  return readJson<Project>(res);
 }
 
 export async function updateProject(
@@ -40,11 +40,11 @@ export async function updateProject(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await readJsonError(res, "Failed to update project"));
-  return res.json();
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to update project"));
+  return readJson<Project>(res);
 }
 
 export async function deleteProject(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/projects/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await readJsonError(res, "Failed to delete project"));
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to delete project"));
 }
