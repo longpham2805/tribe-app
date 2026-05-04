@@ -8,6 +8,7 @@ import { MARKER_REGEX } from "../../agent";
 import { getAdapter } from "../../cli";
 import { getLogDir, getStderrFile } from "../../lib/paths";
 import { persistPhaseEvent, persistPhaseSystemEvent, type PhaseLogContext } from "./phaseLogging";
+import type { PhaseLogEvent } from "../../shared/events";
 
 const SPAWN_TIMEOUT_MS = 30 * 60 * 1000; // 30 min safety kill
 
@@ -74,7 +75,7 @@ export class PhaseCliRunner {
         }
       }
 
-      const persistEvent = (evt: unknown) => {
+      const persistEvent = (evt: PhaseLogEvent) => {
         persistPhaseEvent(logContext, evt);
       };
 

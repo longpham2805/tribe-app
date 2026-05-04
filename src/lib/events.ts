@@ -1,11 +1,6 @@
-export type TribeEvent =
-  | { type: "phase.updated"; ticketId: number; phase: unknown }
-  | { type: "phase.log"; ticketId: number; phaseName: string; event: unknown }
-  | { type: "ticket.updated"; ticket: unknown }
-  | { type: "ticket.deleted"; ticketId: number }
-  | { type: "app-state.updated"; appState: unknown }
-  | { type: "assistant.message.created"; message: unknown }
-  | { type: "assistant.action.updated"; action: unknown };
+import type { TribeEvent } from "../shared/events";
+
+export type { TribeEvent };
 
 type Listener = (event: TribeEvent) => void;
 

@@ -1,4 +1,5 @@
 import { CliType } from "../enum/CliType";
+import type { PhaseLogEvent } from "../shared/events";
 
 export interface SpawnArgs {
   prompt: string;
@@ -9,7 +10,7 @@ export interface ParsedEvent {
   sessionId?: string;
   textChunk?: string;
   finalText?: string;
-  raw: unknown;
+  raw: PhaseLogEvent;
 }
 
 export interface CliAdapter {

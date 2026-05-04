@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync } from "fs";
 import { TicketPhase } from "../../enum/TicketPhase";
 import { emit } from "../../lib/events";
 import { getLogDir, getLogFile } from "../../lib/paths";
+import type { PhaseLogEvent, PhaseSystemEvent, PhaseSystemEventMetadata } from "../../shared/events";
 
 export const phaseLog = (msg: string) => console.log(`[PhaseHandler] ${msg}`);
 
@@ -11,16 +12,16 @@ export type PhaseLogContext = {
   phaseName: TicketPhase;
 };
 
-export type PhaseSystemEventMetadata = Record<string, string | number | boolean | null | undefined>;
+export type { PhaseSystemEventMetadata };
 
 function buildPhaseSystemEvent(
   logContext: PhaseLogContext,
   code: string,
   message: string,
   metadata?: PhaseSystemEventMetadata,
-): Record<string, unknown> {
+): PhaseSystemEvent {
   const detail = Object.fromEntries(
-    Object.entries(metadata ?? {}).filter(([, value]) => value !== undefined),
+    Object.entries(metadata ?? {}).filter((entry): entry is [string, string | number | boolean | null] => entry[1] !== undefined),
   );
 
   return {
@@ -35,7 +36,7 @@ function buildPhaseSystemEvent(
   };
 }
 
-export function persistPhaseEvent(logContext: PhaseLogContext | undefined, evt: unknown): void {
+export function persistPhaseEvent(logContext: PhaseLogContext | undefined, evt: PhaseLogEvent): void {
   if (!logContext?.uid) return;
   try {
     const logDir = getLogDir(logContext.uid);
