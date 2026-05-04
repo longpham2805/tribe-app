@@ -1,5 +1,4 @@
 import { Phase } from "../../entity/Phase";
-import { Ticket } from "../../entity/Ticket";
 import { TicketPhase } from "../../enum/TicketPhase";
 
 export function feedbackOutputFile(phase: Phase): string {
@@ -19,15 +18,3 @@ export function phaseOutputFile(phaseName: TicketPhase): string | null {
   }
 }
 
-export function suggestFeedbackBranchName(ticket: Ticket, phase: Phase): string {
-  return `feedback/${ticket.id}-${phase.sequence}-${slugifyBranchSegment(ticket.title)}`;
-}
-
-function slugifyBranchSegment(value: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-  return slug || "ticket";
-}

@@ -18,7 +18,7 @@ import { runPhaseCompletedHooks, runPhaseEnteredHooks } from "../hooks/registry"
 import { autoMergeShipPRs, persistFeedbackArtifacts, persistShipArtifacts } from "./phase/artifactPersistence";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { PhaseCliRunner, type SpawnResult } from "./phase/phaseCli";
-import { feedbackOutputFile, phaseOutputFile, suggestFeedbackBranchName } from "./phase/phaseFiles";
+import { feedbackOutputFile, phaseOutputFile } from "./phase/phaseFiles";
 import { phaseLog as log, persistPhaseSystemEvent, type PhaseLogContext } from "./phase/phaseLogging";
 import { reviewPlanningArtifact } from "./phase/planningArtifact";
 import { loadProjectAgentContext, resolvePhaseWorkspace } from "./phase/workspace";
@@ -595,7 +595,6 @@ export class PhaseHandler {
       ? ticket.pullRequests[ticket.pullRequests.length - 1]?.prUrl ?? null
       : null;
     const baseBranch = ticket.branchName ?? "dev";
-    const suggestedBranchName = suggestFeedbackBranchName(ticket, activePhase);
     const prompt = agent.buildPrompt({
       ticketContent,
       projectContext,
@@ -607,7 +606,6 @@ export class PhaseHandler {
       feedbackOutputPath,
       baseBranch,
       lastPrUrl,
-      suggestedBranchName,
     });
 
     await this.runPhase(ticket, TicketPhase.FEEDBACK, slotRoot, tmpDir, prompt, feedbackOutputFile(activePhase));

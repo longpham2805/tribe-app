@@ -45,8 +45,7 @@ export interface PromptContext {
   feedbackOutputPath?: string;
   baseBranch?: string | null;
   lastPrUrl?: string | null;
-  suggestedBranchName?: string | null;
-  checklistOutputPath?: string;
+checklistOutputPath?: string;
   shipOutputPath?: string;
 }
 

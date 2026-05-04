@@ -47,7 +47,7 @@ export class FeedbackAgent extends BaseAgent {
     const ticket = ctx?.ticket;
     const ticketId = ticket?.id == null ? "(unknown)" : `#${ticket.id}`;
     const sequence = phase?.sequence ?? 0;
-    const branchName = phase?.branchName ?? `feedback/${ticket?.id ?? "ticket"}-${sequence}`;
+    const branchName = phase?.branchName ?? "(current branch)";
 
     const reminder = [
       "<system-reminder>",
@@ -61,7 +61,7 @@ export class FeedbackAgent extends BaseAgent {
       "",
       "Hard rules:",
       "- Never push to dev, main, or master.",
-      "- Keep using the same feedback branch and same PR for this feedback iteration.",
+      "- Keep using the same branch and same PR for this feedback iteration.",
       "- Do not open duplicate PRs for follow-up changes in this iteration.",
       "- If the user confirms the fix, finish with [STATUS:COMPLETED].",
       "- If more changes are needed, amend the same branch/PR and ask for confirmation again with [STATUS:REQUIRES_ACTION].",
@@ -80,7 +80,6 @@ export class FeedbackAgent extends BaseAgent {
         `Iteration: ${sequence}`,
         `Base branch: ${ctx.baseBranch ?? "dev"}`,
         ctx.lastPrUrl ? `Last pull request: ${ctx.lastPrUrl}` : "Last pull request: _Not available._",
-        ctx.suggestedBranchName ? `Suggested feedback branch: \`${ctx.suggestedBranchName}\`` : "",
         "",
         ctx.feedbackComment ?? "",
       ].filter(Boolean).join("\n"),
