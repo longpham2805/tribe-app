@@ -699,6 +699,14 @@ export class PhaseHandler {
 
     if (!shouldRelease) return;
 
+    // Keep slot on the same ticket when PLANNING completes and IMPLEMENTATION is next —
+    // releasing here would hand the slot to the oldest waiting ticket, forcing this ticket
+    // to re-queue behind it instead of continuing immediately.
+    if (result.status === PhaseStatus.COMPLETED && phaseName !== TicketPhase.FEEDBACK) {
+      const next = this.nextPhase(phaseName);
+      if (next === TicketPhase.IMPLEMENTATION) return;
+    }
+
     // Commit and push any dirty workspace so work is not lost when slot is reassigned
     if (phaseName === TicketPhase.IMPLEMENTATION || phaseName === TicketPhase.FEEDBACK) {
       try {
