@@ -70,10 +70,11 @@ export class SlotService {
       }
 
       for (const repoPath of repoDirs) {
-        this.assertRepoClean(slot, repoPath);
+        this.discardDirtyIfNeeded(slot, repoPath);
         this.runGit(slot, repoPath, ["fetch", "origin"]);
         this.runGit(slot, repoPath, ["checkout", "dev"]);
-        this.runGit(slot, repoPath, ["pull", "--ff-only", "origin", "dev"]);
+        this.runGit(slot, repoPath, ["reset", "--hard", "origin/dev"]);
+        this.runGit(slot, repoPath, ["clean", "-ffd"]);
         console.log(`[SlotService] Synced "${repoPath}" on dev`);
       }
     } catch (err) {
@@ -106,12 +107,14 @@ export class SlotService {
     return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
   }
 
-  private assertRepoClean(slot: Slot, repoPath: string): void {
+  private discardDirtyIfNeeded(slot: Slot, repoPath: string): void {
     const result = this.runGit(slot, repoPath, ["status", "--porcelain"], false);
     const status = result.stdout.trim();
     if (status) {
       const summary = status.split("\n").slice(0, 10).join("; ");
-      throw new Error(`Slot ${slot.id} repo is dirty before sync: ${repoPath} (${summary})`);
+      console.warn(`[SlotService] Slot ${slot.id} repo dirty before sync — discarding: ${repoPath} (${summary})`);
+      this.runGit(slot, repoPath, ["reset", "--hard", "HEAD"]);
+      this.runGit(slot, repoPath, ["clean", "-ffd"]);
     }
   }
 
