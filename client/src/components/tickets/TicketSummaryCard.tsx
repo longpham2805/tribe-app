@@ -182,18 +182,27 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
   const pausedColor = pausedPhase
     ? (statusColors[pausedPhase.status] ?? "#B07634")
     : "#B07634";
+  const cardStyle = {
+    ...(runningColor ? { "--ticket-running-accent": runningColor } : {}),
+    ...(pausedPhase ? { "--ticket-paused-accent": pausedColor } : {}),
+  } as CSSProperties;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`ticket-card ticket-card--interactive${runningPhase ? " ticket-card--running" : ""}`}
-      style={runningColor ? ({ "--ticket-running-accent": runningColor } as CSSProperties) : undefined}
+      className={`ticket-card ticket-card--interactive${runningPhase ? " ticket-card--running" : ""}${pausedPhase ? ` ticket-card--paused ticket-card--paused-${pausedPhase.status.toLowerCase().replace("_", "-")}` : ""}`}
+      style={runningColor || pausedPhase ? cardStyle : undefined}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
       aria-label={`Open ticket #${ticket.id}: ${ticket.title}`}
     >
-      {/* Running left rail */}
+      {pausedPhase && (
+        <span
+          className="ticket-paused-rail"
+          style={{ background: pausedColor }}
+        />
+      )}
       {runningPhase && (
         <span
           className="ticket-running-rail"
@@ -256,10 +265,10 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
             borderColor: `color-mix(in srgb, ${pausedColor} 25%, transparent)`,
           }}
         >
-          <span className="serif sc-paused-preview__label" style={{ color: pausedColor }}>
-            {pausedPhase.status === "QUESTION" ? "Asks:" : pausedPhase.status === "ERROR" ? "Errored:" : "Needs input:"}
-          </span>
-          {" "}&ldquo;{pausedPhase.lastMessage}&rdquo;
+          <div className="serif sc-paused-preview__label" style={{ color: pausedColor }}>
+            {pausedPhase.status === "QUESTION" ? "Question to answer" : pausedPhase.status === "ERROR" ? "Error blocking progress" : "Action needed"}
+          </div>
+          <div className="sc-paused-preview__message">{pausedPhase.lastMessage}</div>
         </div>
       )}
 

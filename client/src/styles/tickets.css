@@ -93,6 +93,16 @@
   /* running rail is absolute-positioned inside; no border override needed */
 }
 
+.ticket-card--paused {
+  border-color: color-mix(in srgb, var(--ticket-paused-accent, var(--status-warn)) 45%, var(--hairline));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ticket-paused-accent, var(--status-warn)) 18%, transparent);
+}
+
+.ticket-card--paused:hover {
+  border-color: color-mix(in srgb, var(--ticket-paused-accent, var(--status-warn)) 58%, var(--hairline));
+  box-shadow: 0 1px 0 rgba(25,25,25,0.03), 0 10px 22px -14px color-mix(in srgb, var(--ticket-paused-accent, var(--status-warn)) 34%, transparent);
+}
+
 .ticket-card:hover {
   border-color: var(--hairline-strong);
   box-shadow: 0 1px 0 rgba(25,25,25,0.03), 0 6px 18px -12px rgba(60,55,40,0.18);
@@ -630,6 +640,7 @@
   color: var(--ink-1);
   line-height: 1.5;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-family: "Source Serif 4", serif;
   font-style: italic;
 }
@@ -671,14 +682,22 @@
 
 /* ── Ticket card structural updates ─────────────────────────────── */
 
-.ticket-running-rail {
+.ticket-running-rail,
+.ticket-paused-rail {
   position: absolute;
   left: -1px;
   top: 12px;
   bottom: 12px;
   width: 3px;
   border-radius: 999px;
+}
+
+.ticket-running-rail {
   animation: tp-pulse 1.4s ease-in-out infinite;
+}
+
+.ticket-paused-rail {
+  width: 4px;
 }
 
 .sc-header {
@@ -791,20 +810,29 @@
 
 .sc-paused-preview {
   margin-top: 4px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border: 1px solid;
   border-radius: 8px;
   font-size: 12.5px;
   color: var(--ink-2);
   line-height: 1.45;
-  font-style: italic;
+  max-height: 128px;
+  overflow: auto;
 }
 
 .sc-paused-preview__label {
   font-style: normal;
-  font-weight: 600;
-  margin-right: 4px;
-  font-size: 12.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sc-paused-preview__message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-style: italic;
 }
 
 /* ── Ticket footer tags ──────────────────────────────────────────── */
@@ -1107,10 +1135,12 @@
 
 /* ── Paused / reply panel ── */
 .td-paused-panel {
-  padding: 14px 16px;
+  padding: 16px;
   border: 1px solid transparent;
   border-radius: 12px;
   margin-bottom: 22px;
+  max-height: min(52vh, 520px);
+  overflow: auto;
 }
 
 .td-paused-panel--sticky {
@@ -1123,12 +1153,23 @@
   box-shadow: 0 -14px 28px -24px rgba(25, 25, 25, 0.34);
 }
 
+.td-paused-panel__header {
+  margin-bottom: 10px;
+}
+
 .td-paused-panel__label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  margin-bottom: 3px;
+}
+
+.td-paused-panel__title {
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .td-paused-panel__message {
@@ -1136,12 +1177,15 @@
   line-height: 1.5;
   color: var(--ink-1);
   margin-bottom: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   text-wrap: pretty;
 }
 
 .td-paused-panel__textarea {
   width: 100%;
   margin-bottom: 8px;
+  min-height: 96px;
 }
 
 /* ── Artifacts card ── */

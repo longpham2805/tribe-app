@@ -369,7 +369,7 @@ export function TicketDetailModal({
           statusLabels={statusLabels}
           statusColors={statusColors}
           onReplyChange={handleReplyChange}
-          onDiscard={() => onResponseDraftChange("")}
+          onDiscard={clearReply}
           onRespond={() => onRespond(ticket.id)}
         />
         </div>

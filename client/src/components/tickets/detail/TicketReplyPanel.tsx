@@ -48,11 +48,14 @@ export function TicketReplyPanel({
         borderColor: `color-mix(in srgb, ${statusColors[paused.status] ?? "var(--status-warn)"} 35%, transparent)`,
       }}
     >
-      <div
-        className="td-paused-panel__label"
-        style={{ color: statusColors[paused.status] ?? "var(--status-warn)" }}
-      >
-        {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
+      <div className="td-paused-panel__header">
+        <div
+          className="td-paused-panel__label"
+          style={{ color: statusColors[paused.status] ?? "var(--status-warn)" }}
+        >
+          {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
+        </div>
+        <div className="td-paused-panel__title">Reply to unblock this ticket</div>
       </div>
       {paused.lastMessage ? (
         <div className="serif td-paused-panel__message">{paused.lastMessage}</div>
@@ -64,7 +67,7 @@ export function TicketReplyPanel({
         }}
         className="input textarea td-paused-panel__textarea"
         rows={3}
-        placeholder="Reply to the agent…"
+        placeholder="Type the answer or fix details the agent needs…"
         {...replyInput}
         value={replyMessage}
         onChange={(event) => onReplyChange(event.target.value)}
@@ -83,7 +86,7 @@ export function TicketReplyPanel({
           disabled={isReplyBusy || !responseDraft.trim()}
           onClick={onRespond}
         >
-          {isReplyBusy ? "Sending…" : "Send reply"}
+          {isReplyBusy ? "Sending…" : "Send reply to agent"}
         </button>
       </div>
     </div>
