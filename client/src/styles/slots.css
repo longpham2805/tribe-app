@@ -18,6 +18,11 @@
   gap: 8px;
 }
 
+.slot-card--disabled {
+  background: color-mix(in srgb, var(--status-danger) 7%, var(--cream));
+  border-color: color-mix(in srgb, var(--status-danger) 30%, var(--hairline));
+}
+
 .slot-card__header {
   display: flex;
   align-items: center;
@@ -53,4 +58,28 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.slot-disable-toggle {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  color: var(--ink-2);
+}
+
+.slot-disable-toggle input {
+  margin-top: 3px;
+}
+
+.slot-disable-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slot-disable-toggle small {
+  color: var(--ink-4);
+  font-size: 12px;
 }

@@ -135,6 +135,7 @@ export class AssistantProjectSlotWriteService {
       ...(input.name !== undefined ? { name: this.normalizeRequiredString(input.name, "name", MAX_SLOT_NAME_CHARS) } : {}),
       ...(input.rootPath !== undefined ? { rootPath: this.normalizeRootPath(input.rootPath) } : {}),
       ...(input.projectId !== undefined ? { projectId: this.normalizeNullablePositiveInteger(input.projectId, "projectId") } : {}),
+      ...(input.disabled !== undefined ? { disabled: this.normalizeBoolean(input.disabled, "disabled") } : {}),
     };
   }
 
@@ -214,4 +215,3 @@ export class AssistantProjectSlotWriteService {
     if (!Number.isInteger(value) || (value as number) <= 0) throw new Error(`${fieldName} must be a positive integer`);
   }
 }
-

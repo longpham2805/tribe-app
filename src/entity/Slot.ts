@@ -25,6 +25,9 @@ export class Slot {
   @Column({ type: "int", nullable: true })
   currentTicketId!: number | null;
 
+  @Column({ type: "boolean", default: false })
+  disabled!: boolean;
+
   @Column({ type: "int", nullable: true })
   projectId!: number | null;
 

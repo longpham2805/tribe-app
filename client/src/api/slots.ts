@@ -24,7 +24,7 @@ export async function createSlot(data: {
 
 export async function updateSlot(
   id: number,
-  data: { name?: string; rootPath?: string; projectId?: number | null },
+  data: { name?: string; rootPath?: string; projectId?: number | null; disabled?: boolean },
 ): Promise<Slot> {
   const res = await fetch(`${API_BASE}/slots/${id}`, {
     method: "PATCH",

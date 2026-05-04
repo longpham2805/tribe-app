@@ -17,6 +17,8 @@ test("assistant exposes project and slot write tools with approval wording", () 
   assert.match(source, /explain(?:ing)? the intended write/i);
   assert.match(source, /Risky updates to running projects are proposed for explicit approval/i);
   assert.match(source, /Occupied slot routing updates require explicit approval/i);
+  assert.match(source, /Disabled blocks new ticket work without stopping current work/i);
+  assert.match(source, /status: slot\.disabled \? "disabled"/);
 });
 
 test("assistant approval executor only accepts project slot OTHER payloads", () => {
@@ -44,5 +46,6 @@ test("write service validates absolute root paths and active project defaults", 
   assert.match(source, /isAbsolute\(rootPath\)/);
   assert.match(source, /rootPath must be an absolute path/);
   assert.match(source, /input\.projectId === undefined \? defaultProjectId/);
+  assert.match(source, /normalizeBoolean\(input\.disabled, "disabled"\)/);
   assert.match(source, /Project conflicts with existing project/);
 });

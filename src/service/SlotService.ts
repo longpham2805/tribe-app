@@ -31,6 +31,7 @@ export class SlotService {
 
     if (!freeSlot) {
       // No free slot — mark ticket as waiting
+      console.log(`[SlotService] No enabled free slot for ticket #${ticket.id}`);
       await this.ticketRepo.updateSlotFields(ticket.id, {
         slotId: null,
         waitingForSlot: true,
@@ -215,6 +216,11 @@ export class SlotService {
       });
     }
     await this.slotRepo.release(slot.id);
+
+    if (slot.disabled) {
+      console.log(`[SlotService] Slot ${slot.id} disabled — released without promotion`);
+      return;
+    }
 
     const appState = await this.appStateRepo.get();
     if (!appState.autoTriggerEnabled) {

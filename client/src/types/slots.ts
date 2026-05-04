@@ -3,6 +3,7 @@ export interface Slot {
   name: string;
   rootPath: string;
   currentTicketId: number | null;
+  disabled: boolean;
   projectId: number | null;
   createdAt: string;
   updatedAt: string;

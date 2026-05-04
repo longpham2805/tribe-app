@@ -6,7 +6,7 @@ import { AssistantProjectSlotWriteService } from "../../assistant/AssistantProje
 export function registerSlotTools(server: McpServer): void {
   server.tool(
     "list_slots",
-    "List all workspace slots with their current ticket assignment and free/occupied status",
+    "List all workspace slots with their current ticket assignment and disabled/occupied/free status",
     {
       projectId: z.number().optional().describe("Filter slots by project ID"),
     },
@@ -18,7 +18,8 @@ export function registerSlotTools(server: McpServer): void {
         name: slot.name,
         rootPath: slot.rootPath,
         projectId: slot.projectId,
-        status: slot.currentTicketId ? "occupied" : "free",
+        disabled: slot.disabled,
+        status: slot.disabled ? "disabled" : slot.currentTicketId ? "occupied" : "free",
         currentTicketId: slot.currentTicketId,
       }));
       return {
@@ -44,12 +45,13 @@ export function registerSlotTools(server: McpServer): void {
 
   server.tool(
     "update_slot",
-    "Update workspace slot name, absolute rootPath, or project assignment. Caller owns confirmation in trusted MCP contexts.",
+    "Update workspace slot name, absolute rootPath, project assignment, or disabled state. Caller owns confirmation in trusted MCP contexts.",
     {
       slotId: z.number().describe("Slot ID to update"),
       name: z.string().optional().describe("New slot name"),
       rootPath: z.string().optional().describe("New absolute workspace root path"),
       projectId: z.number().nullable().optional().describe("Project ID, or null to unassign"),
+      disabled: z.boolean().optional().describe("True blocks new ticket assignment without stopping current work"),
     },
     async ({ slotId, ...input }) => {
       const service = new AssistantProjectSlotWriteService();

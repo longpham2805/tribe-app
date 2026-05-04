@@ -24,6 +24,7 @@ export type SlotUpdateInput = {
   name?: string;
   rootPath?: string;
   projectId?: number | null;
+  disabled?: boolean;
 };
 
 export type ProjectWriteIntent =
@@ -62,4 +63,3 @@ export type AssistantProjectSlotActionPayload = {
   kind: "project_slot_write";
   intent: ProjectSlotWriteIntent;
 };
-

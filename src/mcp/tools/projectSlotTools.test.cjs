@@ -25,13 +25,25 @@ test("MCP slot tools expose create/update parity", () => {
   assert.match(source, /absolute rootPath/);
   assert.match(source, /operation: "create_slot"/);
   assert.match(source, /operation: "update_slot"/);
+  assert.match(source, /disabled: z\.boolean\(\)\.optional\(\)/);
+  assert.match(source, /status: slot\.disabled \? "disabled"/);
 });
 
-test("REST and client slot update support projectId PATCH", () => {
+test("REST and client slot update support projectId and disabled PATCH", () => {
   const routeSource = readFileSync(path.join(__dirname, "../../routes/slots.ts"), "utf8");
   const clientSource = readFileSync(path.join(__dirname, "../../../client/src/api/slots.ts"), "utf8");
 
-  assert.match(routeSource, /PATCH \/api\/slots\/:id  \{ name\?, rootPath\?, projectId\? \}/);
+  assert.match(routeSource, /PATCH \/api\/slots\/:id  \{ name\?, rootPath\?, projectId\?, disabled\? \}/);
   assert.match(routeSource, /projectId: typeof projectId === "number" \|\| projectId === null \? projectId : undefined/);
+  assert.match(routeSource, /disabled must be a boolean/);
   assert.match(clientSource, /projectId\?: number \| null/);
+  assert.match(clientSource, /disabled\?: boolean/);
+});
+
+test("slot assignment excludes disabled slots", () => {
+  const repositorySource = readFileSync(path.join(__dirname, "../../repository/SlotRepository.ts"), "utf8");
+  const serviceSource = readFileSync(path.join(__dirname, "../../service/SlotService.ts"), "utf8");
+
+  assert.match(repositorySource, /disabled: false/);
+  assert.match(serviceSource, /Slot \$\{slot\.id\} disabled — released without promotion/);
 });

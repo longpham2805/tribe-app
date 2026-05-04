@@ -359,7 +359,7 @@ const ASSISTANT_TOOLS: Tool[] = [
   },
   {
     name: "list_slots",
-    description: "List all workspace slots with their current ticket assignment and free/occupied status",
+    description: "List all workspace slots with their current ticket assignment and disabled/occupied/free status",
     input_schema: {
       type: "object",
       properties: { projectId: { type: "number", description: "Filter slots by project ID" } },
@@ -380,7 +380,7 @@ const ASSISTANT_TOOLS: Tool[] = [
   },
   {
     name: "update_slot",
-    description: "Update a workspace slot after explaining target fields. Occupied slot routing updates require explicit approval before write.",
+    description: "Update a workspace slot after explaining target fields. Disabled blocks new ticket work without stopping current work; occupied slot routing updates require explicit approval before write.",
     input_schema: {
       type: "object",
       properties: {
@@ -388,6 +388,7 @@ const ASSISTANT_TOOLS: Tool[] = [
         name: { type: "string", description: "New slot name" },
         rootPath: { type: "string", description: "New absolute workspace root path" },
         projectId: { type: "number", description: "Project ID, or null to unassign" },
+        disabled: { type: "boolean", description: "True blocks new ticket assignment without stopping current work" },
       },
       required: ["slotId"],
     },
@@ -1034,7 +1035,8 @@ export class AssistantAgentService {
             name: slot.name,
             rootPath: slot.rootPath,
             projectId: slot.projectId,
-            status: slot.currentTicketId ? "occupied" : "free",
+            disabled: slot.disabled,
+            status: slot.disabled ? "disabled" : slot.currentTicketId ? "occupied" : "free",
             currentTicketId: slot.currentTicketId,
           }));
         }

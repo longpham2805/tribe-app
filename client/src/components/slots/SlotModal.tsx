@@ -15,20 +15,23 @@ export const SlotModal = memo(function SlotModal({
   mode: SlotModalMode;
   slot: Slot | null;
   onClose: () => void;
-  onSave: (data: { name: string; rootPath: string }) => void;
+  onSave: (data: { name: string; rootPath: string; disabled?: boolean }) => void;
   saving: boolean;
 }) {
   const [name, setName] = useState("");
   const [rootPath, setRootPath] = useState("");
+  const [disabled, setDisabled] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     if (mode === "configure" && slot) {
       setName(slot.name);
       setRootPath(slot.rootPath);
+      setDisabled(slot.disabled);
     } else {
       setName("");
       setRootPath("");
+      setDisabled(false);
     }
   }, [open, mode, slot]);
 
@@ -64,7 +67,7 @@ export const SlotModal = memo(function SlotModal({
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim() || !rootPath.trim()) return;
-            onSave({ name: name.trim(), rootPath: rootPath.trim() });
+            onSave({ name: name.trim(), rootPath: rootPath.trim(), ...(isConfigure ? { disabled } : {}) });
           }}
         >
           <label className="ntm-field">
@@ -88,6 +91,19 @@ export const SlotModal = memo(function SlotModal({
               required
             />
           </label>
+          {isConfigure && (
+            <label className="slot-disable-toggle">
+              <input
+                type="checkbox"
+                checked={disabled}
+                onChange={(e) => setDisabled(e.target.checked)}
+              />
+              <span>
+                <strong>Disable new work</strong>
+                <small>Current ticket keeps running; queue promotion skips this slot.</small>
+              </span>
+            </label>
+          )}
           <div className="ntm-panel__footer">
             <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
               {isConfigure ? "Slot pauses while saving." : "Tribe will probe the path before activating."}

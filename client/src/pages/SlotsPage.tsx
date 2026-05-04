@@ -42,18 +42,18 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
   const closeModal = useCallback(() => setModal((m) => ({ ...m, open: false })), []);
 
   const handleSave = useCallback(
-    async (data: { name: string; rootPath: string }) => {
+    async (data: { name: string; rootPath: string; disabled?: boolean }) => {
       setSaving(true);
       try {
         if (modal.mode === "configure" && modal.slot) {
-          await updateSlot(modal.slot.id, { name: data.name, rootPath: data.rootPath });
+          await updateSlot(modal.slot.id, { name: data.name, rootPath: data.rootPath, disabled: data.disabled });
         } else {
           await createSlot({ name: data.name, rootPath: data.rootPath, projectId });
         }
         closeModal();
         await load();
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
       } finally {
         setSaving(false);
       }
@@ -69,6 +69,18 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
         await load();
       } catch (e: any) {
         setError(e.message);
+      }
+    },
+    [load],
+  );
+
+  const handleDisabledChange = useCallback(
+    async (slot: Slot, disabled: boolean) => {
+      try {
+        await updateSlot(slot.id, { disabled });
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
       }
     },
     [load],
@@ -102,27 +114,41 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
         <div className="slots-grid">
           {slots.map((slot) => {
             const isBusy = slot.currentTicketId != null;
+            const status = slot.disabled ? "Disabled" : isBusy ? "Busy" : "Idle";
             return (
-              <div key={slot.id} className="slot-card">
+              <div key={slot.id} className={`slot-card${slot.disabled ? " slot-card--disabled" : ""}`}>
                 <div className="slot-card__header">
                   <span
                     className="slot-card__dot"
                     style={{
-                      background: isBusy ? "var(--claude)" : "var(--ink-5)",
-                      animation: isBusy ? "tp-pulse 1.4s ease-in-out infinite" : "none",
+                      background: slot.disabled ? "var(--status-danger)" : isBusy ? "var(--claude)" : "var(--ink-5)",
+                      animation: !slot.disabled && isBusy ? "tp-pulse 1.4s ease-in-out infinite" : "none",
                     }}
                   />
                   <h3 className="serif slot-card__name">{slot.name}</h3>
-                  <span className="slot-card__status" style={{ color: isBusy ? "var(--claude-deep)" : "var(--ink-4)" }}>
-                    {isBusy ? "Busy" : "Idle"}
+                  <span className="slot-card__status" style={{ color: slot.disabled ? "var(--status-danger)" : isBusy ? "var(--claude-deep)" : "var(--ink-4)" }}>
+                    {status}
                   </span>
                 </div>
                 <div className="mono slot-card__path">{slot.rootPath}</div>
                 <div className="slot-card__footer">
                   <span style={{ fontSize: 12.5, color: "var(--ink-3)", flex: 1 }}>
-                    {isBusy ? `Working ticket #${slot.currentTicketId}` : "Available for the next ticket in queue."}
+                    {slot.disabled
+                      ? isBusy
+                        ? `Disabled for new work; ticket #${slot.currentTicketId} continues.`
+                        : "Disabled for new ticket assignment."
+                      : isBusy
+                        ? `Working ticket #${slot.currentTicketId}`
+                        : "Available for the next ticket in queue."}
                   </span>
                   <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      className="btn"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, padding: "5px 10px" }}
+                      onClick={() => handleDisabledChange(slot, !slot.disabled)}
+                    >
+                      {slot.disabled ? "Enable" : "Disable"}
+                    </button>
                     <button
                       className="btn"
                       style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, padding: "5px 10px" }}

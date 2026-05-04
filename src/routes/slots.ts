@@ -60,7 +60,7 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/slots/:id  { name?, rootPath?, projectId? }
+// PATCH /api/slots/:id  { name?, rootPath?, projectId?, disabled? }
 router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const repo = new SlotRepository();
@@ -70,11 +70,17 @@ router.patch("/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const { name, rootPath, projectId } = req.body;
+    const { name, rootPath, projectId, disabled } = req.body;
+    if (disabled !== undefined && typeof disabled !== "boolean") {
+      res.status(400).json({ error: "disabled must be a boolean" });
+      return;
+    }
+
     const updated = await repo.update(id, {
       name,
       rootPath,
       projectId: typeof projectId === "number" || projectId === null ? projectId : undefined,
+      disabled,
     });
     if (!updated) {
       res.status(404).json({ error: `Slot ${id} not found` });

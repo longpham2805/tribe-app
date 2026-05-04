@@ -25,6 +25,7 @@ export class SlotRepository {
     return this.repo.findOne({
       where: {
         currentTicketId: IsNull(),
+        disabled: false,
         ...(projectId != null ? { projectId } : {}),
       },
       order: { id: "ASC" },
@@ -37,19 +38,21 @@ export class SlotRepository {
       rootPath: data.rootPath,
       projectId: data.projectId ?? null,
       currentTicketId: null,
+      disabled: false,
     });
     return this.repo.save(slot);
   }
 
   async update(
     id: number,
-    data: { name?: string; rootPath?: string; projectId?: number | null }
+    data: { name?: string; rootPath?: string; projectId?: number | null; disabled?: boolean }
   ): Promise<Slot | null> {
     const slot = await this.findById(id);
     if (!slot) return null;
     if (data.name !== undefined) slot.name = data.name;
     if (data.rootPath !== undefined) slot.rootPath = data.rootPath;
     if (data.projectId !== undefined) slot.projectId = data.projectId;
+    if (data.disabled !== undefined) slot.disabled = data.disabled;
     return this.repo.save(slot);
   }
 
