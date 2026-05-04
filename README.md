@@ -9,6 +9,20 @@ It provides:
 - REST APIs for web clients and integrations
 - WebSocket events for real-time UI updates
 
+## Product Overview
+
+Tribe turns ticket execution into a visible workflow: choose a project, watch work move across phases, inspect the active ticket, and coordinate agent slots with the assistant.
+
+| Ticket board | Ticket detail pane |
+|---|---|
+| ![Ticket board showing active and shipped Tribe tickets grouped by workflow state](docs/assets/product/ticket-board.png) | ![Ticket detail pane showing phase lifecycle, generated files, and current implementation context](docs/assets/product/ticket-detail-pane.png) |
+| Track running, queued, and shipped work at a glance. | Inspect one ticket without losing board context. |
+
+| Project and slot setup | Assistant drawer |
+|---|---|
+| ![Worker slots showing active and paused local execution slots for a selected project](docs/assets/product/project-slot-setup.png) | ![Assistant drawer showing ticket-aware updates and suggested workflow prompts](docs/assets/product/assistant-drawer.png) |
+| Map projects to safe local worker slots. | Keep system events and next actions beside the board. |
+
 ## Core Capabilities
 
 - **Ticket lifecycle management**
