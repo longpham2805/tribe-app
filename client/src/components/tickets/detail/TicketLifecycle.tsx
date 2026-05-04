@@ -28,8 +28,13 @@ export function TicketLifecycle({
   if (ticket.phases.length === 0) return null;
 
   return (
-    <div className="td-section">
-      <div className="td-section-label">Lifecycle</div>
+    <section className="td-section td-lifecycle-section">
+      <div className="td-section-header">
+        <div>
+          <div className="td-section-label">Lifecycle</div>
+          <div className="td-section-caption">Select a phase to inspect its feed. Trigger actions stay with phase state.</div>
+        </div>
+      </div>
       <div className="td-lifecycle">
         {phases.map((phase) => {
           const phaseRecord = ticket.phases.find((item) => item.phaseName === phase);
@@ -114,6 +119,6 @@ export function TicketLifecycle({
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

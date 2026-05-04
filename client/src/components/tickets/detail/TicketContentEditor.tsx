@@ -37,7 +37,29 @@ export function TicketContentEditor({
   onCancel: () => void;
 }) {
   return (
-    <>
+    <section className="td-section td-content-section">
+      <div className="td-content-section__header">
+        <div className="td-section-label">Ticket content</div>
+        <div className="td-current-state" aria-label="Current state">
+          <span className="td-current-state__label">Current</span>
+          <Tag color={phaseColors[ticket.currentPhase]} dot>
+            {phaseLabels[ticket.currentPhase]}
+          </Tag>
+          <Tag color={TICKET_STATUS_COLORS[ticket.status]} dot>
+            {TICKET_STATUS_LABELS[ticket.status]}
+          </Tag>
+          {ticket.waitingForSlot ? (
+            <Tag color="var(--status-warn)">Waiting for slot</Tag>
+          ) : assignedSlotName ? (
+            <Tag color="var(--ink-3)">{assignedSlotName}</Tag>
+          ) : null}
+          <Tag color="var(--ink-2)" icon={<IconRobot />}>
+            {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
+          </Tag>
+          <Tag color="var(--ink-4)">Created {relativeTime(ticket.createdAt)}</Tag>
+        </div>
+      </div>
+
       {editingContent ? (
         <form className="ticket-edit-form" onSubmit={onSubmit}>
           <input
@@ -72,29 +94,11 @@ export function TicketContentEditor({
         <h1 className="serif td-title">{ticket.title}</h1>
       )}
 
-      <div className="td-meta-row">
-        <Tag color={phaseColors[ticket.currentPhase]} dot>
-          {phaseLabels[ticket.currentPhase]}
-        </Tag>
-        <Tag color={TICKET_STATUS_COLORS[ticket.status]} dot>
-          {TICKET_STATUS_LABELS[ticket.status]}
-        </Tag>
-        <Tag color="var(--ink-2)" icon={<IconRobot />}>
-          {ticket.cliType === "CODEX" ? "Codex" : "Claude"}
-        </Tag>
-        {ticket.waitingForSlot ? (
-          <Tag color="var(--status-warn)">Waiting for slot</Tag>
-        ) : assignedSlotName ? (
-          <Tag color="var(--ink-3)">{assignedSlotName}</Tag>
-        ) : null}
-        <Tag color="var(--ink-4)">Created {relativeTime(ticket.createdAt)}</Tag>
-      </div>
-
       {!editingContent && ticket.description ? (
-        <div className="ticket-desc serif" style={{ fontSize: 15, lineHeight: 1.55, color: "var(--ink-1)", marginBottom: 20 }}>
+        <div className="ticket-desc serif">
           <SharedMarkdown content={normalizeTicketDescriptionImages(ticket.description, ticket.id)} />
         </div>
       ) : null}
-    </>
+    </section>
   );
 }

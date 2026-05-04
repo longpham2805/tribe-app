@@ -680,6 +680,10 @@
   font-family: "JetBrains Mono", monospace;
 }
 
+.td-file-chips {
+  margin-top: 0;
+}
+
 /* ── Ticket card structural updates ─────────────────────────────── */
 
 .ticket-running-rail,
@@ -981,6 +985,53 @@
 /* ── Sections ── */
 .td-section {
   margin-bottom: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.td-content-section {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.td-content-section__header,
+.td-current-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.td-content-section__header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.td-current-state {
+  justify-content: flex-end;
+  row-gap: 6px;
+}
+
+.td-current-state__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.td-content-section .ticket-desc {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-1);
+}
+
+.td-work-products {
+  margin-bottom: 22px;
+}
+
+.td-work-products .td-section:last-child {
+  margin-bottom: 0;
 }
 
 .td-activity-section {
@@ -1002,19 +1053,26 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-3);
-  margin-bottom: 10px;
+  margin-bottom: 4px;
+}
+
+.td-section-caption,
+.td-section-empty {
+  font-size: 12px;
+  color: var(--ink-4);
+  line-height: 1.4;
 }
 
 .td-section-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .td-section-header .td-section-label {
-  margin-bottom: 0;
+  margin-bottom: 4px;
 }
 
 .td-feedback-button {
@@ -1027,6 +1085,7 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .td-feedback-button:hover:not(:disabled) {
@@ -1043,21 +1102,17 @@
 .td-lifecycle {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  padding: 14px;
-  background: var(--paper);
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
+  gap: 8px;
 }
 
 .td-lc-card {
-  padding: 12px 12px 10px;
-  background: var(--cream);
+  padding: 10px;
+  background: color-mix(in srgb, var(--paper) 62%, transparent);
   border: 1px solid var(--hairline);
-  border-radius: 10px;
+  border-radius: 9px;
   position: relative;
   cursor: pointer;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition: box-shadow 0.2s, border-color 0.2s, background 0.2s;
   outline: none;
 }
 
@@ -1066,6 +1121,7 @@
 }
 
 .td-lc-card--selected {
+  background: color-mix(in srgb, var(--claude) 7%, var(--cream));
   border-color: var(--claude) !important;
 }
 
@@ -1188,29 +1244,36 @@
   min-height: 96px;
 }
 
-/* ── Artifacts card ── */
-.td-artifacts-card {
-  padding: 12px 14px;
-  background: var(--paper);
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
+/* ── Artifacts ── */
+.td-artifacts-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.td-artifacts-list--feedback:empty {
+  display: none;
 }
 
 .td-artifacts-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
   font-size: 13px;
   color: var(--ink-2);
 }
 
+.td-artifacts-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .td-feedback-form {
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 12px;
-  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
   border: 1px solid var(--hairline);
   border-radius: 10px;
 }
@@ -1233,10 +1296,13 @@
 }
 
 .td-feedback-card {
-  padding: 12px 14px;
-  background: var(--paper);
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--rule);
+}
+
+.td-feedback-card:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .td-feedback-card__head {
@@ -1254,11 +1320,7 @@
 }
 
 .td-feedback-card__comment {
-  padding: 9px 10px;
   margin-bottom: 10px;
-  background: var(--cream);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
   color: var(--ink-1);
   font-size: 13.5px;
   line-height: 1.5;
@@ -1271,6 +1333,12 @@
   background: color-mix(in srgb, var(--status-warn) 9%, var(--cream));
   border: 1px solid color-mix(in srgb, var(--status-warn) 35%, transparent);
   border-radius: 10px;
+}
+
+.td-reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .image-drop-zone-wrapper {

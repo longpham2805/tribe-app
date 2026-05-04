@@ -38,8 +38,13 @@ export function TicketFeedbackRounds({
   if (feedbackPhases.length === 0) return null;
 
   return (
-    <div className="td-section">
-      <div className="td-section-label">Feedback</div>
+    <section className="td-section td-feedback-section">
+      <div className="td-section-header">
+        <div>
+          <div className="td-section-label">Feedback rounds</div>
+          <div className="td-section-caption">{feedbackPhases.length} round{feedbackPhases.length === 1 ? "" : "s"} separated from ship artifacts.</div>
+        </div>
+      </div>
       <div className="td-feedback-list">
         {feedbackPhases.map((phase) => {
           const isActivePausedFeedback = paused?.id === phase.id;
@@ -53,7 +58,9 @@ export function TicketFeedbackRounds({
               {phase.feedbackComment ? (
                 <div className="td-feedback-card__comment serif">{phase.feedbackComment}</div>
               ) : null}
-              <TicketArtifactRows branchName={phase.branchName} pullRequests={phase.pullRequests} keyPrefix={`${phase.id}-`} />
+              <div className="td-artifacts-list td-artifacts-list--feedback">
+                <TicketArtifactRows branchName={phase.branchName} pullRequests={phase.pullRequests} keyPrefix={`${phase.id}-`} />
+              </div>
               {isActivePausedFeedback ? (
                 <div ref={replyPanelRef} className="td-feedback-reply">
                   {phase.lastMessage ? (
@@ -71,7 +78,7 @@ export function TicketFeedbackRounds({
                     value={replyMessage}
                     onChange={(event) => onReplyChange(event.target.value)}
                   />
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <div className="td-reply-actions">
                     <button
                       className="btn btn-secondary"
                       type="button"
@@ -94,6 +101,6 @@ export function TicketFeedbackRounds({
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

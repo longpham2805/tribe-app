@@ -265,113 +265,115 @@ export function TicketDetailModal({
         />
 
         <div className={`td-body${hasActivityDock ? " td-body--with-activity-dock" : ""}`}>
-        <TicketContentEditor
-          ticket={ticket}
-          editingContent={editingContent}
-          assignedSlotName={assignedSlotName}
-          phaseLabels={phaseLabels}
-          phaseColors={phaseColors}
-          contentTitleInput={contentTitleInput}
-          contentDescriptionInput={contentDescriptionInput}
-          contentError={contentError}
-          titleTooLong={titleTooLong}
-          savingContent={savingContent}
-          saveDisabled={saveDisabled}
-          onSubmit={handleContentSubmit}
-          onCancel={() => {
-            setEditingContent(false);
-            resetContentDraft();
-            setContentError(null);
-          }}
-        />
+          <TicketContentEditor
+            ticket={ticket}
+            editingContent={editingContent}
+            assignedSlotName={assignedSlotName}
+            phaseLabels={phaseLabels}
+            phaseColors={phaseColors}
+            contentTitleInput={contentTitleInput}
+            contentDescriptionInput={contentDescriptionInput}
+            contentError={contentError}
+            titleTooLong={titleTooLong}
+            savingContent={savingContent}
+            saveDisabled={saveDisabled}
+            onSubmit={handleContentSubmit}
+            onCancel={() => {
+              setEditingContent(false);
+              resetContentDraft();
+              setContentError(null);
+            }}
+          />
 
-        <TicketLifecycle
-          ticket={ticket}
-          phases={phases}
-          selectedPhase={selectedPhase}
-          triggeringPhase={triggeringPhase}
-          ticketRunning={ticketRunning}
-          phaseLabels={phaseLabels}
-          phaseColors={phaseColors}
-          statusLabels={statusLabels}
-          statusColors={statusColors}
-          onSelectPhase={onSelectPhase}
-          onTriggerPhase={onTriggerPhase}
-        />
+          <TicketLifecycle
+            ticket={ticket}
+            phases={phases}
+            selectedPhase={selectedPhase}
+            triggeringPhase={triggeringPhase}
+            ticketRunning={ticketRunning}
+            phaseLabels={phaseLabels}
+            phaseColors={phaseColors}
+            statusLabels={statusLabels}
+            statusColors={statusColors}
+            onSelectPhase={onSelectPhase}
+            onTriggerPhase={onTriggerPhase}
+          />
 
-        <TicketGeneratedFiles files={files} filesLoading={filesLoading} onOpenFile={onOpenFile} />
+          <TicketReplyPanel
+            paused={paused}
+            hasActivityDock={hasActivityDock}
+            replyPanelRef={replyPanelRef}
+            replyRegisterRef={replyRegisterRef}
+            replyTextareaRef={replyTextareaRef}
+            replyInput={replyInput}
+            replyMessage={replyMessage}
+            responseDraft={responseDraft}
+            isReplyBusy={isReplyBusy}
+            phaseLabels={phaseLabels}
+            statusLabels={statusLabels}
+            statusColors={statusColors}
+            onReplyChange={handleReplyChange}
+            onDiscard={clearReply}
+            onRespond={() => onRespond(ticket.id)}
+          />
 
-        <TicketShipArtifacts
-          ticket={ticket}
-          assignedArtifacts={!!assignedArtifacts}
-          shipPullRequests={shipPullRequests}
-          feedbackOpen={feedbackOpen}
-          feedbackBusy={feedbackBusy}
-          feedbackDraft={feedbackDraft}
-          feedbackError={feedbackError}
-          canRequestFeedback={canRequestFeedback}
-          feedbackButtonTitle={hasOpenFeedback ? "Finish the open feedback round first" : "Add feedback"}
-          feedbackCommentInput={feedbackCommentInput}
-          onToggleFeedback={() => {
-            setFeedbackOpen((prev) => {
-              const next = !prev;
-              if (!next) resetFeedbackDraft();
-              return next;
-            });
-            setFeedbackError(null);
-          }}
-          onCancelFeedback={() => {
-            setFeedbackOpen(false);
-            resetFeedbackDraft();
-            setFeedbackError(null);
-          }}
-          onSubmitFeedback={handleFeedbackSubmit}
-        />
+          <div className="td-work-products">
+            <TicketGeneratedFiles files={files} filesLoading={filesLoading} onOpenFile={onOpenFile} />
 
-        <TicketLiveFeedSection
-          ticketId={ticket.id}
-          displayedFeedPhaseName={displayedFeedPhaseName}
-          displayedFeedPhaseStatus={displayedFeedPhaseStatus}
-          hasActivityDock={hasActivityDock}
-          liveLogs={liveLogs}
-          selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKey}
-          phaseLabels={phaseLabels}
-        />
+            <TicketShipArtifacts
+              ticket={ticket}
+              assignedArtifacts={!!assignedArtifacts}
+              shipPullRequests={shipPullRequests}
+              feedbackOpen={feedbackOpen}
+              feedbackBusy={feedbackBusy}
+              feedbackDraft={feedbackDraft}
+              feedbackError={feedbackError}
+              canRequestFeedback={canRequestFeedback}
+              feedbackButtonTitle={hasOpenFeedback ? "Finish the open feedback round first" : "Add feedback"}
+              feedbackCommentInput={feedbackCommentInput}
+              onToggleFeedback={() => {
+                setFeedbackOpen((prev) => {
+                  const next = !prev;
+                  if (!next) resetFeedbackDraft();
+                  return next;
+                });
+                setFeedbackError(null);
+              }}
+              onCancelFeedback={() => {
+                setFeedbackOpen(false);
+                resetFeedbackDraft();
+                setFeedbackError(null);
+              }}
+              onSubmitFeedback={handleFeedbackSubmit}
+            />
+          </div>
 
-        <TicketFeedbackRounds
-          feedbackPhases={feedbackPhases}
-          paused={paused}
-          replyPanelRef={replyPanelRef}
-          replyRegisterRef={replyRegisterRef}
-          replyTextareaRef={replyTextareaRef}
-          replyInput={replyInput}
-          replyMessage={replyMessage}
-          isReplyBusy={isReplyBusy}
-          phaseColors={phaseColors}
-          statusLabels={statusLabels}
-          statusColors={statusColors}
-          onReplyChange={handleReplyChange}
-          onClearReply={clearReply}
-          onSubmitReply={handleReplySubmit}
-        />
+          <TicketFeedbackRounds
+            feedbackPhases={feedbackPhases}
+            paused={paused}
+            replyPanelRef={replyPanelRef}
+            replyRegisterRef={replyRegisterRef}
+            replyTextareaRef={replyTextareaRef}
+            replyInput={replyInput}
+            replyMessage={replyMessage}
+            isReplyBusy={isReplyBusy}
+            phaseColors={phaseColors}
+            statusLabels={statusLabels}
+            statusColors={statusColors}
+            onReplyChange={handleReplyChange}
+            onClearReply={clearReply}
+            onSubmitReply={handleReplySubmit}
+          />
 
-        <TicketReplyPanel
-          paused={paused}
-          hasActivityDock={hasActivityDock}
-          replyPanelRef={replyPanelRef}
-          replyRegisterRef={replyRegisterRef}
-          replyTextareaRef={replyTextareaRef}
-          replyInput={replyInput}
-          replyMessage={replyMessage}
-          responseDraft={responseDraft}
-          isReplyBusy={isReplyBusy}
-          phaseLabels={phaseLabels}
-          statusLabels={statusLabels}
-          statusColors={statusColors}
-          onReplyChange={handleReplyChange}
-          onDiscard={clearReply}
-          onRespond={() => onRespond(ticket.id)}
-        />
+          <TicketLiveFeedSection
+            ticketId={ticket.id}
+            displayedFeedPhaseName={displayedFeedPhaseName}
+            displayedFeedPhaseStatus={displayedFeedPhaseStatus}
+            hasActivityDock={hasActivityDock}
+            liveLogs={liveLogs}
+            selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKey}
+            phaseLabels={phaseLabels}
+          />
         </div>
       </div>
     </Modal>

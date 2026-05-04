@@ -55,7 +55,8 @@ export function TicketReplyPanel({
         >
           {phaseLabels[paused.phaseName]} — {statusLabels[paused.status]}
         </div>
-        <div className="td-paused-panel__title">Reply to unblock this ticket</div>
+        <div className="td-paused-panel__title">Required action</div>
+        <div className="td-section-caption">Reply here to unblock this ticket.</div>
       </div>
       {paused.lastMessage ? (
         <div className="serif td-paused-panel__message">{paused.lastMessage}</div>
@@ -72,7 +73,7 @@ export function TicketReplyPanel({
         value={replyMessage}
         onChange={(event) => onReplyChange(event.target.value)}
       />
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+      <div className="td-reply-actions">
         <button
           className="btn btn-secondary"
           type="button"

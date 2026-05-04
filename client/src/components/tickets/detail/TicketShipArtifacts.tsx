@@ -37,9 +37,12 @@ export function TicketShipArtifacts({
   if (!assignedArtifacts && !ticket.isDone) return null;
 
   return (
-    <div className="td-section">
+    <section className="td-section td-ship-section">
       <div className="td-section-header">
-        <div className="td-section-label">Ship artifacts</div>
+        <div>
+          <div className="td-section-label">Ship artifacts</div>
+          <div className="td-section-caption">Branch, PRs, and feedback request action.</div>
+        </div>
         <button
           className="td-feedback-button"
           type="button"
@@ -51,7 +54,7 @@ export function TicketShipArtifacts({
         </button>
       </div>
       {assignedArtifacts ? (
-        <div className="td-artifacts-card">
+        <div className="td-artifacts-list">
           <TicketArtifactRows branchName={ticket.branchName} pullRequests={shipPullRequests} />
         </div>
       ) : null}
@@ -83,6 +86,6 @@ export function TicketShipArtifacts({
           </div>
         </form>
       ) : null}
-    </div>
+    </section>
   );
 }

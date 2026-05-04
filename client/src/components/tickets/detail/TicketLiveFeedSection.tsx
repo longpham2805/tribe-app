@@ -21,9 +21,12 @@ export function TicketLiveFeedSection({
   if (!displayedFeedPhaseName) return null;
 
   return (
-    <div className={`td-section td-activity-section${hasActivityDock ? " td-activity-section--docked" : ""}`}>
-      <div className="td-section-label">
-        Live feed · {phaseLabels[displayedFeedPhaseName] ?? displayedFeedPhaseName}
+    <section className={`td-section td-activity-section${hasActivityDock ? " td-activity-section--docked" : ""}`}>
+      <div className="td-section-header">
+        <div>
+          <div className="td-section-label">Live feed</div>
+          <div className="td-section-caption">Showing {phaseLabels[displayedFeedPhaseName] ?? displayedFeedPhaseName} activity.</div>
+        </div>
       </div>
       <PhaseLiveFeed
         ticketId={ticketId}
@@ -33,6 +36,6 @@ export function TicketLiveFeedSection({
         autoOpenKey={selectedPhaseAutoOpenKey}
         fill={hasActivityDock}
       />
-    </div>
+    </section>
   );
 }

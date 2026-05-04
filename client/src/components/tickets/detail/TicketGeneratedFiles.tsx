@@ -12,12 +12,17 @@ export function TicketGeneratedFiles({
   if (!filesLoading && files.length === 0) return null;
 
   return (
-    <div className="td-section">
-      <div className="td-section-label">Generated files</div>
+    <section className="td-section td-generated-files-section">
+      <div className="td-section-header">
+        <div>
+          <div className="td-section-label">Generated files</div>
+          <div className="td-section-caption">{filesLoading ? "Loading work outputs" : `${files.length} file${files.length === 1 ? "" : "s"} ready to inspect`}</div>
+        </div>
+      </div>
       {filesLoading ? (
-        <div style={{ fontSize: 11, color: "var(--ink-4)" }}>Loading files…</div>
+        <div className="td-section-empty">Loading files…</div>
       ) : (
-        <div className="file-chips">
+        <div className="file-chips td-file-chips">
           {files.map((file) => (
             <button
               key={file.name}
@@ -32,6 +37,6 @@ export function TicketGeneratedFiles({
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
