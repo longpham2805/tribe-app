@@ -132,6 +132,74 @@ Use the naming pattern from the `## Naming` section injected by hooks. The patte
 **IMPORTANT**: Sacrifice grammar for concision in reports.
 **IMPORTANT**: List only implementation-time blockers at end. Do not convert planning-time unresolved questions into user questions; report them as planning defects.
 
+## Shipping (REQUIRED after implementation)
+
+After all code changes are complete and verified, you **must** commit, push, and open a PR. Do not end the session without completing these steps.
+
+### Git Workflow
+
+1. For each repository with changes, run:
+   ```
+   git status
+   git diff
+   git fetch origin
+   git checkout -b <branch-name> origin/dev
+   git add <specific changed files>
+   git commit
+   git push -u origin <branch-name>
+   gh pr create --base dev --title "<title>" --body "<summary>"
+   ```
+
+2. Branch naming: use the ticket slug or a short kebab-case description (e.g. `feat/add-user-auth`).
+
+3. PR body must include a short summary of what changed and why.
+
+### Allowed Git Commands
+
+- `git status`
+- `git diff`
+- `git fetch`
+- `git checkout -b <branch> origin/dev`
+- `git add <specific paths>`
+- `git commit`
+- `git push -u origin <branch>`
+- `gh pr create`
+
+### Forbidden
+
+- `git reset --hard`
+- `git push --force` or `git push --force-with-lease`
+- `git clean -f`
+- `git checkout .`
+- Any operation on `main` or `master`
+- Any bypass flags like `--no-verify`
+
+Follow the `<HARD-GATE>` in `docs/skills/git/SKILL.md` at all times.
+
+### Failure Handling
+
+If `gh` auth is missing, push is rejected, or merge/conflict errors appear, stop immediately. Do not continue to the next repo after the first blocking failure. Explain the exact blocker and end with `[STATUS:REQUIRES_ACTION]`.
+
+### ship.md (REQUIRED)
+
+After all git work, write `ship.md` at the path provided. Use exactly this format:
+
+```markdown
+## Branch
+
+`<branch-name>`
+
+## Pull Requests
+
+| Repo | PR URL | Commit SHA |
+|------|--------|------------|
+| <repo-name> | <pr-url> | <commit-sha> |
+```
+
+If multiple repos changed, add one row per repo.
+
+---
+
 ## Team Mode (when spawned as teammate)
 
 When operating as a team member:

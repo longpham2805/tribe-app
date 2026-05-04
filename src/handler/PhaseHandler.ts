@@ -61,16 +61,9 @@ export class PhaseHandler {
     }
   }
 
-  private async finalizeShip(ticket: Ticket, shipOutputPath: string): Promise<void> {
-    const pullRequests = await persistShipArtifacts(this.ticketRepo, ticket, shipOutputPath, log);
-    await this.ticketRepo.update(ticket.id, { isDone: true });
-
-    if (ticket.projectId != null && pullRequests.length > 0) {
-      const project = await new ProjectRepository().findById(ticket.projectId);
-      if (project?.fastTrack) {
-        autoMergeShipPRs(pullRequests, log);
-      }
-    }
+  private async finalizeImplementation(ticket: Ticket, tmpDir: string): Promise<void> {
+    const shipOutputPath = join(tmpDir, "ship.md");
+    await persistShipArtifacts(this.ticketRepo, ticket, shipOutputPath, log);
     if (ticket.slotId == null) {
       log(`ticket #${ticket.id} has no slot — skipping release`);
       return;
@@ -329,10 +322,7 @@ export class PhaseHandler {
       });
     }
     if (reviewedResult.status === PhaseStatus.COMPLETED) {
-      if (activePhase.phaseName === TicketPhase.SHIP) {
-        await this.finalizeShip(ticket, shipOutputPath);
-        await this.emitTicket(ticket.id);
-      } else if (activePhase.phaseName === TicketPhase.FEEDBACK) {
+      if (activePhase.phaseName === TicketPhase.FEEDBACK) {
         await this.finalizeFeedback(ticket, activePhase, feedbackOutputPath);
         await this.emitTicket(ticket.id);
       }
@@ -488,29 +478,30 @@ export class PhaseHandler {
   protected async handleShip(ticket: Ticket): Promise<void> {
     log(`handleShip → ticket #${ticket.id}`);
     persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.SHIP }, "handler_enter", "Entered ship handler");
-    if (ticket.slotId == null) { log(`no slot — nothing to ship`); return; }
 
-    const { slotRoot, tmpDir } = await resolvePhaseWorkspace(ticket);
-    const ticketContent = readFileSync(join(tmpDir, "ticket.md"), "utf-8");
-    const implPath = join(tmpDir, "implementation.md");
-    const implementationContent = existsSync(implPath) ? readFileSync(implPath, "utf-8") : "";
+    const freshTicket = await this.ticketRepo.findById(ticket.id);
+    const pullRequests = freshTicket?.pullRequests ?? [];
 
-    const agent = getAgent(TicketPhase.SHIP);
-    if (!agent) throw new Error("No agent configured for SHIP");
-    const shipOutputPath = join(tmpDir, "ship.md");
-    const projectContext = await loadProjectAgentContext(ticket);
-    const prompt = agent.buildPrompt({ ticketContent, projectContext, implementationContent, shipOutputPath });
+    if (ticket.projectId != null && pullRequests.length > 0) {
+      const project = await new ProjectRepository().findById(ticket.projectId);
+      if (project?.fastTrack) {
+        autoMergeShipPRs(pullRequests, log);
+      }
+    }
+
+    await this.ticketRepo.update(ticket.id, { isDone: true });
 
     const activePhase = await this.phaseRepo.findActiveByTicketId(ticket.id);
-    await this.runPhase(ticket, TicketPhase.SHIP, slotRoot, tmpDir, prompt, "ship.md");
-
-    const latest = activePhase ? await this.phaseRepo.findById(activePhase.id) : null;
-    if (latest?.status === PhaseStatus.COMPLETED) {
-      await this.finalizeShip(ticket, shipOutputPath);
-      await runPhaseCompletedHooks(ticket, TicketPhase.SHIP);
-    } else {
-      log(`SHIP status=${latest?.status} — slot retained`);
+    if (activePhase && activePhase.phaseName === TicketPhase.SHIP) {
+      await this.applyResultToPhase(activePhase, {
+        output: "Shipped",
+        status: PhaseStatus.COMPLETED,
+        message: null,
+        sessionUuid: null,
+      });
     }
+
+    await runPhaseCompletedHooks(ticket, TicketPhase.SHIP);
     await this.emitTicket(ticket.id);
   }
 
@@ -615,7 +606,10 @@ export class PhaseHandler {
       await this.finalizeFeedback(ticket, activePhase, join(tmpDir, outputFile));
       await runPhaseCompletedHooks(ticket, phaseName);
       await this.emitTicket(ticket.id);
-    } else if (result.status === PhaseStatus.COMPLETED && phaseName !== TicketPhase.SHIP) {
+    } else if (result.status === PhaseStatus.COMPLETED && phaseName === TicketPhase.IMPLEMENTATION) {
+      await this.finalizeImplementation(ticket, tmpDir);
+      await runPhaseCompletedHooks(ticket, phaseName);
+    } else if (result.status === PhaseStatus.COMPLETED) {
       await runPhaseCompletedHooks(ticket, phaseName);
     }
 

@@ -3,12 +3,10 @@ import { BaseAgent } from "./BaseAgent";
 import { FeedbackAgent } from "./FeedbackAgent";
 import { ImplementerAgent } from "./ImplementerAgent";
 import { PlannerAgent } from "./PlannerAgent";
-import { ShipAgent } from "./ShipAgent";
 
 const AGENTS: Partial<Record<TicketPhase, BaseAgent>> = {
   [TicketPhase.PLANNING]: new PlannerAgent(),
   [TicketPhase.IMPLEMENTATION]: new ImplementerAgent(),
-  [TicketPhase.SHIP]: new ShipAgent(),
   [TicketPhase.FEEDBACK]: new FeedbackAgent(),
 };
 
