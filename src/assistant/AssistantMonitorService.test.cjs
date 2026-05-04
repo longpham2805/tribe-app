@@ -31,7 +31,9 @@ function createFakeMsgRepo() {
   };
 }
 
-const monitor = new AssistantMonitorService(fakeAgent, fakePauseProvider, fakeSummaryReader, fakeTicketRepo, createFakeMsgRepo());
+const fakePhaseRepo = { update: async () => undefined };
+
+const monitor = new AssistantMonitorService(fakeAgent, fakePauseProvider, fakeSummaryReader, fakeTicketRepo, fakePhaseRepo, createFakeMsgRepo());
 
 {
   const description = monitor.buildEventDescription(
@@ -102,6 +104,7 @@ const monitor = new AssistantMonitorService(fakeAgent, fakePauseProvider, fakeSu
     },
     fakeSummaryReader,
     fakeTicketRepo,
+    fakePhaseRepo,
     msgRepo,
   );
 
