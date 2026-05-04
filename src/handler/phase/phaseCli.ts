@@ -21,7 +21,26 @@ export interface SpawnResult {
 export class PhaseCliRunner {
   constructor(private readonly log: (message: string) => void) {}
 
-  spawn(
+  async spawn(
+    ticket: Ticket,
+    prompt: string,
+    cwd: string,
+    resumeSessionId?: string | null,
+    logContext?: PhaseLogContext,
+  ): Promise<SpawnResult> {
+    const result = await this.spawnOnce(ticket, prompt, cwd, resumeSessionId, logContext);
+    if (
+      resumeSessionId &&
+      result.status === PhaseStatus.ERROR &&
+      result.message?.includes("No conversation found")
+    ) {
+      this.log(`session ${resumeSessionId} not found — retrying as new session`);
+      return this.spawnOnce(ticket, prompt, cwd, null, logContext);
+    }
+    return result;
+  }
+
+  private spawnOnce(
     ticket: Ticket,
     prompt: string,
     cwd: string,
