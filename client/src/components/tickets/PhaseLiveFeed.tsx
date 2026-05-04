@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog } from "../../api";
 import { estimateEventPayloadBytes, getActivityMarkdownEntries } from "../../phaseEvents";
-import type { PhaseStatus, TicketPhase } from "../../types";
+import type { PhaseLogEvent, PhaseStatus, TicketPhase } from "../../types";
 import { MarkdownProse } from "../markdown/MarkdownProse";
 
 interface PhaseLiveFeedProps {
   ticketId: number;
   phaseName: TicketPhase;
   status: PhaseStatus;
-  liveEvents: unknown[];
+  liveEvents: PhaseLogEvent[];
   autoOpenKey?: string;
   fill?: boolean;
 }
@@ -24,7 +24,7 @@ function activityEntryClassName(tone: string, severity: string): string {
 }
 
 export function PhaseLiveFeed({ ticketId, phaseName, status, liveEvents, autoOpenKey, fill = false }: PhaseLiveFeedProps) {
-  const [historicalEvents, setHistoricalEvents] = useState<unknown[]>([]);
+  const [historicalEvents, setHistoricalEvents] = useState<PhaseLogEvent[]>([]);
   const [historicalPayloadBytes, setHistoricalPayloadBytes] = useState(0);
   const [expanded, setExpanded] = useState(() => AUTO_EXPAND_STATUSES.includes(status));
   const [expandedFullEvents, setExpandedFullEvents] = useState<Set<string>>(() => new Set());

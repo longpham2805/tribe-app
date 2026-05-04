@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog, fetchTicketFile } from "../../api";
 import { normalizeActivityEvents } from "../../phaseEvents";
-import type { TicketPhase } from "../../types";
+import type { PhaseLogEvent, TicketPhase } from "../../types";
 import { SharedMarkdown } from "./SharedMarkdown";
 
 const MarkdownProse = lazy(() => import("./MarkdownProse").then((module) => ({ default: module.MarkdownProse })));
@@ -12,7 +12,7 @@ interface MarkdownViewerProps {
   ticketId: number;
   fileName: string;
   phaseName: TicketPhase | null;
-  liveEvents: any[];
+  liveEvents: PhaseLogEvent[];
   onBack?: () => void;
 }
 
@@ -88,7 +88,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBa
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [historicalEvents, setHistoricalEvents] = useState<unknown[]>([]);
+  const [historicalEvents, setHistoricalEvents] = useState<PhaseLogEvent[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);

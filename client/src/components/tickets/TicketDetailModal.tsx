@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 
-import type { PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
+import type { PhaseLogMap, PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
 import { Modal } from "../ui/Modal";
 import { TicketContentEditor } from "./detail/TicketContentEditor";
 import { TicketDetailTopbar } from "./detail/TicketDetailTopbar";
@@ -25,7 +25,7 @@ interface TicketDetailModalProps {
   viewer: TicketViewerState | null;
   selectedPhase: TicketPhase | undefined;
   selectedPhaseAutoOpenKey: string | undefined;
-  liveLogs: Record<string, any[]>;
+  liveLogs: PhaseLogMap;
   files: TicketFile[];
   filesLoading: boolean;
   assignedSlotName: string | null;

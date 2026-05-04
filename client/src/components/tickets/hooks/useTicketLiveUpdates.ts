@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useWebSocket } from "../../../ws";
-import type { Phase, Ticket, WsMessage } from "../../../types";
+import type { Phase, PhaseLogMap, Ticket, WsMessage } from "../../../types";
 import { MAX_LIVE_LOG_EVENTS } from "../utils/ticketBoard";
 
 export function useTicketLiveUpdates({
@@ -12,7 +12,7 @@ export function useTicketLiveUpdates({
 }: {
   projectId: number | null;
   setTickets: Dispatch<SetStateAction<Ticket[]>>;
-  setLiveLogs: Dispatch<SetStateAction<Record<string, any[]>>>;
+  setLiveLogs: Dispatch<SetStateAction<PhaseLogMap>>;
   scheduleTicketFilesRefresh: (ticketId: number) => void;
 }) {
   useWebSocket(

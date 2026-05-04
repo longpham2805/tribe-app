@@ -16,7 +16,7 @@ import {
   STATUS_LABELS,
   TICKET_GROUPS,
 } from "../constants/ticket";
-import type { TicketPhase } from "../types";
+import type { PhaseLogMap, TicketPhase } from "../types";
 import { useAppContext, type PaletteAction } from "../context/AppContext";
 
 const MondayPicker = lazy(() => import("../components/tickets/MondayPicker").then((module) => ({ default: module.MondayPicker })));
@@ -49,7 +49,7 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
   const [mondayPickerStep, setMondayPickerStep] = useState<"browse" | "configure">("browse");
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [viewer, setViewer] = useState<{ fileName: string | null } | null>(null);
-  const [liveLogs, setLiveLogs] = useState<Record<string, any[]>>({});
+  const [liveLogs, setLiveLogs] = useState<PhaseLogMap>({});
   const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
   const [selectedPhaseAutoOpenKeyByTicket, setSelectedPhaseAutoOpenKeyByTicket] = useState<Record<number, string>>({});
   const { filesByTicket, scheduleTicketFilesRefresh } = useTicketFiles(selectedTicketId);

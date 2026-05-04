@@ -10,7 +10,7 @@ import {
   uploadTicketImage,
 } from "../../../api";
 import { PAUSED_STATUSES } from "../../../constants/ticket";
-import type { Ticket, TicketPhase } from "../../../types";
+import type { PhaseLogMap, Ticket, TicketPhase } from "../../../types";
 import { MAX_LIVE_LOG_EVENTS } from "../utils/ticketBoard";
 
 export function useTicketMutations({
@@ -33,7 +33,7 @@ export function useTicketMutations({
   setSelectedTicketId: Dispatch<SetStateAction<number | null>>;
   setViewer: Dispatch<SetStateAction<{ fileName: string | null } | null>>;
   setTickets: Dispatch<SetStateAction<Ticket[]>>;
-  setLiveLogs: Dispatch<SetStateAction<Record<string, any[]>>>;
+  setLiveLogs: Dispatch<SetStateAction<PhaseLogMap>>;
   setError: Dispatch<SetStateAction<string | null>>;
   load: () => Promise<void>;
   onCreateSuccess: () => void;

@@ -1,5 +1,11 @@
-import type { BoardTicketsResponse, Ticket, TicketFile, TicketPhase, CliType } from "../types";
+import type { BoardTicketsResponse, Ticket, TicketFile, TicketPhase, CliType, PhaseLogEvent } from "../types";
 import { API_BASE, readErrorMessage, readJsonError } from "./request";
+
+function phaseLogEventsFromBody(body: unknown): PhaseLogEvent[] {
+  if (!body || typeof body !== "object" || !("events" in body)) return [];
+  const events = (body as { events?: unknown }).events;
+  return Array.isArray(events) ? (events as PhaseLogEvent[]) : [];
+}
 
 export async function fetchTickets(phase?: TicketPhase, projectId?: number): Promise<Ticket[]> {
   const params = new URLSearchParams();
@@ -98,9 +104,9 @@ export async function fetchTicketFile(ticketId: number, name: string): Promise<s
   return res.text();
 }
 
-export async function fetchPhaseLog(ticketId: number, phaseName: string): Promise<any[]> {
+export async function fetchPhaseLog(ticketId: number, phaseName: string): Promise<PhaseLogEvent[]> {
   const res = await fetch(`${API_BASE}/tickets/${ticketId}/files/_logs/${encodeURIComponent(phaseName)}`);
   if (!res.ok) throw new Error("Failed to fetch phase log");
-  const body = await res.json();
-  return body.events ?? [];
+  const body: unknown = await res.json();
+  return phaseLogEventsFromBody(body);
 }

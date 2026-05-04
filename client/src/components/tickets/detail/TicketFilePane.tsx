@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Modal } from "../../ui/Modal";
-import type { TicketPhase } from "../../../types";
+import type { PhaseLogMap, TicketPhase } from "../../../types";
 import { fileToPhase } from "./ticketDetailUtils";
 
 const MarkdownViewer = lazy(() => import("../../markdown/MarkdownViewer").then((module) => ({ default: module.MarkdownViewer })));
@@ -21,7 +21,7 @@ export function TicketFilePane({
   title: string;
   paneWidth: number;
   rightPaneOffset?: string;
-  liveLogs: Record<string, any[]>;
+  liveLogs: PhaseLogMap;
   onCloseFile: () => void;
 }) {
   const phaseName: TicketPhase | null = fileToPhase(fileName);

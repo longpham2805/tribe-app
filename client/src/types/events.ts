@@ -1,4 +1,5 @@
-import type { WebSocketMessage } from "../../../src/shared/events";
+import type { PhaseLogEvent, WebSocketMessage } from "../../../src/shared/events";
 
+export type PhaseLogMap = Record<string, PhaseLogEvent[]>;
 export type WsMessage = WebSocketMessage;
-export type { WebSocketMessage };
+export type { PhaseLogEvent, WebSocketMessage };
