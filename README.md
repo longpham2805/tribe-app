@@ -100,6 +100,8 @@ client/
 
 ## Quick Start
 
+For a practical local runbook covering startup, migrations, verification commands, ports, optional integrations, generated files, and common fixes, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
 ### 1) Prerequisites
 
 - Node.js (LTS recommended)
