@@ -20,6 +20,7 @@ import { ProjectRepository } from "../repository/ProjectRepository";
 import { PhaseCliRunner, type SpawnResult } from "./phase/phaseCli";
 import { feedbackOutputFile, phaseOutputFile, suggestFeedbackBranchName } from "./phase/phaseFiles";
 import { phaseLog as log, persistPhaseSystemEvent, type PhaseLogContext } from "./phase/phaseLogging";
+import { reviewPlanningArtifact } from "./phase/planningArtifact";
 import { loadProjectAgentContext, resolvePhaseWorkspace } from "./phase/workspace";
 
 export interface TriggerResult {
@@ -304,15 +305,18 @@ export class PhaseHandler {
       : phaseOutputFile(activePhase.phaseName);
     if (mdFile) {
       const mdPath = join(tmpDir, mdFile);
+      const shouldReplaceArtifact = activePhase.phaseName === TicketPhase.PLANNING && result.status === PhaseStatus.COMPLETED;
       const header = `\n\n---\n## Follow-up\n\n`;
-      if (existsSync(mdPath)) {
-        appendFileSync(mdPath, header + result.output);
+      if (shouldReplaceArtifact || !existsSync(mdPath)) {
+        writeFileSync(mdPath, result.output);
       } else {
-        writeFileSync(mdPath, header + result.output);
+        appendFileSync(mdPath, header + result.output);
       }
     }
 
-    await this.applyResultToPhase(activePhase, result);
+    const reviewedResult = this.reviewPhaseResult(activePhase, result, ticket);
+
+    await this.applyResultToPhase(activePhase, reviewedResult);
     if (activePhase.phaseName === TicketPhase.FEEDBACK) {
       await persistFeedbackArtifacts({
         ticketRepo: this.ticketRepo,
@@ -324,7 +328,7 @@ export class PhaseHandler {
         log,
       });
     }
-    if (result.status === PhaseStatus.COMPLETED) {
+    if (reviewedResult.status === PhaseStatus.COMPLETED) {
       if (activePhase.phaseName === TicketPhase.SHIP) {
         await this.finalizeShip(ticket, shipOutputPath);
         await this.emitTicket(ticket.id);
@@ -335,7 +339,7 @@ export class PhaseHandler {
       await runPhaseCompletedHooks(ticket, activePhase.phaseName);
     }
 
-    if (result.status === PhaseStatus.COMPLETED && activePhase.phaseName !== TicketPhase.FEEDBACK) {
+    if (reviewedResult.status === PhaseStatus.COMPLETED && activePhase.phaseName !== TicketPhase.FEEDBACK) {
       const next = this.nextPhase(activePhase.phaseName);
       if (next) await this.maybeAutoTriggerNext(ticket, activePhase.phaseName, next);
     }
@@ -582,13 +586,14 @@ export class PhaseHandler {
       uid: ticket.uid!,
       phaseName,
     });
-    const result = phaseName === TicketPhase.FEEDBACK && rawResult.status === PhaseStatus.COMPLETED
+    const normalizedResult = phaseName === TicketPhase.FEEDBACK && rawResult.status === PhaseStatus.COMPLETED
       ? {
           ...rawResult,
           status: PhaseStatus.REQUIRES_ACTION,
           message: rawResult.message ?? "Does this resolve your feedback? Reply 'yes' to close, or describe further changes.",
         }
       : rawResult;
+    const result = this.reviewPhaseResult(activePhase, normalizedResult, ticket);
 
     writeFileSync(join(tmpDir, outputFile), result.output);
     log(`${phaseName.toLowerCase()} output → ${join(tmpDir, outputFile)} (status=${result.status})`);
@@ -675,6 +680,25 @@ export class PhaseHandler {
       cliSessionId: result.sessionUuid ?? activePhase.cliSessionId ?? null,
       completedAt: result.status === PhaseStatus.COMPLETED ? new Date() : null,
     });
+  }
+
+  private reviewPhaseResult(activePhase: Phase, result: SpawnResult, ticket: Ticket): SpawnResult {
+    if (activePhase.phaseName !== TicketPhase.PLANNING || result.status !== PhaseStatus.COMPLETED) return result;
+
+    const review = reviewPlanningArtifact(result.output);
+    if (review.ok) return result;
+
+    const logContext = { ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: activePhase.phaseName };
+    log(`planning guard blocked ticket #${ticket.id}: unresolved open questions`);
+    persistPhaseSystemEvent(logContext, "planning_guard_blocked", "Planning completed with open questions", {
+      phaseId: activePhase.id,
+    });
+
+    return {
+      ...result,
+      status: review.status ?? PhaseStatus.QUESTION,
+      message: review.message ?? "PLANNING must resolve open questions before IMPLEMENTATION can start.",
+    };
   }
 
   private nextPhase(current: TicketPhase): TicketPhase | null {

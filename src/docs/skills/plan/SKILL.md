@@ -13,14 +13,14 @@ Playbook for the PLANNING phase. Persona rules live in `docs/agents/planner.md`;
 
 ## Flow
 
-1. **Read the ticket input in full.** If the request has multiple plausible approaches, pick the simplest viable path and state the assumption.
+1. **Read the ticket input in full.** If a required product/technical answer is missing, ask it with `[STATUS:QUESTION]` before writing the final plan. If multiple viable approaches remain but one is safely reversible, pick the simplest path and state the assumption.
 2. **Scout** (see `scout` skill) for the entry point, dispatch, transforms, and exit touched by this change. Record `path:line` for each.
 3. **Decompose into phases.** Each phase = a coherent, independently shippable slice. Three phases is common; more than six is usually a sign the ticket needs splitting.
 4. **Assign file ownership per phase.** No two phases may edit the same file. If they must, merge them or serialize them.
 5. **Build the dependency graph.** Which phases block which. Phases with no blocker can run in parallel.
 6. **Rate risks** per phase: likelihood × impact. For anything High, write a mitigation in the same row.
 7. **Define verification** for each phase: the command or check that proves it works. If you cannot name one, the phase is under-specified.
-8. **Write `planning.md`** per `report-format`.
+8. **Write `planning.md`** per `report-format` only after required questions are answered.
 
 ## Phase table (mandatory)
 
@@ -44,10 +44,10 @@ Every row must be complete. A blank cell means the plan is not ready.
 
 Do NOT implement. Do NOT edit files under `src/`, `client/`, or anywhere the phases will touch. Planning phase output is `planning.md` and nothing else.
 
-## Open questions
+## Question gate
 
-End with an `## Open Questions` section if any remain. The IMPLEMENTATION phase reads this and will block on unanswered items — be honest.
+Do not finalize a plan with unresolved questions. If an answer is required for a safe implementation contract, stop with `[STATUS:QUESTION]`, ask the smallest set of questions needed, then incorporate the answers into the final `planning.md`. Completed plans must not contain an `## Open Questions` section; use `## Decisions Resolved` or `## Assumptions` only for resolved context.
 
 ## Completion
 
-Write `planning.md` matching `report-format`. End with `[STATUS:COMPLETED]` once the phase table is complete and each row has a verification cell.
+Write `planning.md` matching `report-format`. End with `[STATUS:COMPLETED]` only after required questions are resolved, the phase table is complete, and each row has a verification cell.

@@ -12,11 +12,11 @@ Playbook for the IMPLEMENTATION phase. Persona rules live in `docs/agents/fullst
 - `ticket.md` — the original request
 - `planning.md` — phases, file ownership, verification commands
 
-If `planning.md` has unanswered questions in `## Open Questions`, stop and ask them. Do not guess.
+If `planning.md` has unanswered questions or an `## Open Questions` section, stop with `[STATUS:ERROR]` and report a planning contract violation. Do not ask the user again from IMPLEMENTATION; PLANNING must resume, incorporate the answers, and emit a finalized actionable plan.
 
 ## Flow
 
-1. **Read `planning.md` in full.** Understand every phase, not just the one you are starting.
+1. **Read `planning.md` in full.** Understand every phase, not just the one you are starting; fail fast if the planning question contract is violated.
 2. **Pick the phase to run** (the next one with all blockers complete). If the plan names one, use that.
 3. **Confirm file ownership.** List the files the phase owns. You will edit those and only those.
 4. **Scout** existing utilities before writing new code. Reuse beats invention.

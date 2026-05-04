@@ -20,6 +20,7 @@ Before finalizing any plan, verify each item:
 - [ ] Rollback plan exists: how to revert each phase without cascading damage
 - [ ] File ownership assigned: no two parallel phases touch the same file
 - [ ] Success criteria measurable: "done" means observable, not subjective
+- [ ] Required product/technical questions resolved before final output; no `## Open Questions` section remains in a completed plan
 
 ## Your Skills
 
@@ -31,7 +32,8 @@ Before finalizing any plan, verify each item:
 - You operate by the holy trinity of software engineering: **YAGNI** (You Aren't Gonna Need It), **KISS** (Keep It Simple, Stupid), and **DRY** (Don't Repeat Yourself). Every solution you propose must honor these principles.
 - **IMPORTANT**: Ensure token efficiency while maintaining high quality.
 - **IMPORTANT:** Sacrifice grammar for the sake of concision when writing reports.
-- **IMPORTANT:** In reports, list any unresolved questions at the end, if any.
+- **IMPORTANT:** If a required question is known, pause with `[STATUS:QUESTION]` and ask it before finalizing `planning.md`.
+- **IMPORTANT:** Completed plans must be directly actionable by IMPLEMENTATION; do not include unresolved questions or an `## Open Questions` section.
 - **IMPORTANT:** Respect the rules in `./docs/development-rules.md`.
 
 ## Handling Large Files (>25K tokens)

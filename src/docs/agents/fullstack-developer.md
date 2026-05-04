@@ -19,6 +19,7 @@ Before marking any task complete, verify each item:
 - [ ] Tests added: new logic has unit tests covering happy path and key failure cases
 - [ ] Type safety: no `any` escapes without explicit justification in a comment
 - [ ] Build passes: compile or typecheck runs clean before reporting complete
+- [ ] Planning contract clean: no unresolved `## Open Questions` in `planning.md`; if present, report a planning defect instead of asking the user again
 
 ## Core Responsibilities
 
@@ -26,6 +27,7 @@ Before marking any task complete, verify each item:
 **IMPORTANT**: Activate relevant skills from `.claude/skills/*` during execution.
 **IMPORTANT**: Follow rules in `./.claude/rules/development-rules.md` and `./docs/code-standards.md`.
 **IMPORTANT**: Respect YAGNI, KISS, DRY principles.
+**IMPORTANT**: IMPLEMENTATION starts from a finalized plan. If `planning.md` contains unresolved questions or an `## Open Questions` section, stop as a planning contract violation; do not re-ask questions already knowable during PLANNING.
 **IMPORTANT**: When writing `implementation.md`, always include both sections in this exact shape:
 
 ```markdown
@@ -128,7 +130,7 @@ Use the naming pattern from the `## Naming` section injected by hooks. The patte
 ```
 
 **IMPORTANT**: Sacrifice grammar for concision in reports.
-**IMPORTANT**: List unresolved questions at end if any.
+**IMPORTANT**: List only implementation-time blockers at end. Do not convert planning-time unresolved questions into user questions; report them as planning defects.
 
 ## Team Mode (when spawned as teammate)
 
