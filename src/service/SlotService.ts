@@ -217,18 +217,26 @@ export class SlotService {
     }
     await this.slotRepo.release(slot.id);
 
+    await this.promoteToFreeSlot(slot);
+  }
+
+  /**
+   * Promote the oldest waiting ticket to a slot that is already free.
+   * No-ops if the slot is disabled, auto-trigger is paused, or no ticket is waiting.
+   */
+  private async promoteToFreeSlot(slot: Slot): Promise<void> {
     if (slot.disabled) {
-      console.log(`[SlotService] Slot ${slot.id} disabled — released without promotion`);
+      console.log(`[SlotService] Slot ${slot.id} disabled — skipping promotion`);
       return;
     }
 
     const appState = await this.appStateRepo.get();
     if (!appState.autoTriggerEnabled) {
-      console.log(`[SlotService] Auto trigger paused — slot ${slot.id} released without promotion`);
+      console.log(`[SlotService] Auto trigger paused — slot ${slot.id} skipping promotion`);
       return;
     }
 
-    // 3. Promote the next waiting ticket (FIFO — oldest createdAt first, same project)
+    // Promote the next waiting ticket (FIFO — oldest createdAt first, same project)
     const nextTicket = await this.ticketRepo.findOldestWaiting(slot.projectId ?? undefined, {
       cliTypes: appState.availableCliTypes,
     });
@@ -278,6 +286,17 @@ export class SlotService {
       }
     } catch (err) {
       console.error("[SlotService] promoted ticket handler failed:", err);
+    }
+  }
+
+  /**
+   * Promote waiting tickets to all currently free slots.
+   * Called when auto-trigger is re-enabled or a slot is re-enabled.
+   */
+  async tryResumeQueue(projectId?: number): Promise<void> {
+    const freeSlots = await this.slotRepo.findFreeSlots(projectId);
+    for (const slot of freeSlots) {
+      await this.promoteToFreeSlot(slot);
     }
   }
 }

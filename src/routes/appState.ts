@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { AppStateRepository } from "../repository/AppStateRepository";
+import { SlotService } from "../service/SlotService";
 import { CliType } from "../enum/CliType";
 import { emit } from "../lib/events";
 
@@ -108,6 +109,11 @@ router.patch("/", async (req: Request, res: Response) => {
     });
     const responseState = toAppStateResponse(state);
     emit({ type: "app-state.updated", appState: responseState });
+
+    if (payload.autoTriggerEnabled === true) {
+      new SlotService().tryResumeQueue().catch(console.error);
+    }
+
     res.json(responseState);
   } catch (error: unknown) {
     res.status(500).json({ error: getErrorMessage(error) });

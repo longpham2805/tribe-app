@@ -32,6 +32,18 @@ export class SlotRepository {
     });
   }
 
+  /** Returns all free, non-disabled slots for the given project, ordered by id. */
+  async findFreeSlots(projectId?: number): Promise<Slot[]> {
+    return this.repo.find({
+      where: {
+        currentTicketId: IsNull(),
+        disabled: false,
+        ...(projectId != null ? { projectId } : {}),
+      },
+      order: { id: "ASC" },
+    });
+  }
+
   async create(data: { name: string; rootPath: string; projectId?: number | null }): Promise<Slot> {
     const slot = this.repo.create({
       name: data.name,

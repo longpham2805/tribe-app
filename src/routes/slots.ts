@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { SlotRepository } from "../repository/SlotRepository";
+import { SlotService } from "../service/SlotService";
 
 const router = Router();
 
@@ -86,6 +87,11 @@ router.patch("/:id", async (req: Request, res: Response) => {
       res.status(404).json({ error: `Slot ${id} not found` });
       return;
     }
+
+    if (disabled === false && updated.currentTicketId == null) {
+      new SlotService().tryResumeQueue(updated.projectId ?? undefined).catch(console.error);
+    }
+
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
