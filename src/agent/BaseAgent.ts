@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "fs";
-import { join } from "path";
+import { basename, join } from "path";
 import { TicketPhase } from "../enum/TicketPhase";
 import type { Phase } from "../entity/Phase";
 import type { Ticket } from "../entity/Ticket";
@@ -37,6 +37,7 @@ export interface PromptContext {
   ticketContent: string;
   projectContext?: ProjectAgentContext;
   brainstormContent?: string;
+  planningOutputPath?: string;
   planningContent?: string;
   implementationContent?: string;
   shipContent?: string;
@@ -45,13 +46,14 @@ export interface PromptContext {
   feedbackOutputPath?: string;
   baseBranch?: string | null;
   lastPrUrl?: string | null;
-checklistOutputPath?: string;
+  checklistOutputPath?: string;
   shipOutputPath?: string;
 }
 
 export interface FollowupPromptContext {
   phase?: Phase;
   ticket?: Ticket;
+  outputArtifactPath?: string;
 }
 
 export abstract class BaseAgent {
@@ -78,8 +80,8 @@ export abstract class BaseAgent {
     return `${sections.filter(Boolean).join("\n\n")}${MARKER_TRAILER}`;
   }
 
-  buildFollowupPrompt(message: string, _ctx?: FollowupPromptContext): string {
-    return `${message}${MARKER_TRAILER}`;
+  buildFollowupPrompt(message: string, ctx?: FollowupPromptContext): string {
+    return `${message}${this.renderFollowupOutputArtifact(ctx)}${MARKER_TRAILER}`;
   }
 
   protected renderInputs(ctx: PromptContext): string {
@@ -92,6 +94,9 @@ export abstract class BaseAgent {
     }
     if (ctx.implementationContent) {
       sections.push(`## Implementation Report\n\n${ctx.implementationContent}`);
+    }
+    if (ctx.planningOutputPath) {
+      sections.push(this.renderDirectOutputArtifact(ctx.planningOutputPath, "planning.md"));
     }
     if (ctx.checklistOutputPath) {
       sections.push(
@@ -109,6 +114,23 @@ export abstract class BaseAgent {
       );
     }
     return sections.join("\n\n");
+  }
+
+  private renderFollowupOutputArtifact(ctx: FollowupPromptContext | undefined): string {
+    if (!ctx?.outputArtifactPath) return "";
+    return `\n\n${this.renderDirectOutputArtifact(ctx.outputArtifactPath, basename(ctx.outputArtifactPath))}`;
+  }
+
+  private renderDirectOutputArtifact(path: string, fileName: string): string {
+    return [
+      "## Output Artifact",
+      "",
+      `Write your complete \`${fileName}\` artifact directly to this absolute path using your file-write tool:`,
+      "",
+      `- \`${fileName}\` -> \`${path}\``,
+      "",
+      "Do not create `plans/` folders or any slot-local planning artifacts. Stdout may be a brief status summary only.",
+    ].join("\n");
   }
 
   protected renderProjectContext(projectContext: ProjectAgentContext | undefined): string {

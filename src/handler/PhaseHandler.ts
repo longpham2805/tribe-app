@@ -21,6 +21,7 @@ import { PhaseCliRunner, type SpawnResult } from "./phase/phaseCli";
 import { feedbackOutputFile, phaseOutputFile } from "./phase/phaseFiles";
 import { phaseLog as log, persistPhaseSystemEvent, type PhaseLogContext } from "./phase/phaseLogging";
 import { reviewPlanningArtifact } from "./phase/planningArtifact";
+import { selectPhaseOutputResult, snapshotOutputArtifact } from "./phase/outputArtifact";
 import { loadProjectAgentContext, resolvePhaseWorkspace } from "./phase/workspace";
 
 export interface TriggerResult {
@@ -295,31 +296,41 @@ export class PhaseHandler {
       }
     }
 
+    const mdFile = activePhase.phaseName === TicketPhase.FEEDBACK
+      ? feedbackOutputFile(activePhase)
+      : phaseOutputFile(activePhase.phaseName);
+    const mdPath = mdFile ? join(tmpDir, mdFile) : null;
+    const outputSnapshot = mdPath ? snapshotOutputArtifact(mdPath) : null;
+
     const phaseAgent = getAgent(activePhase.phaseName);
     const prompt = phaseAgent
-      ? phaseAgent.buildFollowupPrompt(message, { phase: activePhase, ticket })
+      ? phaseAgent.buildFollowupPrompt(message, {
+          phase: activePhase,
+          ticket,
+          outputArtifactPath: activePhase.phaseName === TicketPhase.PLANNING && mdPath ? mdPath : undefined,
+        })
       : `${message}${MARKER_TRAILER}`;
-    const result = await this.cliRunner.spawn(ticket, prompt, slotRoot, activePhase.cliSessionId, {
+    const rawResult = await this.cliRunner.spawn(ticket, prompt, slotRoot, activePhase.cliSessionId, {
       ticketId: ticket.id,
       uid: ticket.uid!,
       phaseName: activePhase.phaseName,
     });
+    const { result, source } = mdPath && outputSnapshot
+      ? selectPhaseOutputResult(rawResult, mdPath, outputSnapshot)
+      : { result: rawResult, source: "stdout" as const };
+    const reviewedResult = this.reviewPhaseResult(activePhase, result, ticket);
 
-    const mdFile = activePhase.phaseName === TicketPhase.FEEDBACK
-      ? feedbackOutputFile(activePhase)
-      : phaseOutputFile(activePhase.phaseName);
-    if (mdFile) {
-      const mdPath = join(tmpDir, mdFile);
-      const shouldReplaceArtifact = activePhase.phaseName === TicketPhase.PLANNING && result.status === PhaseStatus.COMPLETED;
+    if (mdPath) {
+      const shouldReplaceArtifact = activePhase.phaseName === TicketPhase.PLANNING && reviewedResult.status === PhaseStatus.COMPLETED;
       const header = `\n\n---\n## Follow-up\n\n`;
-      if (shouldReplaceArtifact || !existsSync(mdPath)) {
-        writeFileSync(mdPath, result.output);
+      if (source === "file") {
+        log(`${activePhase.phaseName.toLowerCase()} follow-up output kept from ${mdPath}`);
+      } else if (shouldReplaceArtifact || !existsSync(mdPath)) {
+        writeFileSync(mdPath, reviewedResult.output);
       } else {
-        appendFileSync(mdPath, header + result.output);
+        appendFileSync(mdPath, header + reviewedResult.output);
       }
     }
-
-    const reviewedResult = this.reviewPhaseResult(activePhase, result, ticket);
 
     await this.applyResultToPhase(activePhase, reviewedResult);
     if (activePhase.phaseName === TicketPhase.FEEDBACK) {
@@ -486,7 +497,11 @@ export class PhaseHandler {
     const agent = getAgent(TicketPhase.PLANNING);
     if (!agent) throw new Error("No agent configured for PLANNING");
     const projectContext = await loadProjectAgentContext(ticket);
-    const prompt = agent.buildPrompt({ ticketContent, projectContext });
+    const prompt = agent.buildPrompt({
+      ticketContent,
+      projectContext,
+      planningOutputPath: join(tmpDir, "planning.md"),
+    });
 
     await this.runPhase(ticket, TicketPhase.PLANNING, slotRoot, tmpDir, prompt, "planning.md");
   }
@@ -629,6 +644,8 @@ export class PhaseHandler {
     await this.ensureCliAvailable(ticket);
 
     log(`spawning ${ticket.cliType} for ${phaseName.toLowerCase()} (resume=${activePhase.cliSessionId ?? "none"})`);
+    const outputPath = join(tmpDir, outputFile);
+    const outputSnapshot = snapshotOutputArtifact(outputPath);
     const rawResult = await this.cliRunner.spawn(ticket, prompt, slotRoot, activePhase.cliSessionId, {
       ticketId: ticket.id,
       uid: ticket.uid!,
@@ -641,17 +658,18 @@ export class PhaseHandler {
           message: rawResult.message ?? "Does this resolve your feedback? Reply 'yes' to close, or describe further changes.",
         }
       : rawResult;
-    const result = this.reviewPhaseResult(activePhase, normalizedResult, ticket);
+    const { result: selectedResult, source } = selectPhaseOutputResult(normalizedResult, outputPath, outputSnapshot);
+    const result = this.reviewPhaseResult(activePhase, selectedResult, ticket);
 
-    writeFileSync(join(tmpDir, outputFile), result.output);
-    log(`${phaseName.toLowerCase()} output → ${join(tmpDir, outputFile)} (status=${result.status})`);
+    writeFileSync(outputPath, result.output);
+    log(`${phaseName.toLowerCase()} output → ${outputPath} (status=${result.status}, source=${source})`);
 
     if (phaseName === TicketPhase.FEEDBACK) {
       await persistFeedbackArtifacts({
         ticketRepo: this.ticketRepo,
         ticket,
         phase: activePhase,
-        feedbackOutputPath: join(tmpDir, outputFile),
+        feedbackOutputPath: outputPath,
         updatePhase: this.updatePhase.bind(this),
         emitTicket: this.emitTicket.bind(this),
         log,
@@ -663,7 +681,7 @@ export class PhaseHandler {
     // Phase-specific finalization before slot release (sets branchName, persists artifacts)
     if (result.status === PhaseStatus.COMPLETED) {
       if (phaseName === TicketPhase.FEEDBACK) {
-        await this.finalizeFeedback(ticket, activePhase, join(tmpDir, outputFile));
+        await this.finalizeFeedback(ticket, activePhase, outputPath);
         await this.emitTicket(ticket.id);
       } else if (phaseName === TicketPhase.IMPLEMENTATION) {
         await this.finalizeImplementation(ticket, tmpDir);

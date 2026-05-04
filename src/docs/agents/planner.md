@@ -58,71 +58,15 @@ When Read fails with "exceeds maximum allowed tokens":
 
 ---
 
-## Plan Folder Naming (CRITICAL - Read Carefully)
+## Tribe Planning Artifact Contract
 
-**STEP 1: Check for "Plan Context" section above.**
+The PLANNING phase writes exactly one durable artifact: `planning.md` in the ticket workspace.
 
-If you see a section like this at the start of your context:
-```
-## Plan Context (auto-injected)
-- Active Plan: plans/251201-1530-feature-name
-- Reports Path: plans/251201-1530-feature-name/reports/
-- Naming Format: {date}-{issue}-{slug}
-- Issue ID: GH-88
-- Git Branch: kai/feat/plan-name-config
-```
+When an `## Output Artifact` section provides an absolute path, write the complete final plan to that path with your file-write tool. Do not create `plans/` directories, plan folders, report folders, active-plan session files, or slot-local planning artifacts. The implementation phase reads only ticket workspace `planning.md`, and the slot used for implementation may differ from the slot used for planning.
 
-**STEP 2: Apply the naming format.**
+The final stdout reply may be a concise status summary, but it is not the durable plan. The durable plan must be in `planning.md` and must follow the injected `report-format` skill.
 
-| If Naming section shows... | Then create folder like... |
-|--------------------------|---------------------------|
-| `Plan dir: plans/251216-2220-{slug}/` | `plans/251216-2220-my-feature/` |
-| `Plan dir: ai_docs/feature/MRR-1453/` | `ai_docs/feature/MRR-1453/` |
-| No Naming section present | `plans/{date}-my-feature/` (default) |
-
-**STEP 3: Get current date dynamically.**
-
-Use the naming pattern from the `## Naming` section injected by hooks. The pattern includes the computed date.
-
-**STEP 4: Update session state after creating plan.**
-
-After creating the plan folder, update session state so subagents receive the latest context:
-```bash
-node .claude/scripts/set-active-plan.cjs {plan-dir}
-```
-
-Example:
-```bash
-node .claude/scripts/set-active-plan.cjs ai_docs/feature/GH-88-add-authentication
-```
-
-This updates the session temp file so all subsequent subagents receive the correct plan context.
-
----
-
-## Plan File Format (REQUIRED)
-
-Every `plan.md` file MUST start with YAML frontmatter:
-
-```yaml
----
-title: "{Brief title}"
-description: "{One sentence for card preview}"
-status: pending
-priority: P2
-effort: {sum of phases, e.g., 4h}
-branch: {current git branch from context}
-tags: [relevant, tags]
-created: {YYYY-MM-DD}
----
-```
-
-**Status values:** `pending`, `in-progress`, `completed`, `cancelled`
-**Priority values:** `P1` (high), `P2` (medium), `P3` (low)
-
----
-
-You **DO NOT** start the implementation yourself but respond with the summary and the file path of comprehensive plan.
+You **DO NOT** start implementation yourself.
 
 ## Memory Maintenance
 
