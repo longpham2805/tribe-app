@@ -1,9 +1,11 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { emit, subscribe } from "../lib/events";
 import { AssistantAgentService } from "./AssistantAgentService";
 import { AssistantMessageRepository } from "./AssistantRepository";
 import { PauseQuestionContextProvider, type PauseQuestionContext } from "./PauseQuestionContextProvider";
 import { PhaseCompletionSummaryReader, type PhaseCompletionSummary } from "./PhaseCompletionSummary";
 import { PhaseStatus } from "../enum/PhaseStatus";
+import { PhaseRepository } from "../repository/PhaseRepository";
 import { TicketRepository } from "../repository/TicketRepository";
 import type { Phase } from "../entity/Phase";
 import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
@@ -22,6 +24,7 @@ export class AssistantMonitorService {
   private pauseContextProvider: PauseQuestionContextProvider;
   private summaryReader: PhaseCompletionSummaryReader;
   private ticketRepo: TicketRepository;
+  private phaseRepo: PhaseRepository;
   private msgRepo: AssistantMessageRepository;
 
   constructor(
@@ -29,12 +32,14 @@ export class AssistantMonitorService {
     pauseContextProvider = new PauseQuestionContextProvider(),
     summaryReader = new PhaseCompletionSummaryReader(),
     ticketRepo = new TicketRepository(),
+    phaseRepo = new PhaseRepository(),
     msgRepo = new AssistantMessageRepository(),
   ) {
     this.agent = agent;
     this.pauseContextProvider = pauseContextProvider;
     this.summaryReader = summaryReader;
     this.ticketRepo = ticketRepo;
+    this.phaseRepo = phaseRepo;
     this.msgRepo = msgRepo;
   }
 
@@ -64,6 +69,13 @@ export class AssistantMonitorService {
       : null;
 
     if (pauseContext) {
+      if (phase.lastMessage && phase.lastMessage.length > 200) {
+        const clean = await this.refineQuestionWithLLM(phase.lastMessage);
+        if (clean !== phase.lastMessage) {
+          await this.phaseRepo.update(phase.id, { lastMessage: clean });
+          phase = { ...phase, lastMessage: clean };
+        }
+      }
       await this.postPauseMessage(ticketId, phase, pauseContext, sourceEventKey);
       return;
     }
@@ -198,6 +210,27 @@ export class AssistantMonitorService {
     }
 
     return `Ticket #${ticketId} phase ${phase.phaseName} status changed to ${statusLabel}.`;
+  }
+
+  private async refineQuestionWithLLM(rawText: string): Promise<string> {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return rawText;
+    try {
+      const client = new Anthropic({ apiKey });
+      const response = await client.messages.create({
+        model: "gpt-5.4",
+        max_tokens: 200,
+        messages: [{
+          role: "user",
+          content: `An AI agent paused and needs human input. Extract ONLY the actual question or decision needed (1–2 sentences max). Output the question text only, no preamble.\n\nAgent output (last part):\n${rawText.slice(-2000)}`,
+        }],
+      });
+      const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
+      return text || rawText;
+    } catch (err: unknown) {
+      log(`refineQuestionWithLLM failed: ${err instanceof Error ? err.message : String(err)}`);
+      return rawText;
+    }
   }
 
   private formatPauseContext(context: PauseQuestionContext | null): string {
