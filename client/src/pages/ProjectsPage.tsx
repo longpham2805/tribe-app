@@ -126,12 +126,32 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
         </div>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <section className="page-state page-state--error" role="alert">
+          <div className="page-state__eyebrow">Project load failed</div>
+          <h2 className="page-state__title">Could not refresh projects.</h2>
+          <p className="page-state__description">{error}</p>
+          <div className="page-state__actions">
+            <button className="btn" onClick={load}>Retry</button>
+          </div>
+        </section>
+      )}
 
       {loading ? (
-        <div className="empty">Loading…</div>
+        <section className="loading-rows" aria-busy="true" aria-label="Loading projects">
+          <div className="loading-row" />
+          <div className="loading-row" />
+          <div className="loading-row" />
+        </section>
       ) : projects.length === 0 ? (
-        <div className="empty">No projects yet.</div>
+        <section className="page-state">
+          <div className="page-state__eyebrow">No projects configured</div>
+          <h2 className="page-state__title">Create a project to connect tickets, repos, and Monday boards.</h2>
+          <p className="page-state__description">Projects keep local rules, colors, and integration settings in one place before tickets start moving.</p>
+          <div className="page-state__actions">
+            <button className="btn btn-primary" onClick={openCreateModal}>+ Create project</button>
+          </div>
+        </section>
       ) : (
         <ProjectList
           projects={projects}

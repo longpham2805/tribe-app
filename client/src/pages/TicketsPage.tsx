@@ -141,6 +141,10 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
     () => (selectedTicketId != null ? tickets.find((ticket) => ticket.id === selectedTicketId) ?? null : null),
     [tickets, selectedTicketId],
   );
+  const emptyTicketTitle = selectedProjectId != null ? "No tickets in this project yet" : "No tickets on the board yet";
+  const emptyTicketDescription = selectedProjectId != null
+    ? "Create a ticket for this project, or import Monday items once board IDs are configured."
+    : "Create the first ticket manually, then assign it to a project when the work is ready.";
   const availableCliTypes = useMemo(() => appState?.availableCliTypes ?? [], [appState]);
   const paneOpen = selectedTicket != null;
   const rightPaneOffset = assistantOpen ? "var(--assistant-drawer-width)" : "0px";
@@ -249,12 +253,37 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
           </div>
         </div>
 
-        {error && <div className="error">{error}</div>}
+        {error && (
+          <section className="page-state page-state--error" role="alert">
+            <div className="page-state__eyebrow">Ticket load failed</div>
+            <h2 className="page-state__title">Could not refresh the ticket board.</h2>
+            <p className="page-state__description">{error}</p>
+            <div className="page-state__actions">
+              <button className="btn" onClick={load}>Retry</button>
+            </div>
+          </section>
+        )}
 
         {loading ? (
-          <div className="empty">Loading...</div>
+          <section className="loading-rows" aria-busy="true" aria-label="Loading tickets">
+            <div className="loading-row" />
+            <div className="loading-row" />
+            <div className="loading-row" />
+          </section>
         ) : tickets.length === 0 ? (
-          <div className="empty">No tickets found.</div>
+          <section className="page-state">
+            <div className="page-state__eyebrow">Empty board</div>
+            <h2 className="page-state__title">{emptyTicketTitle}</h2>
+            <p className="page-state__description">{emptyTicketDescription}</p>
+            <div className="page-state__actions">
+              {canImportFromMonday ? (
+                <button className="btn" onClick={handleOpenMondayPicker}>Import from Monday</button>
+              ) : selectedProjectId != null ? (
+                <div className="page-state__note">Monday import unavailable: add board IDs in project settings to enable imports.</div>
+              ) : null}
+              <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ New Ticket</button>
+            </div>
+          </section>
         ) : (
           <div className="ticket-groups">
             {TICKET_GROUPS.map((group) => (
@@ -267,7 +296,7 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
                 getProjectName={getProjectName}
                 onOpenTicket={openTicket}
                 action={group === "DONE" && doneHasMore ? {
-                  label: loadingMoreDone ? "Loading..." : "Load more",
+                  label: loadingMoreDone ? "Loading more" : "Load more",
                   disabled: loadingMoreDone,
                   onClick: loadMoreDone,
                 } : null}

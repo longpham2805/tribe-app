@@ -104,12 +104,32 @@ export function SlotsPage({ projectId }: SlotsPageProps) {
         </div>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <section className="page-state page-state--error" role="alert">
+          <div className="page-state__eyebrow">Slot load failed</div>
+          <h2 className="page-state__title">Could not refresh worker slots.</h2>
+          <p className="page-state__description">{error}</p>
+          <div className="page-state__actions">
+            <button className="btn" onClick={load}>Retry</button>
+          </div>
+        </section>
+      )}
 
       {loading ? (
-        <div className="empty">Loading…</div>
+        <section className="loading-rows" aria-busy="true" aria-label="Loading slots">
+          <div className="loading-row" />
+          <div className="loading-row" />
+          <div className="loading-row" />
+        </section>
       ) : slots.length === 0 ? (
-        <div className="empty">No slots yet. Create your first workspace slot.</div>
+        <section className="page-state">
+          <div className="page-state__eyebrow">No workers configured</div>
+          <h2 className="page-state__title">Create a slot before assigning local work.</h2>
+          <p className="page-state__description">Slots map Tribe tickets to local checkouts, so agents know where they can run safely.</p>
+          <div className="page-state__actions">
+            <button className="btn btn-primary" onClick={() => setModal({ open: true, mode: "create", slot: null })}>+ Create slot</button>
+          </div>
+        </section>
       ) : (
         <div className="slots-grid">
           {slots.map((slot) => {
