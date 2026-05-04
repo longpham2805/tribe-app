@@ -35,10 +35,12 @@ Use level-2 headings. Include only the sections that carry signal for the next p
 
 | Phase | Required sections |
 |---|---|
-| planning | `## Goal`, `## Phases` (table), `## Risks`, `## Verification` |
+| planning | `## Goal`, `## Decisions / Assumptions`, `## Discovery`, `## Phases`, `## Implementation Tasks`, `## Risks / Rollback`, `## Verification` |
 | implementation | `## Changes` (files + lines), `## Verification` (commands + results), `## Follow-ups` |
 
 Under each heading, use short prose or a table. No walls of text.
+
+Planning output must be implementer-ready. The `## Implementation Tasks` section uses ordered task headings with checkbox steps. Each checkbox names exact files, the command or check to run when useful, and the expected result. A simple plan may contain one task, but it still needs concrete paths and verification. Do not include placeholders such as `TBD`, `TODO`, `<...>`, or `???` in completed planning artifacts.
 
 ## Concision rules
 
@@ -72,19 +74,39 @@ The report body does not contain the `[STATUS:...]` tag. The trailer is appended
 
 ```markdown
 ---
-phase: brainstorm
+phase: planning
 ticket: add-realtime-notifications
 status: completed
 created: 2026-04-23
 ---
 
 ## Goal
-<1–3 sentences>
+Add realtime notifications when phase state changes so ticket boards update without a manual refresh.
+
+## Decisions / Assumptions
+- Reuse the existing WebSocket event channel.
+
+## Discovery
+- Entry: `src/handler/PhaseHandler.ts:631`
+- Exit: `src/lib/events.ts:1`
 
 ## Phases
 | # | Phase | Files owned | Blocked by | Risk | Verification |
 |---|---|---|---|---|---|
-| 1 | ... | ... | ... | ... | ... |
+| 1 | Broadcast phase change | `src/ws/server.ts` | none | low | `npm run build` |
+
+## Implementation Tasks
+### Task 1: Add realtime broadcast
+- [ ] Update `src/ws/server.ts`.
+  Command/check: `npm run build`
+  Expected: TypeScript build passes.
+
+## Risks / Rollback
+- Risk: duplicate phase events. Rollback by reverting the broadcast change.
+
+## Verification
+- `npm run build`
+  Expected: TypeScript build passes.
 ```
 
 If the template feels too short for your ticket, the ticket is probably bigger than one phase — surface that before inflating the report.

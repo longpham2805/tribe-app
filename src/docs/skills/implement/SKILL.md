@@ -10,20 +10,21 @@ Playbook for the IMPLEMENTATION phase. Persona rules live in `docs/agents/fullst
 ## Inputs
 
 - `ticket.md` — the original request
-- `planning.md` — phases, file ownership, verification commands
+- `planning.md` — phases, file ownership, implementation checkbox tasks, verification commands
 
-If `planning.md` has unanswered questions or an `## Open Questions` section, stop with `[STATUS:ERROR]` and report a planning contract violation. Do not ask the user again from IMPLEMENTATION; PLANNING must resume, incorporate the answers, and emit a finalized actionable plan.
+If `planning.md` has unanswered questions, an `## Open Questions` section, missing `## Implementation Tasks`, missing checkbox steps, or obvious placeholders, stop with `[STATUS:ERROR]` and report a planning contract violation. Do not ask the user again from IMPLEMENTATION; PLANNING must resume, incorporate the answers, and emit a finalized actionable plan.
 
 ## Flow
 
 1. **Read `planning.md` in full.** Understand every phase, not just the one you are starting; fail fast if the planning question contract is violated.
 2. **Pick the phase to run** (the next one with all blockers complete). If the plan names one, use that.
 3. **Confirm file ownership.** List the files the phase owns. You will edit those and only those.
-4. **Scout** existing utilities before writing new code. Reuse beats invention.
-5. **Edit, one file at a time.** Keep each diff small enough to explain in one sentence.
-6. **Verify after each meaningful change** — typecheck early, not only at the end.
-7. **Run the phase's verification commands** from `planning.md`. Copy their output into the report.
-8. **Write `implementation.md`** per `report-format`.
+4. **Execute `## Implementation Tasks` in order.** Work through checkbox steps sequentially. Do not skip, reorder, or reinterpret them silently.
+5. **Scout** existing utilities before writing new code. Reuse beats invention.
+6. **Edit, one file at a time.** Keep each diff small enough to explain in one sentence.
+7. **Verify after each meaningful change** — typecheck early, not only at the end.
+8. **Run the phase's verification commands** from `planning.md`. Copy their output into the report.
+9. **Write `implementation.md`** per `report-format`, including skipped/deferred checkbox items with justification.
 
 ## Scope discipline
 
@@ -39,12 +40,15 @@ If `planning.md` has unanswered questions or an `## Open Questions` section, sto
 - No silent `catch` blocks — at minimum log or rethrow.
 - Public types/interfaces match the plan exactly.
 - Boundary validation at system edges only; trust internal code.
+- Every completed checkbox maps to an actual change or verification step.
 
 ## <HARD-GATE>
 
 Do NOT edit files outside the phase's file-ownership list. If the change requires touching an un-owned file, STOP, write `[STATUS:REQUIRES_ACTION]`, and explain. Ownership violations corrupt parallel phases.
 
 Do NOT skip verification. A `[STATUS:COMPLETED]` without a `Verified:` block is rejected by downstream phases.
+
+Do NOT silently skip plan checkboxes. If a checkbox is obsolete, unsafe, or impossible, record it in `implementation.md` under `## Follow-ups` or stop with `[STATUS:REQUIRES_ACTION]` if it blocks correctness.
 
 ## Verification (required)
 
@@ -59,7 +63,7 @@ See `verification` skill for the evidence format. The `Verified:` block goes int
 `implementation.md` per `report-format`, with sections:
 - `## Changes` — one line per modified file (`src/foo.ts — add X broadcast`)
 - `## Verification` — commands and their results, copy-pasted
-- `## Follow-ups` — anything deliberately deferred (with justification)
+- `## Follow-ups` — anything deliberately deferred, including skipped plan checkboxes, with justification
 
 ## Checklist Output (required)
 
