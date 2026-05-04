@@ -202,6 +202,9 @@ npm run start
 - `npm run build` - Build backend
 - `npm run client:build` - Build frontend
 - `npm run build:all` - Build backend and frontend
+- `npm run check:build` - Run backend and frontend builds
+- `npm run test` - Run backend test files
+- `npm run check` - Run the full project health check
 - `npm run migration:run` - Apply TypeORM migrations
 
 ## API Surfaces
