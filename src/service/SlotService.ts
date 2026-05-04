@@ -115,6 +115,62 @@ export class SlotService {
     }
   }
 
+  /**
+   * Commit any uncommitted changes in the slot workspace and push to the current branch.
+   * Used before releasing a slot mid-IMPLEMENTATION or mid-FEEDBACK so work is not lost.
+   * Returns the branch name that was used (may update ticket.branchName if it was null).
+   */
+  async commitAndPushIfDirty(ticket: Ticket, slotRoot: string): Promise<void> {
+    const rootPath = this.validateSlotRoot({ rootPath: slotRoot } as Slot);
+    const entries = readdirSync(rootPath, { withFileTypes: true });
+    const repoDirs = entries
+      .filter((e) => e.isDirectory())
+      .map((e) => resolve(rootPath, e.name))
+      .filter((d) => this.isPathInside(d, rootPath))
+      .filter((d) => existsSync(join(d, ".git")));
+
+    for (const repoPath of repoDirs) {
+      const status = this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["status", "--porcelain"], false).stdout.trim();
+      if (!status) continue;
+
+      const branch = this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["rev-parse", "--abbrev-ref", "HEAD"], false).stdout.trim();
+      let workBranch = branch;
+
+      if (branch === "dev" || branch === "HEAD") {
+        workBranch = `tribe/ticket-${ticket.id}-wip`;
+        this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["checkout", "-b", workBranch]);
+      }
+
+      this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["add", "-A"]);
+      this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["commit", "-m", `WIP: ticket #${ticket.id} phase pause`]);
+      this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["push", "origin", workBranch]);
+
+      if (!ticket.branchName) {
+        await this.ticketRepo.update(ticket.id, { branchName: workBranch });
+        ticket.branchName = workBranch;
+      }
+    }
+  }
+
+  /**
+   * Check out the given branch in all child repos of the slot workspace.
+   * Called when resuming IMPLEMENTATION/FEEDBACK on a slot that was reset to dev.
+   */
+  checkoutBranch(slotRoot: string, branchName: string): void {
+    const rootPath = this.validateSlotRoot({ rootPath: slotRoot } as Slot);
+    const entries = readdirSync(rootPath, { withFileTypes: true });
+    const repoDirs = entries
+      .filter((e) => e.isDirectory())
+      .map((e) => resolve(rootPath, e.name))
+      .filter((d) => this.isPathInside(d, rootPath))
+      .filter((d) => existsSync(join(d, ".git")));
+
+    for (const repoPath of repoDirs) {
+      this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["fetch", "origin"]);
+      this.runGit({ rootPath: slotRoot } as Slot, repoPath, ["checkout", "-B", branchName, `origin/${branchName}`]);
+    }
+  }
+
   private runGit(slot: Slot, repoPath: string, args: string[], inheritOutput = true): { stdout: string; stderr: string } {
     const result = spawnSync(resolveGitBin(), ["-C", repoPath, ...args], {
       encoding: "utf8",
@@ -187,8 +243,26 @@ export class SlotService {
       if (promotedTicket) {
         const handler = new PhaseHandler();
         const latestPending = await new PhaseRepository().findLatestPendingByTicketId(promotedTicket.id);
+        const activePhase = await new PhaseRepository().findActiveByTicketId(promotedTicket.id);
+
         if (latestPending?.phaseName === TicketPhase.FEEDBACK) {
           await handler.trigger(promotedTicket.id, TicketPhase.FEEDBACK);
+        } else if (
+          promotedTicket.currentPhase === TicketPhase.PLANNING ||
+          promotedTicket.currentPhase === TicketPhase.IMPLEMENTATION
+        ) {
+          // May have a pending user response (paused mid-phase waiting for slot to resume)
+          // or may be waiting to start the phase fresh (slot was unavailable at phase entry)
+          const applied = activePhase
+            ? await handler.applyPendingResponseIfExists(promotedTicket, activePhase)
+            : false;
+          if (!applied) {
+            if (promotedTicket.currentPhase === TicketPhase.PLANNING) {
+              await handler.initPlanning(promotedTicket);
+            } else {
+              await handler.initImplementation(promotedTicket);
+            }
+          }
         } else {
           await handler.initCreated(promotedTicket);
         }

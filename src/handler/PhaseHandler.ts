@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, readFileSync, existsSync, appendFileSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, appendFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { TicketPhase } from "../enum/TicketPhase";
@@ -64,15 +64,7 @@ export class PhaseHandler {
   private async finalizeImplementation(ticket: Ticket, tmpDir: string): Promise<void> {
     const shipOutputPath = join(tmpDir, "ship.md");
     await persistShipArtifacts(this.ticketRepo, ticket, shipOutputPath, log);
-    if (ticket.slotId == null) {
-      log(`ticket #${ticket.id} has no slot — skipping release`);
-      return;
-    }
-    const slotRepo = new SlotRepository();
-    const slot = await slotRepo.findById(ticket.slotId);
-    if (slot) {
-      await new SlotService().releaseAndPromoteQueue(slot);
-    }
+    // Slot release is handled by releaseSlotAfterRun in the phase runner
   }
 
   private async finalizeFeedback(ticket: Ticket, phase: Phase, feedbackOutputPath: string): Promise<void> {
@@ -86,15 +78,7 @@ export class PhaseHandler {
       log,
     });
     await this.ticketRepo.update(ticket.id, { isDone: true });
-    if (ticket.slotId == null) {
-      log(`ticket #${ticket.id} has no slot — skipping feedback release`);
-      return;
-    }
-    const slotRepo = new SlotRepository();
-    const slot = await slotRepo.findById(ticket.slotId);
-    if (slot) {
-      await new SlotService().releaseAndPromoteQueue(slot);
-    }
+    // Slot release is handled by releaseSlotAfterRun in the phase runner
   }
 
   async trigger(ticketId: number, phaseName: TicketPhase): Promise<TriggerResult> {
@@ -257,6 +241,20 @@ export class PhaseHandler {
     }
 
     await this.ensureCliAvailable(ticket);
+
+    // Acquire slot if it was released while the phase was paused
+    if (ticket.slotId == null) {
+      const assigned = await new SlotService().tryAssign(ticket);
+      if (!assigned) {
+        await this.savePendingResponse(ticket, activePhase, message);
+        const queuedTicket = (await this.ticketRepo.findById(ticketId))!;
+        const queuedPhase = (await this.phaseRepo.findById(activePhase.id))!;
+        return { ticket: queuedTicket, phase: queuedPhase };
+      }
+      ticket.slotId = assigned.id;
+      log(`slot ${assigned.id} re-acquired for ticket #${ticketId} respond`);
+    }
+
     const { slotRoot, tmpDir } = await resolvePhaseWorkspace(ticket);
     await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING, lastMessage: null });
 
@@ -281,8 +279,22 @@ export class PhaseHandler {
     slotRoot: string,
     tmpDir: string,
   ): Promise<void> {
-    const shipOutputPath = join(tmpDir, "ship.md");
     const feedbackOutputPath = join(tmpDir, feedbackOutputFile(activePhase));
+
+    // Re-checkout implementation branch if needed (slot may have been reset to dev)
+    if (
+      (activePhase.phaseName === TicketPhase.IMPLEMENTATION ||
+        activePhase.phaseName === TicketPhase.FEEDBACK) &&
+      ticket.branchName
+    ) {
+      try {
+        new SlotService().checkoutBranch(slotRoot, ticket.branchName);
+        log(`checked out branch ${ticket.branchName} in slot for ${activePhase.phaseName} resume`);
+      } catch (err) {
+        log(`WARN: branch checkout failed for ticket #${ticket.id}: ${err}`);
+      }
+    }
+
     const phaseAgent = getAgent(activePhase.phaseName);
     const prompt = phaseAgent
       ? phaseAgent.buildFollowupPrompt(message, { phase: activePhase, ticket })
@@ -321,17 +333,26 @@ export class PhaseHandler {
         log,
       });
     }
+
+    // Phase-specific finalization before slot release
     if (reviewedResult.status === PhaseStatus.COMPLETED) {
       if (activePhase.phaseName === TicketPhase.FEEDBACK) {
         await this.finalizeFeedback(ticket, activePhase, feedbackOutputPath);
         await this.emitTicket(ticket.id);
+      } else if (activePhase.phaseName === TicketPhase.IMPLEMENTATION) {
+        await this.finalizeImplementation(ticket, tmpDir);
       }
-      await runPhaseCompletedHooks(ticket, activePhase.phaseName);
     }
 
-    if (reviewedResult.status === PhaseStatus.COMPLETED && activePhase.phaseName !== TicketPhase.FEEDBACK) {
-      const next = this.nextPhase(activePhase.phaseName);
-      if (next) await this.maybeAutoTriggerNext(ticket, activePhase.phaseName, next);
+    // Release slot whenever phase is no longer actively running
+    await this.releaseSlotAfterRun(ticket, activePhase.phaseName, reviewedResult, slotRoot);
+
+    if (reviewedResult.status === PhaseStatus.COMPLETED) {
+      await runPhaseCompletedHooks(ticket, activePhase.phaseName);
+      if (activePhase.phaseName !== TicketPhase.FEEDBACK) {
+        const next = this.nextPhase(activePhase.phaseName);
+        if (next) await this.maybeAutoTriggerNext(ticket, activePhase.phaseName, next);
+      }
     }
   }
 
@@ -341,6 +362,41 @@ export class PhaseHandler {
   async initCreated(ticket: Ticket): Promise<void> {
     this.assertReadyForProcessing(ticket);
     return this.handleCreated(ticket);
+  }
+
+  /** Public entry point — resumes a PLANNING-queued ticket when a slot becomes available. */
+  async initPlanning(ticket: Ticket): Promise<void> {
+    this.assertReadyForProcessing(ticket);
+    return this.handlePlanning(ticket);
+  }
+
+  /** Public entry point — resumes an IMPLEMENTATION-queued ticket when a slot becomes available. */
+  async initImplementation(ticket: Ticket): Promise<void> {
+    this.assertReadyForProcessing(ticket);
+    return this.handleImplementation(ticket);
+  }
+
+  /** Save a user response to disk so it can be applied once a slot is free. */
+  async savePendingResponse(ticket: Ticket, phase: Phase, message: string): Promise<void> {
+    const tmpDir = getTicketDir(ticket.uid!);
+    writeFileSync(join(tmpDir, `pending-response-${phase.id}.txt`), message);
+    await this.ticketRepo.updateSlotFields(ticket.id, { slotId: null, waitingForSlot: true });
+    log(`ticket #${ticket.id} phase ${phase.phaseName}: response queued, waiting for slot`);
+  }
+
+  /**
+   * Apply a previously queued response if one exists for this phase.
+   * Returns true if a pending response was found and applied, false otherwise.
+   */
+  async applyPendingResponseIfExists(ticket: Ticket, phase: Phase): Promise<boolean> {
+    const tmpDir = getTicketDir(ticket.uid!);
+    const pendingFile = join(tmpDir, `pending-response-${phase.id}.txt`);
+    if (!existsSync(pendingFile)) return false;
+    const message = readFileSync(pendingFile, "utf-8");
+    unlinkSync(pendingFile);
+    log(`ticket #${ticket.id} phase ${phase.phaseName}: applying queued response`);
+    await this.respond(ticket.id, message);
+    return true;
   }
 
   async publish(ticketId: number): Promise<Ticket> {
@@ -370,19 +426,7 @@ export class PhaseHandler {
 
   protected async handleCreated(ticket: Ticket): Promise<void> {
     this.assertReadyForProcessing(ticket);
-    log(`handleCreated → ticket #${ticket.id} (uid=${ticket.uid ?? "none"}, slotId=${ticket.slotId ?? "none"})`);
-
-    if (ticket.slotId == null) {
-      log(`ticket #${ticket.id} has no slot — attempting assignment`);
-      const slotService = new SlotService();
-      const assigned = await slotService.tryAssign(ticket);
-      if (!assigned) {
-        log(`ticket #${ticket.id} queued — no free slots available`);
-        return;
-      }
-      ticket.slotId = assigned.id;
-      log(`slot ${assigned.id} (${assigned.name}) assigned to ticket #${ticket.id}`);
-    }
+    log(`handleCreated → ticket #${ticket.id} (uid=${ticket.uid ?? "none"})`);
 
     let uid = ticket.uid;
     if (!uid) {
@@ -390,13 +434,6 @@ export class PhaseHandler {
       await this.ticketRepo.update(ticket.id, { uid });
       ticket.uid = uid;
       log(`generated uid ${uid} for ticket #${ticket.id}`);
-    }
-
-    const slotRepo = new SlotRepository();
-    const slot = await slotRepo.findById(ticket.slotId);
-    if (!slot) {
-      log(`WARN: slot ${ticket.slotId} not found for ticket #${ticket.id}`);
-      return;
     }
 
     const tmpDir = getTicketDir(uid);
@@ -426,6 +463,17 @@ export class PhaseHandler {
   protected async handlePlanning(ticket: Ticket): Promise<void> {
     log(`handlePlanning → ticket #${ticket.id}`);
     persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.PLANNING }, "handler_enter", "Entered planning handler");
+
+    if (ticket.slotId == null) {
+      const assigned = await new SlotService().tryAssign(ticket);
+      if (!assigned) {
+        log(`ticket #${ticket.id} queued — no free slots for PLANNING`);
+        return;
+      }
+      ticket.slotId = assigned.id;
+      log(`slot ${assigned.id} assigned to ticket #${ticket.id} for PLANNING`);
+    }
+
     const { slotRoot, tmpDir } = await resolvePhaseWorkspace(ticket);
 
     if (!existsSync(join(tmpDir, "ticket.md"))) {
@@ -446,6 +494,17 @@ export class PhaseHandler {
   protected async handleImplementation(ticket: Ticket): Promise<void> {
     log(`handleImplementation → ticket #${ticket.id}`);
     persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.IMPLEMENTATION }, "handler_enter", "Entered implementation handler");
+
+    if (ticket.slotId == null) {
+      const assigned = await new SlotService().tryAssign(ticket);
+      if (!assigned) {
+        log(`ticket #${ticket.id} queued — no free slots for IMPLEMENTATION`);
+        return;
+      }
+      ticket.slotId = assigned.id;
+      log(`slot ${assigned.id} assigned to ticket #${ticket.id} for IMPLEMENTATION`);
+    }
+
     const { slotRoot, tmpDir } = await resolvePhaseWorkspace(ticket);
 
     if (!existsSync(join(tmpDir, "ticket.md"))) {
@@ -602,24 +661,65 @@ export class PhaseHandler {
     }
 
     await this.applyResultToPhase(activePhase, result);
-    if (result.status === PhaseStatus.COMPLETED && phaseName === TicketPhase.FEEDBACK) {
-      await this.finalizeFeedback(ticket, activePhase, join(tmpDir, outputFile));
-      await runPhaseCompletedHooks(ticket, phaseName);
-      await this.emitTicket(ticket.id);
-    } else if (result.status === PhaseStatus.COMPLETED && phaseName === TicketPhase.IMPLEMENTATION) {
-      await this.finalizeImplementation(ticket, tmpDir);
-      await runPhaseCompletedHooks(ticket, phaseName);
-    } else if (result.status === PhaseStatus.COMPLETED) {
-      await runPhaseCompletedHooks(ticket, phaseName);
+
+    // Phase-specific finalization before slot release (sets branchName, persists artifacts)
+    if (result.status === PhaseStatus.COMPLETED) {
+      if (phaseName === TicketPhase.FEEDBACK) {
+        await this.finalizeFeedback(ticket, activePhase, join(tmpDir, outputFile));
+        await this.emitTicket(ticket.id);
+      } else if (phaseName === TicketPhase.IMPLEMENTATION) {
+        await this.finalizeImplementation(ticket, tmpDir);
+      }
     }
 
+    // Release slot whenever phase is no longer actively running
+    await this.releaseSlotAfterRun(ticket, phaseName, result, slotRoot);
+
     if (result.status === PhaseStatus.COMPLETED) {
+      await runPhaseCompletedHooks(ticket, phaseName);
       if (phaseName !== TicketPhase.FEEDBACK) {
         const next = this.nextPhase(phaseName);
         if (next) await this.maybeAutoTriggerNext(ticket, phaseName, next);
       }
     } else {
       log(`phase ${phaseName} paused with status=${result.status} — awaiting user`);
+    }
+  }
+
+  private async releaseSlotAfterRun(
+    ticket: Ticket,
+    phaseName: TicketPhase,
+    result: SpawnResult,
+    slotRoot: string,
+  ): Promise<void> {
+    const shouldRelease = [
+      PhaseStatus.QUESTION,
+      PhaseStatus.REQUIRES_ACTION,
+      PhaseStatus.COMPLETED,
+      PhaseStatus.ERROR,
+    ].includes(result.status);
+
+    if (!shouldRelease) return;
+
+    // Commit and push any dirty workspace so work is not lost when slot is reassigned
+    if (phaseName === TicketPhase.IMPLEMENTATION || phaseName === TicketPhase.FEEDBACK) {
+      try {
+        const freshTicket = await this.ticketRepo.findById(ticket.id);
+        if (freshTicket) await new SlotService().commitAndPushIfDirty(freshTicket, slotRoot);
+      } catch (err) {
+        log(`WARN: commitAndPushIfDirty failed for ticket #${ticket.id}: ${err}`);
+      }
+    }
+
+    const freshTicket = await this.ticketRepo.findById(ticket.id);
+    const slotId = freshTicket?.slotId ?? ticket.slotId;
+    if (slotId == null) return;
+
+    const slotRepo = new SlotRepository();
+    const slot = await slotRepo.findById(slotId);
+    if (slot) {
+      log(`releasing slot ${slot.id} after ${phaseName} (status=${result.status})`);
+      await new SlotService().releaseAndPromoteQueue(slot);
     }
   }
 
