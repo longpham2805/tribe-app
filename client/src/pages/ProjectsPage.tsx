@@ -10,6 +10,7 @@ import {
   type EditState,
   type ProjectModalMode,
 } from "../components/projects/projectForm";
+import { useAppContext } from "../context/AppContext";
 import type { Project } from "../types";
 
 type ProjectsPageProps = {
@@ -17,6 +18,7 @@ type ProjectsPageProps = {
 };
 
 export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
+  const { shortcutIntent, clearShortcutIntent } = useAppContext();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,18 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const openCreateModal = useCallback(() => {
+    setModal({ open: true, mode: "create", project: null });
+    setModalError(null);
+  }, []);
+
+  useEffect(() => {
+    if (shortcutIntent?.type !== "new-project") return;
+
+    openCreateModal();
+    clearShortcutIntent();
+  }, [clearShortcutIntent, openCreateModal, shortcutIntent]);
 
   const closeModal = useCallback(() => {
     setModal((m) => ({ ...m, open: false }));
@@ -105,7 +119,7 @@ export function ProjectsPage({ onProjectsChanged }: ProjectsPageProps) {
         <div className="page-heading__actions">
           <button
             className="btn btn-primary"
-            onClick={() => setModal({ open: true, mode: "create", project: null })}
+            onClick={openCreateModal}
           >
             + Create project
           </button>

@@ -105,6 +105,9 @@ export default function App() {
       setView(intent.view);
     } else if (intent.type === "switch-project") {
       setSelectedProjectId(intent.projectId);
+    } else if (intent.type === "new-project") {
+      setView("projects");
+      setShortcutIntent(intent);
     } else if (intent.type === "import-from-monday") {
       setView("tickets");
       setShortcutIntent(intent);
@@ -127,6 +130,11 @@ export default function App() {
     setShortcutIntent({ type: "open-ticket", ticketId });
   }, [setShortcutIntent]);
 
+  const handleCreateProject = useCallback(() => {
+    setView("projects");
+    setShortcutIntent({ type: "new-project" });
+  }, [setShortcutIntent]);
+
   return (
     <div className={`app ${assistantOpen ? "app--assistant-open" : ""}`} data-assistant-open={assistantOpen}>
       <AppHeader onSearchClick={() => setCommandPaletteOpen(true)} assistantOpen={assistantOpen} />
@@ -136,6 +144,7 @@ export default function App() {
           projects={projects}
           selectedProjectId={selectedProjectId}
           onSelectProject={(id) => setSelectedProjectId(id)}
+          onCreateProject={handleCreateProject}
         />
 
         <main className="main">

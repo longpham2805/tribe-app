@@ -6,6 +6,7 @@ interface ProjectPaneProps {
   projects: Project[];
   selectedProjectId: number | null;
   onSelectProject: (projectId: number | null) => void;
+  onCreateProject: () => void;
 }
 
 function getInitial(name: string): string {
@@ -17,6 +18,7 @@ export const ProjectPane = memo(function ProjectPane({
   projects,
   selectedProjectId,
   onSelectProject,
+  onCreateProject,
 }: ProjectPaneProps) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
   const shortcutTargets = useMemo(() => getProjectShortcutTargets(projects), [projects]);
@@ -136,7 +138,7 @@ export const ProjectPane = memo(function ProjectPane({
         })}
       </div>
 
-      <button className="project-sidebar__new-btn" type="button">
+      <button className="project-sidebar__new-btn" type="button" onClick={onCreateProject}>
         <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
         New project
       </button>

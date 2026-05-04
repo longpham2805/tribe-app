@@ -23,6 +23,7 @@ export type View = "tickets" | "slots" | "projects";
 
 export type ShortcutIntent =
   | { type: "new-ticket" }
+  | { type: "new-project" }
   | { type: "open-ticket"; ticketId: number }
   | { type: "navigate"; view: View }
   | { type: "switch-project"; projectId: number }
