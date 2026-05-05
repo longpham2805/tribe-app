@@ -15,9 +15,11 @@ const MAX_EXCERPT_LENGTH = 1000;
 const PLACEHOLDER_PATTERNS: Array<{ label: string; regex: RegExp }> = [
   { label: "TBD", regex: /\bTBD\b/i },
   { label: "TODO", regex: /\bTODO\b/i },
-  { label: "<...>", regex: /<[^>\n]+>/ },
   { label: "???", regex: /\?\?\?/ },
 ];
+const ANGLE_TOKEN = /<[^>\n]+>/g;
+const TAG_NAME = /^<\/?\s*([A-Za-z][\w:.-]*)\b[^>]*>$/;
+const ATTRIBUTE_ASSIGNMENT = /\s+[A-Za-z_:][\w:.-]*\s*=\s*(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s"'=<>`]+)/;
 
 interface PlanningSection {
   body: string;
@@ -95,7 +97,45 @@ function findPlaceholder(content: string): { label: string; excerpt: string } | 
     };
   }
 
+  const anglePlaceholder = findAnglePlaceholder(content);
+  if (anglePlaceholder) return anglePlaceholder;
+
   return null;
+}
+
+function findAnglePlaceholder(content: string): { label: string; excerpt: string } | null {
+  for (const match of content.matchAll(ANGLE_TOKEN)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+    const line = extractLineExcerpt(content, index);
+    if (isHtmlLikeTagSnippet(token, line)) continue;
+
+    return {
+      label: "<...>",
+      excerpt: line,
+    };
+  }
+
+  return null;
+}
+
+function isHtmlLikeTagSnippet(token: string, line: string): boolean {
+  const tagMatch = TAG_NAME.exec(token);
+  if (!tagMatch) return false;
+
+  const tagName = tagMatch[1];
+  const isClosingTag = /^<\//.test(token);
+  const hasAttributeAssignment = ATTRIBUTE_ASSIGNMENT.test(token);
+  const isSelfClosing = /\/\s*>$/.test(token);
+  const hasJsxExpression = /\{[^}]+\}/.test(line);
+  const hasOpeningTagOnLine = new RegExp(`<${escapeRegExp(tagName)}(?:\\s|>|/)`).test(line);
+  const hasClosingTagOnLine = new RegExp(`</\\s*${escapeRegExp(tagName)}\\s*>`).test(line);
+
+  if (isClosingTag) {
+    return hasOpeningTagOnLine && (hasAttributeAssignment || hasJsxExpression || hasClosingTagOnLine);
+  }
+
+  return hasAttributeAssignment || isSelfClosing || hasJsxExpression || hasClosingTagOnLine;
 }
 
 function findTopLevelSection(content: string, heading: string): PlanningSection | null {

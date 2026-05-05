@@ -91,6 +91,48 @@ test("reviewPlanningArtifact blocks placeholder text", () => {
   assert.match(result.message, /TBD/);
 });
 
+test("reviewPlanningArtifact allows exact PhaseLiveFeed JSX task text", () => {
+  const openingTag = '<span className="phase-live-feed__tag">';
+  const closingTag = "</span>";
+  const sentence = `- [ ] Update client/src/components/tickets/PhaseLiveFeed.tsx row render to place ${openingTag}{entry.subtypeLabel}${closingTag} before MarkdownProse.`;
+  const plan = validActionablePlan([sentence]);
+  const result = reviewPlanningArtifact(plan);
+
+  assert.equal(result.ok, true);
+  assert.match(plan, /<span className="phase-live-feed__tag">\{entry\.subtypeLabel\}<\/span> before MarkdownProse/);
+});
+
+test("reviewPlanningArtifact allows literal HTML and XML-like snippets", () => {
+  const result = reviewPlanningArtifact(validActionablePlan([
+    '- [ ] Preserve `<img src="/phase.png" />` in the planning instruction text.',
+    '- [ ] Render `<strong>Phase label</strong>` before the detail copy.',
+    '- [ ] Keep `<PhaseTag label={entry.subtypeLabel} />` in the JSX example.',
+  ]));
+
+  assert.equal(result.ok, true);
+});
+
+test("reviewPlanningArtifact still blocks placeholder-style angle markers", () => {
+  const result = reviewPlanningArtifact(validActionablePlan([
+    "- [ ] Replace <target file> with the concrete implementation path.",
+  ]));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, PhaseStatus.QUESTION);
+  assert.match(result.message, /<\.\.\.>/);
+  assert.match(result.message, /<target file>/);
+});
+
+test("reviewPlanningArtifact blocks angle markers without code evidence", () => {
+  const result = reviewPlanningArtifact(validActionablePlan([
+    "- [ ] Update <phase> after verification completes.",
+  ]));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, PhaseStatus.QUESTION);
+  assert.match(result.message, /<phase>/);
+});
+
 test("reviewPlanningArtifact blocks missing Implementation Tasks section", () => {
   const result = reviewPlanningArtifact([
     "## Goal",
