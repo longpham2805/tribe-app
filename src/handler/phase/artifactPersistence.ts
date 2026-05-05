@@ -3,7 +3,7 @@ import { spawnSync } from "child_process";
 import { Phase } from "../../entity/Phase";
 import { Ticket } from "../../entity/Ticket";
 import { TicketRepository } from "../../repository/TicketRepository";
-import { parseShipArtifacts, type PullRequestArtifact } from "./artifacts";
+import { dedupePullRequestArtifacts, getPullRequestArtifactKey, parseShipArtifacts, type PullRequestArtifact } from "./artifacts";
 
 type UpdatePhase = (phaseId: number, data: Partial<Phase>) => Promise<Phase | null>;
 type EmitTicket = (ticketId: number) => Promise<void>;
@@ -22,11 +22,12 @@ export async function persistShipArtifacts(
 
   const shipContent = readFileSync(shipOutputPath, "utf-8");
   const { branchName, pullRequests } = parseShipArtifacts(shipContent);
+  const dedupedPullRequests = dedupePullRequestArtifacts(pullRequests);
   await ticketRepo.update(ticket.id, {
     branchName,
-    pullRequests: pullRequests.length ? pullRequests : null,
+    pullRequests: dedupedPullRequests.length ? dedupedPullRequests : null,
   });
-  return pullRequests;
+  return dedupedPullRequests;
 }
 
 export function autoMergeShipPRs(pullRequests: PullRequestArtifact[], log: Log): void {
@@ -70,27 +71,28 @@ export async function persistFeedbackArtifacts({
 
   const feedbackContent = readFileSync(feedbackOutputPath, "utf-8");
   const { branchName, pullRequests } = parseShipArtifacts(feedbackContent);
+  const dedupedPullRequests = dedupePullRequestArtifacts(pullRequests);
   const phasePatch: Partial<Phase> = {};
   if (branchName) phasePatch.branchName = branchName;
-  if (pullRequests.length) phasePatch.pullRequests = pullRequests;
+  if (dedupedPullRequests.length) phasePatch.pullRequests = dedupedPullRequests;
   if (Object.keys(phasePatch).length) {
     await updatePhase(phase.id, phasePatch);
   }
 
-  if (!pullRequests.length) return;
+  if (!dedupedPullRequests.length) return;
 
   const freshTicket = await ticketRepo.findById(ticket.id);
-  const existing = freshTicket?.pullRequests ?? ticket.pullRequests ?? [];
-  const byUrl = new Map<string, PullRequestArtifact>();
+  const existing = dedupePullRequestArtifacts(freshTicket?.pullRequests ?? ticket.pullRequests ?? []);
+  const byKey = new Map<string, PullRequestArtifact>();
   for (const pr of existing) {
-    byUrl.set(pr.prUrl, pr);
+    byKey.set(getPullRequestArtifactKey(pr), pr);
   }
-  for (const pr of pullRequests) {
-    byUrl.set(pr.prUrl, pr);
+  for (const pr of dedupedPullRequests) {
+    byKey.set(getPullRequestArtifactKey(pr), pr);
   }
 
   await ticketRepo.update(ticket.id, {
-    pullRequests: [...byUrl.values()],
+    pullRequests: [...byKey.values()],
   });
   await emitTicket(ticket.id);
 }

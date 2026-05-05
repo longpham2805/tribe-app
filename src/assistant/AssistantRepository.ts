@@ -7,6 +7,7 @@ import { Ticket } from "../entity/Ticket";
 import type { ActionStatus, ActionType, ActionSource } from "../entity/AssistantAction";
 import type { AssistantMessageMetadata, MessageRole, MessageSeverity } from "../entity/AssistantMessage";
 import type { AssistantMessageEmbed } from "../shared/assistantEmbed";
+import { dedupePullRequestArtifacts, getPullRequestArtifactKey } from "../handler/phase/artifacts";
 
 export class AssistantMessageRepository {
   private repo: Repository<AssistantMessage>;
@@ -41,11 +42,15 @@ export class AssistantMessageRepository {
     }
 
     if (ticket.pullRequests?.length) {
-      const existingPrUrls = new Set(
-        suppliedEmbeds?.filter((e) => e.type === "pull_request").map((e) => (e as Extract<AssistantMessageEmbed, { type: "pull_request" }>).url) ?? [],
+      const existingPrKeys = new Set(
+        suppliedEmbeds
+          ?.filter((e): e is Extract<AssistantMessageEmbed, { type: "pull_request" }> => e.type === "pull_request")
+          .map((e) => getPullRequestArtifactKey({ repo: "unknown", prUrl: e.url })) ?? [],
       );
-      for (const pr of ticket.pullRequests) {
-        if (existingPrUrls.has(pr.prUrl)) continue;
+      for (const pr of dedupePullRequestArtifacts(ticket.pullRequests)) {
+        const key = getPullRequestArtifactKey(pr);
+        if (existingPrKeys.has(key)) continue;
+        existingPrKeys.add(key);
         const match = pr.prUrl.match(/\/pull\/(\d+)/);
         embeds.push({ type: "pull_request", url: pr.prUrl, number: match ? Number(match[1]) : undefined, ticketId });
       }

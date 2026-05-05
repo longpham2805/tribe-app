@@ -1,4 +1,4 @@
-import { extractPullRequestUrl, getPullRequestLinkLabel } from "../../../constants/ticket";
+import { dedupePullRequests, extractPullRequestUrl, getPullRequestIdentity, getPullRequestLinkLabel } from "../../../constants/ticket";
 
 type PullRequestArtifact = { repo: string; prUrl: string; commitSha: string };
 
@@ -24,10 +24,10 @@ export function TicketArtifactRows({
           <code className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{branchName}</code>
         </div>
       ) : null}
-      {(pullRequests ?? []).map((pr) => {
+      {dedupePullRequests(pullRequests).map((pr) => {
         const url = extractPullRequestUrl(pr.prUrl);
         return (
-          <div key={`${keyPrefix}${pr.repo}-${pr.prUrl}`} className="td-artifacts-row">
+          <div key={`${keyPrefix}${getPullRequestIdentity(pr.prUrl, pr.repo)}`} className="td-artifacts-row">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="18" cy="18" r="3" />
               <circle cx="6" cy="6" r="3" />

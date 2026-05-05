@@ -1,5 +1,5 @@
 import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
-import { PHASES, TICKET_STATUS_COLORS, TICKET_STATUS_LABELS } from "../../constants/ticket";
+import { dedupePullRequests, extractPullRequestUrl, getPullRequestLinkLabel, PHASES, TICKET_STATUS_COLORS, TICKET_STATUS_LABELS } from "../../constants/ticket";
 import { Tag } from "../ui/Tag";
 import type { CliType, PhaseStatus, Ticket, TicketPhase } from "../../types";
 
@@ -123,23 +123,6 @@ function PipelineBars({
   );
 }
 
-const extractUrl = (raw: string): string | null => {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const m = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
-  if (m?.[1]) return m[1];
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return null;
-};
-
-const getPrLabel = (url: string): string => {
-  try {
-    const n = new URL(url).pathname.replace(/\/+$/, "").match(/\/pull\/(\d+)$/)?.[1];
-    if (n) return `PR #${n}`;
-  } catch { /* fall through */ }
-  return "Open PR";
-};
-
 export const TicketSummaryCard = memo(function TicketSummaryCard({
   ticket,
   assignedSlotName,
@@ -161,8 +144,8 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
     ? (statusColors[runningPhase.status] ?? phaseColors[runningPhase.phaseName])
     : null;
 
-  const resolvedPRs = (ticket.pullRequests ?? []).flatMap((pr) => {
-    const url = extractUrl(pr.prUrl);
+  const resolvedPRs = dedupePullRequests(ticket.pullRequests).flatMap((pr) => {
+    const url = extractPullRequestUrl(pr.prUrl);
     return url ? [{ ...pr, url }] : [];
   });
   const primaryPR = resolvedPRs[0] ?? null;
@@ -312,7 +295,7 @@ export const TicketSummaryCard = memo(function TicketSummaryCard({
               onKeyDown={stopCardOpen}
             >
               <IconPR />
-              {getPrLabel(primaryPR.url)}
+              {getPullRequestLinkLabel(primaryPR.url)}
               {extraPRs > 0 && <span className="ticket-card-pr-extra"> +{extraPRs}</span>}
             </a>
           )}

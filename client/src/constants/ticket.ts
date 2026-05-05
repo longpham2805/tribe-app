@@ -68,15 +68,54 @@ export interface TicketPrLink {
   label: string;
 }
 
+type TicketPullRequest = NonNullable<Ticket["pullRequests"]>[number];
+
+const normalizePullRequestUrl = (raw: string): string => {
+  const trimmed = raw.trim().replace(/[),.;]+$/, "");
+  try {
+    const parsed = new URL(trimmed);
+    parsed.hash = "";
+    parsed.search = "";
+    parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+    return parsed.toString();
+  } catch {
+    return trimmed.replace(/[?#].*$/, "").replace(/\/+$/, "");
+  }
+};
+
 export const extractPullRequestUrl = (raw: string): string | null => {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
   const markdownMatch = trimmed.match(/\((https?:\/\/[^)\s]+)\)/i);
-  if (markdownMatch?.[1]) return markdownMatch[1];
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (markdownMatch?.[1]) return normalizePullRequestUrl(markdownMatch[1]);
+  if (/^https?:\/\//i.test(trimmed)) return normalizePullRequestUrl(trimmed);
 
   return null;
+};
+
+export const getPullRequestIdentity = (rawUrl: string, _repo?: string): string => {
+  const url = extractPullRequestUrl(rawUrl) ?? normalizePullRequestUrl(rawUrl);
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.toLowerCase() === "github.com") {
+      const match = parsed.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/i);
+      if (match?.[1] && match[2] && match[3]) return `github:${match[1].toLowerCase()}/${match[2].toLowerCase()}#${match[3]}`;
+    }
+  } catch {
+    return `url:${url}`;
+  }
+
+  return `url:${url}`;
+};
+
+export const dedupePullRequests = <T extends TicketPullRequest>(pullRequests: readonly T[] | null | undefined): T[] => {
+  const byIdentity = new Map<string, T>();
+  for (const pullRequest of pullRequests ?? []) {
+    const identity = getPullRequestIdentity(pullRequest.prUrl, pullRequest.repo);
+    if (!byIdentity.has(identity)) byIdentity.set(identity, pullRequest);
+  }
+  return [...byIdentity.values()];
 };
 
 export const getPullRequestLinkLabel = (url: string): string => {

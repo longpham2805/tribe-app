@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 
 import type { PhaseLogMap, PhaseStatus, Ticket, TicketFile, TicketPhase } from "../../types";
+import { dedupePullRequests, getPullRequestIdentity } from "../../constants/ticket";
 import { Modal } from "../ui/Modal";
 import { TicketContentEditor } from "./detail/TicketContentEditor";
 import { TicketDetailTopbar } from "./detail/TicketDetailTopbar";
@@ -159,14 +160,15 @@ export function TicketDetailModal({
   const feedbackPhases = ticket.phases
     .filter((phase) => phase.phaseName === "FEEDBACK")
     .sort((left, right) => left.sequence - right.sequence || left.id - right.id);
-  const feedbackPrUrls = new Set(
-    feedbackPhases.flatMap((phase) => (phase.pullRequests ?? []).map((pr) => pr.prUrl)),
+  const feedbackPrIdentities = new Set(
+    feedbackPhases.flatMap((phase) => dedupePullRequests(phase.pullRequests).map((pr) => getPullRequestIdentity(pr.prUrl, pr.repo))),
   );
-  const shipPullRequests = (ticket.pullRequests ?? []).filter((pr) => !feedbackPrUrls.has(pr.prUrl));
+  const ticketPullRequests = dedupePullRequests(ticket.pullRequests);
+  const shipPullRequests = ticketPullRequests.filter((pr) => !feedbackPrIdentities.has(getPullRequestIdentity(pr.prUrl, pr.repo)));
   const hasActivePhase = ticket.phases.some((phase) => !!phase.startedAt && !phase.completedAt);
   const hasOpenFeedback = feedbackPhases.some((phase) => !phase.completedAt);
   const assignedArtifacts = ticket.branchName || shipPullRequests.length > 0;
-  const canRequestFeedback = ((ticket.pullRequests?.length ?? 0) > 0 || ticket.isDone) && !hasActivePhase && !hasOpenFeedback;
+  const canRequestFeedback = (ticketPullRequests.length > 0 || ticket.isDone) && !hasActivePhase && !hasOpenFeedback;
   const feedbackBusy = creatingFeedbackTicket === ticket.id;
 
   const activePhase = ticket.phases.find((p) => !!p.startedAt && !p.completedAt);

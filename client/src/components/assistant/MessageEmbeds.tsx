@@ -1,3 +1,4 @@
+import { getPullRequestIdentity } from "../../constants/ticket";
 import type { AssistantMessageEmbed } from "../../types/assistant";
 
 function getPhaseLabel(value: string) {
@@ -97,7 +98,15 @@ export function MessageEmbeds({ embeds, onOpenTicket }: {
   if (!embeds?.length) return null;
 
   const tickets = embeds.filter((e): e is Extract<AssistantMessageEmbed, { type: "ticket" }> => e.type === "ticket");
-  const others = embeds.filter((e) => e.type !== "ticket");
+  const pullRequestIdentities = new Set<string>();
+  const others = embeds.filter((e) => {
+    if (e.type === "ticket") return false;
+    if (e.type !== "pull_request") return true;
+    const identity = getPullRequestIdentity(e.url);
+    if (pullRequestIdentities.has(identity)) return false;
+    pullRequestIdentities.add(identity);
+    return true;
+  });
 
   return (
     <div className="asst-embeds">

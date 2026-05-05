@@ -76,6 +76,9 @@ function withTicketDir(uid, files, fn) {
       "| Repo | PR | Commit |",
       "| --- | --- | --- |",
       "| org/app | https://github.com/org/app/pull/115 | `abc123def` |",
+      "| org/app | https://github.com/org/app/pull/115?utm=summary | `abc123def` |",
+      "## Notes",
+      "Also shipped at https://github.com/org/app/pull/115.",
       "## Summary",
       "- Shipped concise phase completion summaries",
     ].join("\n"),
@@ -85,6 +88,7 @@ function withTicketDir(uid, files, fn) {
     const prompt = reader.formatForPrompt(summary);
     assert.ok(prompt.includes("Branch: feature/ticket-115-summary"));
     assert.ok(prompt.includes("PR: org/app https://github.com/org/app/pull/115 @ abc123def"));
+    assert.equal(prompt.match(/https:\/\/github\.com\/org\/app\/pull\/115/g)?.length, 1);
     assert.ok(prompt.includes("Shipped concise phase completion summaries"));
   });
 }

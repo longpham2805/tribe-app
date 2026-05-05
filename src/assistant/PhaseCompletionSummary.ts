@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { TicketPhase } from "../enum/TicketPhase";
 import { getTicketDir } from "../lib/paths";
-import { parseShipArtifacts, type PullRequestArtifact } from "../handler/phase/artifacts";
+import { dedupePullRequestArtifacts, parseShipArtifacts, type PullRequestArtifact } from "../handler/phase/artifacts";
 
 export interface PhaseCompletionSummary {
   phaseName: TicketPhase;
@@ -86,7 +86,7 @@ export class PhaseCompletionSummaryReader {
     const artifacts = parseShipArtifacts(content);
     return {
       branchName: artifacts.branchName ?? undefined,
-      pullRequests: artifacts.pullRequests,
+      pullRequests: dedupePullRequestArtifacts(artifacts.pullRequests),
     };
   }
 
