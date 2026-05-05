@@ -31,12 +31,18 @@ export interface ActivityItem {
   severity: ActivitySeverity;
 }
 
+export interface ActivityTypeOption {
+  key: string;
+  label: string;
+}
+
 export interface ActivityMarkdownEntry {
   id: string;
   content: string;
   tone: ActivityTone;
   severity: ActivitySeverity;
   subtypeLabel: string;
+  typeKey: string;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -82,6 +88,10 @@ function toTitleCase(value: string): string {
     .filter(Boolean)
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
+}
+
+function activityTypeKey(label: string): string {
+  return label.toLowerCase().replace(/\s+/g, "-");
 }
 
 function formatTime(timestamp?: string): string | null {
@@ -568,16 +578,24 @@ export function getActivityMarkdownEntries(
     if (!content) continue;
     const nextBytes = totalBytes + content.length;
     if (entries.length > 0 && nextBytes > maxBytes) break;
+    const typeOption = getActivityTypeOption(event, activityItem);
     entries.push({
       id: `${activityItem.id}:${index}`,
       content,
       tone: getActivityTone(event, activityItem),
       severity: activityItem.severity,
-      subtypeLabel: getActivitySubtypeLabel(event, activityItem),
+      subtypeLabel: typeOption.label,
+      typeKey: typeOption.key,
     });
     totalBytes = nextBytes;
   }
   return entries.reverse();
+}
+
+export function getActivityTypeOption(event: unknown, item?: ActivityItem): ActivityTypeOption {
+  const activityItem = item ?? normalizeActivityEvent(event);
+  const label = getActivitySubtypeLabel(event, activityItem);
+  return { key: activityTypeKey(label), label };
 }
 
 function getActivitySubtypeLabel(event: unknown, item: ActivityItem): string {
@@ -614,13 +632,8 @@ function getActivitySubtypeLabel(event: unknown, item: ActivityItem): string {
   return "UNKNOWN";
 }
 
-function getActivityTone(event: unknown, item: ActivityItem): ActivityTone {
-  if (isRecord(event) && asString(event.type) === "assistant") {
-    return collectAssistantBlocks(event).some((block) => block.type === "text") ? "primary" : "meta";
-  }
-  if (item.kind === "message" && item.actor === "You" && item.title !== "User tool result") return "primary";
-  if (item.kind === "message" && item.actor === "Codex") return "primary";
-  return "meta";
+function getActivityTone(_event: unknown, _item: ActivityItem): ActivityTone {
+  return "primary";
 }
 
 function formatAssistantMarkdown(blocks: AssistantContentBlock[]): string {

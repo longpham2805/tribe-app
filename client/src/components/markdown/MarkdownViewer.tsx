@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog, fetchTicketFile } from "../../api";
-import { normalizeActivityEvents } from "../../phaseEvents";
+import { getActivityTypeOption, normalizeActivityEvents } from "../../phaseEvents";
 import type { PhaseLogEvent, TicketPhase } from "../../types";
+import { ActivityTypeFilter, useActivityTypeFilter } from "../activity/ActivityTypeFilter";
 import { SharedMarkdown } from "./SharedMarkdown";
 
 const MarkdownProse = lazy(() => import("./MarkdownProse").then((module) => ({ default: module.MarkdownProse })));
@@ -143,6 +144,19 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBa
 
   const activityEvents = useMemo(() => historicalEvents.concat(liveEvents), [historicalEvents, liveEvents]);
   const activityItems = useMemo(() => normalizeActivityEvents(activityEvents), [activityEvents]);
+  const activityItemsWithTypes = useMemo(
+    () => activityItems.map((item) => ({ item, typeOption: getActivityTypeOption(item.raw, item) })),
+    [activityItems],
+  );
+  const activityTypeOptions = useMemo(
+    () => activityItemsWithTypes.map((entry) => entry.typeOption),
+    [activityItemsWithTypes],
+  );
+  const { activityTypeOptions: availableActivityTypeOptions, isTypeVisible, toggleType } = useActivityTypeFilter(activityTypeOptions);
+  const visibleActivityItems = useMemo(
+    () => activityItemsWithTypes.filter((entry) => isTypeVisible(entry.typeOption.key)).map((entry) => entry.item),
+    [activityItemsWithTypes, isTypeVisible],
+  );
   const status = fileStatus(content, loading, error);
   const phaseLabel = linkedPhase ? PHASE_LABELS[linkedPhase] : "Ticket";
   const outlineHeadings = useMemo(() => {
@@ -158,7 +172,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBa
   useEffect(() => {
     if (tab === "markdown") return;
     logEndRef.current?.scrollIntoView({ block: "end" });
-  }, [activityItems.length, activityEvents.length, tab]);
+  }, [visibleActivityItems.length, activityEvents.length, tab]);
 
   const handleCopy = useCallback(async () => {
     if (!content) return;
@@ -212,7 +226,7 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBa
         {linkedPhase && (
           <>
             <button className={`file-viewer__tab${tab === "activity" ? " file-viewer__tab--active" : ""}`} type="button" onClick={() => setTab("activity")}>
-              Activity log ({activityItems.length})
+              Activity log ({visibleActivityItems.length})
             </button>
             <button className={`file-viewer__tab${tab === "raw" ? " file-viewer__tab--active" : ""}`} type="button" onClick={() => setTab("raw")}>
               Raw events ({activityEvents.length})
@@ -237,15 +251,22 @@ export function MarkdownViewer({ ticketId, fileName, phaseName, liveEvents, onBa
 
       {tab === "activity" && (
         <div className="file-viewer__body file-viewer__body--activity">
+          <ActivityTypeFilter
+            options={availableActivityTypeOptions}
+            isTypeVisible={isTypeVisible}
+            onToggle={toggleType}
+          />
           {historyLoading && activityItems.length === 0 ? (
             <div className="empty">Loading activity…</div>
           ) : historyError ? (
             <div className="error">{historyError}</div>
           ) : activityItems.length === 0 ? (
             <div className="empty">No activity yet.</div>
+          ) : visibleActivityItems.length === 0 ? (
+            <div className="empty">No activity matches selected filters.</div>
           ) : (
             <div className="file-activity">
-              {activityItems.map((entry) => (
+              {visibleActivityItems.map((entry) => (
                 <article key={entry.id} className={`file-activity__row file-activity__row--${entry.severity}`}>
                   <time className="mono file-activity__time">{formatActivityTime(entry.timestamp) || "—"}</time>
                   <span className={`file-activity__kind file-activity__kind--${entry.kind}`}>

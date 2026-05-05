@@ -500,6 +500,11 @@
   border: 1px solid var(--hairline);
 }
 
+.file-viewer__body--activity .activity-type-filter {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
 .file-activity {
   display: flex;
   flex-direction: column;
