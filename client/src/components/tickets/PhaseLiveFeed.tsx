@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { fetchPhaseLog } from "../../api";
 import { getActivityMarkdownEntries } from "../../phaseEvents";
 import type { PhaseLogEvent, TicketPhase } from "../../types";
@@ -19,7 +19,7 @@ function activityEntryClassName(tone: string, severity: string): string {
   ].join(" ");
 }
 
-export function PhaseLiveFeed({ ticketId, phaseName, liveEvents, fill = false }: PhaseLiveFeedProps) {
+function PhaseLiveFeedComponent({ ticketId, phaseName, liveEvents, fill = false }: PhaseLiveFeedProps) {
   const [historicalEvents, setHistoricalEvents] = useState<PhaseLogEvent[]>([]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -72,3 +72,5 @@ export function PhaseLiveFeed({ ticketId, phaseName, liveEvents, fill = false }:
     </div>
   );
 }
+
+export const PhaseLiveFeed = memo(PhaseLiveFeedComponent);

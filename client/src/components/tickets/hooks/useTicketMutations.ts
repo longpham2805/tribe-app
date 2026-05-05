@@ -132,8 +132,8 @@ export function useTicketMutations({
   );
 
   const handleRespond = useCallback(
-    async (ticketId: number) => {
-      const message = (responseDraft[ticketId] ?? "").trim();
+    async (ticketId: number, messageOverride?: string) => {
+      const message = (messageOverride ?? responseDraft[ticketId] ?? "").trim();
       if (!message) return;
 
       const ticket = tickets.find((item) => item.id === ticketId);
@@ -188,7 +188,15 @@ export function useTicketMutations({
 
   const handleResponseDraftChange = useCallback((value: string) => {
     if (!selectedTicket) return;
-    setResponseDraft((prev) => ({ ...prev, [selectedTicket.id]: value }));
+    setResponseDraft((prev) => {
+      const next = { ...prev };
+      if (value) {
+        next[selectedTicket.id] = value;
+      } else {
+        delete next[selectedTicket.id];
+      }
+      return next;
+    });
   }, [selectedTicket]);
 
   return {

@@ -1,16 +1,12 @@
 import type { MutableRefObject } from "react";
-import type { UseFormRegisterReturn } from "react-hook-form";
 import type { Phase, PhaseStatus, TicketPhase } from "../../../types";
 
 export function TicketReplyPanel({
   paused,
   hasActivityDock,
   replyPanelRef,
-  replyRegisterRef,
   replyTextareaRef,
-  replyInput,
   replyMessage,
-  responseDraft,
   isReplyBusy,
   phaseLabels,
   statusLabels,
@@ -22,11 +18,8 @@ export function TicketReplyPanel({
   paused: Phase | undefined;
   hasActivityDock: boolean;
   replyPanelRef: MutableRefObject<HTMLDivElement | null>;
-  replyRegisterRef: UseFormRegisterReturn<"message">["ref"];
   replyTextareaRef: MutableRefObject<HTMLTextAreaElement | null>;
-  replyInput: Omit<UseFormRegisterReturn<"message">, "ref">;
   replyMessage: string;
-  responseDraft: string;
   isReplyBusy: boolean;
   phaseLabels: Record<TicketPhase, string>;
   statusLabels: Record<PhaseStatus, string>;
@@ -63,13 +56,11 @@ export function TicketReplyPanel({
       ) : null}
       <textarea
         ref={(node) => {
-          replyRegisterRef(node);
           replyTextareaRef.current = node;
         }}
         className="input textarea td-paused-panel__textarea"
         rows={3}
         placeholder="Type the answer or fix details the agent needs…"
-        {...replyInput}
         value={replyMessage}
         onChange={(event) => onReplyChange(event.target.value)}
       />
@@ -84,7 +75,7 @@ export function TicketReplyPanel({
         <button
           className="btn btn-primary"
           type="button"
-          disabled={isReplyBusy || !responseDraft.trim()}
+          disabled={isReplyBusy || !replyMessage.trim()}
           onClick={onRespond}
         >
           {isReplyBusy ? "Sending…" : "Send reply to agent"}

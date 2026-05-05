@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -5,7 +6,7 @@ interface MarkdownProseProps {
   content: string;
 }
 
-export function MarkdownProse({ content }: MarkdownProseProps) {
+function MarkdownProseComponent({ content }: MarkdownProseProps) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -35,3 +36,5 @@ export function MarkdownProse({ content }: MarkdownProseProps) {
     </ReactMarkdown>
   );
 }
+
+export const MarkdownProse = memo(MarkdownProseComponent);

@@ -1,5 +1,4 @@
 import type { MutableRefObject } from "react";
-import type { UseFormRegisterReturn } from "react-hook-form";
 import type { Phase, PhaseStatus, TicketPhase } from "../../../types";
 import { Tag } from "../../ui/Tag";
 import { TicketArtifactRows } from "./TicketArtifactRows";
@@ -8,9 +7,7 @@ export function TicketFeedbackRounds({
   feedbackPhases,
   paused,
   replyPanelRef,
-  replyRegisterRef,
   replyTextareaRef,
-  replyInput,
   replyMessage,
   isReplyBusy,
   phaseColors,
@@ -23,9 +20,7 @@ export function TicketFeedbackRounds({
   feedbackPhases: Phase[];
   paused: Phase | undefined;
   replyPanelRef: MutableRefObject<HTMLDivElement | null>;
-  replyRegisterRef: UseFormRegisterReturn<"message">["ref"];
   replyTextareaRef: MutableRefObject<HTMLTextAreaElement | null>;
-  replyInput: Omit<UseFormRegisterReturn<"message">, "ref">;
   replyMessage: string;
   isReplyBusy: boolean;
   phaseColors: Record<TicketPhase, string>;
@@ -68,13 +63,11 @@ export function TicketFeedbackRounds({
                   ) : null}
                   <textarea
                     ref={(node) => {
-                      replyRegisterRef(node);
                       replyTextareaRef.current = node;
                     }}
                     className="input textarea td-paused-panel__textarea"
                     rows={3}
                     placeholder="Reply to the feedback agent…"
-                    {...replyInput}
                     value={replyMessage}
                     onChange={(event) => onReplyChange(event.target.value)}
                   />

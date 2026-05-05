@@ -40,7 +40,7 @@ interface TicketDetailModalProps {
   onOpenFile: (fileName: string) => void;
   onCloseFile: () => void;
   onResponseDraftChange: (value: string) => void;
-  onRespond: (ticketId: number) => void;
+  onRespond: (ticketId: number, messageOverride?: string) => void;
   onCreateFeedback: (ticketId: number, comment: string) => Promise<void>;
   creatingFeedbackTicket: number | null;
   projectName: string | null;
@@ -126,14 +126,11 @@ export function TicketDetailModal({
   const contentTitleInput = contentForm.register("title", { required: true, maxLength: 255 });
   const contentDescriptionInput = contentForm.register("description");
   const feedbackCommentInput = feedbackForm.register("comment");
-  const replyForm = useForm<{ message: string }>({ defaultValues: { message: responseDraft } });
-  const { ref: replyRegisterRef, ...replyInput } = replyForm.register("message");
-  useEffect(() => {
-    replyForm.reset({ message: responseDraft });
-  }, [responseDraft, replyForm]);
-  const replyMessage = replyForm.watch("message");
+  const [replyMessage, setReplyMessage] = useState(responseDraft);
+  const replyMessageRef = useRef(responseDraft);
   const clearReply = () => {
-    replyForm.reset({ message: "" });
+    replyMessageRef.current = "";
+    setReplyMessage("");
     onResponseDraftChange("");
   };
   const replyPanelRef = useRef<HTMLDivElement>(null);
@@ -142,6 +139,19 @@ export function TicketDetailModal({
   const paused = ticket?.phases.find(
     (phase) => !!phase.startedAt && !phase.completedAt && pausedStatuses.includes(phase.status),
   );
+
+  const pausedDraftKey = ticket && paused ? `${ticket.id}:${paused.id}` : null;
+
+  useEffect(() => {
+    replyMessageRef.current = responseDraft;
+    setReplyMessage(responseDraft);
+  }, [pausedDraftKey, responseDraft]);
+
+  useEffect(() => {
+    return () => {
+      onResponseDraftChange(replyMessageRef.current);
+    };
+  }, [pausedDraftKey, onResponseDraftChange]);
 
   useEffect(() => {
     if (!open || !paused || editingContent) return;
@@ -212,14 +222,19 @@ export function TicketDetailModal({
   });
 
   const handleReplyChange = (value: string) => {
-    replyForm.setValue("message", value, { shouldDirty: true });
-    onResponseDraftChange(value);
+    replyMessageRef.current = value;
+    setReplyMessage(value);
   };
 
   const handleReplySubmit = () => {
     if (!replyMessage.trim()) return;
     onResponseDraftChange(replyMessage);
-    onRespond(ticket.id);
+    onRespond(ticket.id, replyMessage);
+  };
+
+  const handleClose = () => {
+    onResponseDraftChange(replyMessageRef.current);
+    onClose();
   };
 
   if (viewer?.fileName) {
@@ -238,7 +253,7 @@ export function TicketDetailModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={title} variant="right-pane" width={paneWidth} rightOffset={rightPaneOffset} noHeader>
+    <Modal open={open} onClose={handleClose} title={title} variant="right-pane" width={paneWidth} rightOffset={rightPaneOffset} noHeader>
       <div className={`td-shell${hasActivityDock ? " td-shell--activity-dock" : ""}`}>
         <TicketDetailTopbar
           ticket={ticket}
@@ -255,7 +270,7 @@ export function TicketDetailModal({
             setContentError(null);
           }}
           onDelete={onDelete}
-          onClose={onClose}
+          onClose={handleClose}
         />
 
         <div className={`td-body${hasActivityDock ? " td-body--with-activity-dock" : ""}`}>
@@ -297,18 +312,15 @@ export function TicketDetailModal({
             paused={paused}
             hasActivityDock={hasActivityDock}
             replyPanelRef={replyPanelRef}
-            replyRegisterRef={replyRegisterRef}
             replyTextareaRef={replyTextareaRef}
-            replyInput={replyInput}
             replyMessage={replyMessage}
-            responseDraft={responseDraft}
             isReplyBusy={isReplyBusy}
             phaseLabels={phaseLabels}
             statusLabels={statusLabels}
             statusColors={statusColors}
             onReplyChange={handleReplyChange}
             onDiscard={clearReply}
-            onRespond={() => onRespond(ticket.id)}
+            onRespond={handleReplySubmit}
           />
 
           <div className="td-work-products">
@@ -346,9 +358,7 @@ export function TicketDetailModal({
             feedbackPhases={feedbackPhases}
             paused={paused}
             replyPanelRef={replyPanelRef}
-            replyRegisterRef={replyRegisterRef}
             replyTextareaRef={replyTextareaRef}
-            replyInput={replyInput}
             replyMessage={replyMessage}
             isReplyBusy={isReplyBusy}
             phaseColors={phaseColors}
