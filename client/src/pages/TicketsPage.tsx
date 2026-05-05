@@ -51,12 +51,10 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
   const [viewer, setViewer] = useState<{ fileName: string | null } | null>(null);
   const [liveLogs, setLiveLogs] = useState<PhaseLogMap>({});
   const [selectedPhaseByTicket, setSelectedPhaseByTicket] = useState<Record<number, TicketPhase>>({});
-  const [selectedPhaseAutoOpenKeyByTicket, setSelectedPhaseAutoOpenKeyByTicket] = useState<Record<number, string>>({});
   const { filesByTicket, scheduleTicketFilesRefresh } = useTicketFiles(selectedTicketId);
 
   const handleSelectPhase = useCallback((ticketId: number, phase: TicketPhase) => {
     setSelectedPhaseByTicket((prev) => ({ ...prev, [ticketId]: phase }));
-    setSelectedPhaseAutoOpenKeyByTicket((prev) => ({ ...prev, [ticketId]: `${ticketId}:${phase}:${Date.now()}` }));
   }, []);
 
   useEffect(() => {
@@ -315,7 +313,6 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
             ticket={selectedTicket}
             viewer={viewer}
             selectedPhase={selectedPhaseByTicket[selectedTicket.id]}
-            selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKeyByTicket[selectedTicket.id]}
             liveLogs={liveLogs}
             files={filesByTicket[selectedTicket.id] ?? []}
             filesLoading={!(selectedTicket.id in filesByTicket)}

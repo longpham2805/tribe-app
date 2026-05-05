@@ -1,21 +1,17 @@
-import type { PhaseLogMap, PhaseStatus, TicketPhase } from "../../../types";
+import type { PhaseLogMap, TicketPhase } from "../../../types";
 import { PhaseLiveFeed } from "../PhaseLiveFeed";
 
 export function TicketLiveFeedSection({
   ticketId,
   displayedFeedPhaseName,
-  displayedFeedPhaseStatus,
   hasActivityDock,
   liveLogs,
-  selectedPhaseAutoOpenKey,
   phaseLabels,
 }: {
   ticketId: number;
   displayedFeedPhaseName: TicketPhase | undefined;
-  displayedFeedPhaseStatus: PhaseStatus;
   hasActivityDock: boolean;
   liveLogs: PhaseLogMap;
-  selectedPhaseAutoOpenKey: string | undefined;
   phaseLabels: Record<TicketPhase, string>;
 }) {
   if (!displayedFeedPhaseName) return null;
@@ -31,9 +27,7 @@ export function TicketLiveFeedSection({
       <PhaseLiveFeed
         ticketId={ticketId}
         phaseName={displayedFeedPhaseName}
-        status={displayedFeedPhaseStatus}
         liveEvents={liveLogs[`${ticketId}:${displayedFeedPhaseName}`] ?? []}
-        autoOpenKey={selectedPhaseAutoOpenKey}
         fill={hasActivityDock}
       />
     </section>

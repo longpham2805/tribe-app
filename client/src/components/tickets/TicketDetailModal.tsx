@@ -24,7 +24,6 @@ interface TicketDetailModalProps {
   rightPaneOffset?: string;
   viewer: TicketViewerState | null;
   selectedPhase: TicketPhase | undefined;
-  selectedPhaseAutoOpenKey: string | undefined;
   liveLogs: PhaseLogMap;
   files: TicketFile[];
   filesLoading: boolean;
@@ -60,7 +59,6 @@ export function TicketDetailModal({
   rightPaneOffset = "0px",
   viewer,
   selectedPhase,
-  selectedPhaseAutoOpenKey,
   liveLogs,
   files,
   filesLoading,
@@ -171,15 +169,9 @@ export function TicketDetailModal({
   const canRequestFeedback = ((ticket.pullRequests?.length ?? 0) > 0 || ticket.isDone) && !hasActivePhase && !hasOpenFeedback;
   const feedbackBusy = creatingFeedbackTicket === ticket.id;
 
-  const selectedPhaseRecord = selectedPhase
-    ? ticket.phases
-        .filter((phase) => phase.phaseName === selectedPhase)
-        .sort((left, right) => right.sequence - left.sequence || right.id - left.id)[0] ?? null
-    : null;
   const activePhase = ticket.phases.find((p) => !!p.startedAt && !p.completedAt);
   const liveFeedPhase = activePhase ?? ticket.phases.slice().reverse().find((p) => !!p.completedAt) ?? ticket.phases[0];
   const displayedFeedPhaseName = selectedPhase ?? liveFeedPhase?.phaseName;
-  const displayedFeedPhaseStatus = (selectedPhase ? selectedPhaseRecord?.status : liveFeedPhase?.status) ?? "PENDING";
   const hasActivityDock = !!activePhase;
   const ticketRunning = ticket.phases.some((phase) => phase.status === "RUNNING");
   const isReplyBusy = respondingTicket === ticket.id;
@@ -368,10 +360,8 @@ export function TicketDetailModal({
           <TicketLiveFeedSection
             ticketId={ticket.id}
             displayedFeedPhaseName={displayedFeedPhaseName}
-            displayedFeedPhaseStatus={displayedFeedPhaseStatus}
             hasActivityDock={hasActivityDock}
             liveLogs={liveLogs}
-            selectedPhaseAutoOpenKey={selectedPhaseAutoOpenKey}
             phaseLabels={phaseLabels}
           />
         </div>

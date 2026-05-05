@@ -36,15 +36,7 @@ export interface ActivityMarkdownEntry {
   content: string;
   tone: ActivityTone;
   severity: ActivitySeverity;
-  fullEventContent?: string;
-  toolResults?: ActivityToolResultDisclosure[];
-}
-
-export interface ActivityToolResultDisclosure {
-  id: string;
-  label: string;
-  content: string;
-  isError: boolean;
+  subtypeLabel: string;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -276,10 +268,9 @@ function summarizeUserBlocks(blocks: MessageContentBlock[]): string | undefined 
   return summaries.length > 0 ? summaries.join(" | ") : undefined;
 }
 
-function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEntry, "content" | "fullEventContent" | "toolResults"> {
+function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEntry, "content"> {
   const blocks = collectMessageBlocks(event);
   const parts: string[] = [];
-  const toolResults: ActivityToolResultDisclosure[] = [];
 
   for (const block of blocks) {
     const type = asString(block.type);
@@ -293,17 +284,7 @@ function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEnt
       const id = asString(block.tool_use_id);
       const label = id ? `Tool result \`${safeInlineCode(id)}\`` : "Tool result";
       const content = blockContentToMarkdown(block.content);
-      const isError = block.is_error === true;
-      if (content) {
-        toolResults.push({
-          id: id ?? `tool-result-${toolResults.length + 1}`,
-          label,
-          content,
-          isError,
-        });
-      } else {
-        parts.push(`**${label}:**${isError ? " _error_" : ""}`);
-      }
+      parts.push(content ? `**${label}:**${block.is_error === true ? " _error_" : ""}\n\n${content}` : `**${label}:**${block.is_error === true ? " _error_" : ""}`);
       continue;
     }
 
@@ -313,12 +294,11 @@ function formatUserMarkdownEntry(event: UnknownRecord): Pick<ActivityMarkdownEnt
   }
 
   const summary = parts.length > 0 ? parts.join("\n\n") : "**User event**";
-  return { content: summary, fullEventContent: fencedJson(event), toolResults };
+  return { content: summary };
 }
 
 function formatUserMarkdown(event: UnknownRecord): string {
-  const entry = formatUserMarkdownEntry(event);
-  return `${entry.content}\n\n**Full event**\n\n${entry.fullEventContent}`;
+  return formatUserMarkdownEntry(event).content;
 }
 
 function normalizeItemEvent(event: UnknownRecord, index: number): ActivityItem {
@@ -540,10 +520,8 @@ export function normalizeActivityEvent(event: unknown, index = 0): ActivityItem 
   };
 }
 
-export function isDisplayableActivityItem(item: ActivityItem): boolean {
-  const rawType = isRecord(item.raw) ? asString(item.raw.type) : undefined;
-  if (rawType === "user" || rawType === "user_message") return false;
-  return !(item.kind === "system" && (item.title === "System event" || item.title === "User event"));
+export function isDisplayableActivityItem(_item: ActivityItem): boolean {
+  return true;
 }
 
 export function normalizeActivityEvents(events: unknown[]): ActivityItem[] {
@@ -587,23 +565,53 @@ export function getActivityMarkdownEntries(
     const activityItem = normalizeActivityEvent(event, index);
     if (!isDisplayableActivityItem(activityItem)) continue;
     const content = (userEntry?.content ?? extractEventText(event)).trim();
-    const fullEventContent = userEntry?.fullEventContent;
-    const toolResults = userEntry?.toolResults;
     if (!content) continue;
-    const toolResultBytes = toolResults?.reduce((total, result) => total + result.content.length, 0) ?? 0;
-    const nextBytes = totalBytes + content.length + toolResultBytes + (fullEventContent?.length ?? 0);
+    const nextBytes = totalBytes + content.length;
     if (entries.length > 0 && nextBytes > maxBytes) break;
     entries.push({
       id: `${activityItem.id}:${index}`,
       content,
       tone: getActivityTone(event, activityItem),
       severity: activityItem.severity,
-      fullEventContent,
-      toolResults,
+      subtypeLabel: getActivitySubtypeLabel(event, activityItem),
     });
     totalBytes = nextBytes;
   }
   return entries.reverse();
+}
+
+function getActivitySubtypeLabel(event: unknown, item: ActivityItem): string {
+  if (!isRecord(event)) return "UNKNOWN";
+
+  const type = asString(event.type);
+  if (type === "user") {
+    return collectMessageBlocks(event).some((block) => block.type === "tool_result") ? "TOOL RESULT" : "USER";
+  }
+  if (type === "user_message") return "USER";
+  if (type === "assistant") {
+    return collectAssistantBlocks(event).some((block) => block.type === "tool_use") ? "TOOL USE" : "ASSISTANT";
+  }
+  if (type === "system") return "SYSTEM";
+  if (type === "raw") return "RAW";
+  if (type === "result") return "RESULT";
+  if (type === "_tribe.run_start" || type === "thread.started" || type === "turn.started" || type === "turn.completed") return "RUN";
+
+  const eventItem = event.item;
+  if (isRecord(eventItem)) {
+    const itemType = asString(eventItem.type);
+    if (itemType === "command_execution") return "COMMAND";
+    if (itemType === "tool_use") return "TOOL USE";
+    if (itemType === "agent_message") return "ASSISTANT";
+    return "ITEM";
+  }
+
+  if (item.kind === "command") return "COMMAND";
+  if (item.kind === "run") return "RUN";
+  if (item.kind === "tool") return "TOOL USE";
+  if (item.kind === "system") return "SYSTEM";
+  if (item.kind === "raw") return "RAW";
+  if (item.kind === "result") return "RESULT";
+  return "UNKNOWN";
 }
 
 function getActivityTone(event: unknown, item: ActivityItem): ActivityTone {
