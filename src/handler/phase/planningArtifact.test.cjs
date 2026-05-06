@@ -10,7 +10,7 @@ function validActionablePlan(extraLines = []) {
     "## Goal",
     "Make planning artifacts actionable before implementation starts.",
     "## Decisions / Assumptions",
-    "- Use a lightweight string scanner.",
+    "- Require answered questions and implementation structure.",
     "## Discovery",
     "- Entry: src/handler/PhaseHandler.ts:803",
     "- Guard: src/handler/phase/planningArtifact.ts:11",
@@ -20,7 +20,7 @@ function validActionablePlan(extraLines = []) {
     "| 1 | Add planning guard | src/handler/phase/planningArtifact.ts | none | low | `npm test -- src/handler/phase/planningArtifact.test.cjs` |",
     "## Implementation Tasks",
     "### Task 1: Add planning artifact guard",
-    "- [ ] Update `src/handler/phase/planningArtifact.ts` to reject non-actionable plans.",
+    "- [ ] Update `src/handler/phase/planningArtifact.ts` to validate the planning contract.",
     "  Command/check: `npm test -- src/handler/phase/planningArtifact.test.cjs`",
     "  Expected: guard tests pass.",
     ...extraLines,
@@ -80,15 +80,22 @@ test("reviewPlanningArtifact ignores lower-level references", () => {
   assert.equal(result.ok, true);
 });
 
-test("reviewPlanningArtifact blocks placeholder text", () => {
+test("reviewPlanningArtifact allows marker-like words in actionable tasks", () => {
   const result = reviewPlanningArtifact(validActionablePlan([
     "- [ ] Replace TBD with the real command before completion.",
+    "- [ ] Decide whether TODO labels remain visible in imported Markdown.",
+    "- [ ] Preserve ??? inside examples copied from user input.",
   ]));
 
-  assert.equal(result.ok, false);
-  assert.equal(result.status, PhaseStatus.QUESTION);
-  assert.match(result.message, /non-actionable artifact/);
-  assert.match(result.message, /TBD/);
+  assert.equal(result.ok, true);
+});
+
+test("reviewPlanningArtifact allows angle-wrapped CLI argument prose", () => {
+  const result = reviewPlanningArtifact(validActionablePlan([
+    "- [ ] Add `--model <model>` only when configured; keep `-p`, `--resume`, `--output-format stream-json`, and `--verbose` order.",
+  ]));
+
+  assert.equal(result.ok, true);
 });
 
 test("reviewPlanningArtifact allows exact PhaseLiveFeed JSX task text", () => {
@@ -112,25 +119,20 @@ test("reviewPlanningArtifact allows literal HTML and XML-like snippets", () => {
   assert.equal(result.ok, true);
 });
 
-test("reviewPlanningArtifact still blocks placeholder-style angle markers", () => {
+test("reviewPlanningArtifact allows placeholder-style angle prose", () => {
   const result = reviewPlanningArtifact(validActionablePlan([
     "- [ ] Replace <target file> with the concrete implementation path.",
   ]));
 
-  assert.equal(result.ok, false);
-  assert.equal(result.status, PhaseStatus.QUESTION);
-  assert.match(result.message, /<\.\.\.>/);
-  assert.match(result.message, /<target file>/);
+  assert.equal(result.ok, true);
 });
 
-test("reviewPlanningArtifact blocks angle markers without code evidence", () => {
+test("reviewPlanningArtifact allows TypeScript generic syntax", () => {
   const result = reviewPlanningArtifact(validActionablePlan([
-    "- [ ] Update <phase> after verification completes.",
+    "- [ ] Keep `Result<T, E>` and `Promise<Array<Ticket>>` examples in the planning artifact.",
   ]));
 
-  assert.equal(result.ok, false);
-  assert.equal(result.status, PhaseStatus.QUESTION);
-  assert.match(result.message, /<phase>/);
+  assert.equal(result.ok, true);
 });
 
 test("reviewPlanningArtifact blocks missing Implementation Tasks section", () => {
