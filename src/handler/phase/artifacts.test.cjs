@@ -77,4 +77,23 @@ const {
   ]);
 }
 
+{
+  const artifacts = parseShipArtifacts([
+    "## Branch",
+    "",
+    "`feature/restore-ship-artifacts`",
+    "",
+    "## Pull Requests",
+    "",
+    "| Repo | PR URL | Commit SHA |",
+    "|------|--------|------------|",
+    "| org/tribe | https://github.com/org/tribe/pull/170?utm=agent#files | `deadbee` |",
+  ].join("\n"));
+
+  assert.equal(artifacts.branchName, "feature/restore-ship-artifacts");
+  assert.deepEqual(artifacts.pullRequests, [
+    { repo: "org/tribe", prUrl: "https://github.com/org/tribe/pull/170", commitSha: "deadbee" },
+  ]);
+}
+
 console.log("phase artifact fixtures passed");

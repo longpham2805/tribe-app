@@ -544,6 +544,7 @@ export class PhaseHandler {
       projectContext,
       planningContent,
       checklistOutputPath: join(tmpDir, "implementation-testing-checklist.md"),
+      shipOutputPath: join(tmpDir, "ship.md"),
     });
 
     await this.runPhase(ticket, TicketPhase.IMPLEMENTATION, slotRoot, tmpDir, prompt, "implementation.md");
@@ -554,7 +555,8 @@ export class PhaseHandler {
     persistPhaseSystemEvent({ ticketId: ticket.id, uid: ticket.uid ?? null, phaseName: TicketPhase.SHIP }, "handler_enter", "Entered ship handler");
 
     const freshTicket = await this.ticketRepo.findById(ticket.id);
-    const pullRequests = freshTicket?.pullRequests ?? [];
+    const branchName = freshTicket?.branchName ?? ticket.branchName ?? null;
+    const pullRequests = freshTicket?.pullRequests ?? ticket.pullRequests ?? [];
 
     if (ticket.projectId != null && pullRequests.length > 0) {
       const project = await new ProjectRepository().findById(ticket.projectId);
@@ -567,11 +569,17 @@ export class PhaseHandler {
 
     const activePhase = await this.phaseRepo.findActiveByTicketId(ticket.id);
     if (activePhase && activePhase.phaseName === TicketPhase.SHIP) {
-      await this.applyResultToPhase(activePhase, {
-        output: "Shipped",
+      const shipSummaryParts = branchName ? [`Shipped with branch ${branchName}`] : [];
+      if (pullRequests.length) shipSummaryParts.push(`${pullRequests.length} pull request(s)`);
+      const shipSummary = shipSummaryParts.length ? shipSummaryParts.join("; ") : "Shipped with no branch or PR artifacts";
+
+      await this.updatePhase(activePhase.id, {
         status: PhaseStatus.COMPLETED,
-        message: null,
-        sessionUuid: null,
+        lastMessage: shipSummary,
+        cliSessionId: activePhase.cliSessionId ?? null,
+        completedAt: new Date(),
+        branchName,
+        pullRequests: pullRequests.length ? pullRequests : null,
       });
     }
 

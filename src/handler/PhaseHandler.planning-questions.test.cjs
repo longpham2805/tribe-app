@@ -50,3 +50,34 @@ test("planning guard records pause event and returns QUESTION", () => {
   assert.match(source, /planning_guard_blocked/);
   assert.match(source, /status: review\.status \?\? PhaseStatus\.QUESTION/);
 });
+
+test("implementation prompt injects ship artifact output before running phase", () => {
+  const source = readHandlerSource();
+  const shipOutputIndex = source.indexOf('shipOutputPath: join(tmpDir, "ship.md")');
+  const runPhaseIndex = source.indexOf('this.runPhase(ticket, TicketPhase.IMPLEMENTATION, slotRoot, tmpDir, prompt, "implementation.md")');
+
+  assert.notEqual(shipOutputIndex, -1);
+  assert.notEqual(runPhaseIndex, -1);
+  assert.ok(shipOutputIndex < runPhaseIndex);
+});
+
+test("ship completion persists branch and pull request metadata onto active phase", () => {
+  const source = readHandlerSource();
+  const freshTicketIndex = source.indexOf("const freshTicket = await this.ticketRepo.findById(ticket.id);", source.indexOf("protected async handleShip"));
+  const branchIndex = source.indexOf("const branchName = freshTicket?.branchName ?? ticket.branchName ?? null;", freshTicketIndex);
+  const pullRequestsIndex = source.indexOf("const pullRequests = freshTicket?.pullRequests ?? ticket.pullRequests ?? [];", branchIndex);
+  const autoMergeIndex = source.indexOf("autoMergeShipPRs(pullRequests, log);", pullRequestsIndex);
+  const updateIndex = source.indexOf("await this.updatePhase(activePhase.id", autoMergeIndex);
+
+  assert.notEqual(freshTicketIndex, -1);
+  assert.notEqual(branchIndex, -1);
+  assert.notEqual(pullRequestsIndex, -1);
+  assert.notEqual(autoMergeIndex, -1);
+  assert.notEqual(updateIndex, -1);
+  assert.ok(freshTicketIndex < branchIndex);
+  assert.ok(branchIndex < pullRequestsIndex);
+  assert.ok(pullRequestsIndex < autoMergeIndex);
+  assert.ok(autoMergeIndex < updateIndex);
+  assert.match(source.slice(updateIndex), /branchName,/);
+  assert.match(source.slice(updateIndex), /pullRequests: pullRequests\.length \? pullRequests : null/);
+});
