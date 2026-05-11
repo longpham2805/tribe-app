@@ -139,9 +139,24 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
     () => (selectedTicketId != null ? tickets.find((ticket) => ticket.id === selectedTicketId) ?? null : null),
     [tickets, selectedTicketId],
   );
+  const selectedProject = useMemo(
+    () => (selectedProjectId != null ? projects.find((project) => project.id === selectedProjectId) ?? null : null),
+    [projects, selectedProjectId],
+  );
+  const projectHasMondayBoardIds = (selectedProject?.mondayBoardIds?.length ?? 0) > 0;
+  const projectHasMondayExpectation = !!(
+    selectedProject?.mondayDefaultPersonId?.trim()
+    || (selectedProject?.mondayDevPeople?.length ?? 0) > 0
+  );
+  const showMondayImportUnavailableNote = !!selectedProject
+    && !projectHasMondayBoardIds
+    && !canImportFromMonday
+    && projectHasMondayExpectation;
   const emptyTicketTitle = selectedProjectId != null ? "No tickets in this project yet" : "No tickets on the board yet";
-  const emptyTicketDescription = selectedProjectId != null
-    ? "Create a ticket for this project, or import Monday items once board IDs are configured."
+  const emptyTicketDescription = selectedProject != null
+    ? projectHasMondayExpectation
+      ? "Create a ticket for this project, or import Monday items once board IDs are configured."
+      : "Create the first ticket for this project when the work is ready."
     : "Create the first ticket manually, then assign it to a project when the work is ready.";
   const availableCliTypes = useMemo(() => appState?.availableCliTypes ?? [], [appState]);
   const paneOpen = selectedTicket != null;
@@ -276,7 +291,7 @@ export function TicketsPage({ projectId, canImportFromMonday, assistantOpen }: T
             <div className="page-state__actions">
               {canImportFromMonday ? (
                 <button className="btn" onClick={handleOpenMondayPicker}>Import from Monday</button>
-              ) : selectedProjectId != null ? (
+              ) : showMondayImportUnavailableNote ? (
                 <div className="page-state__note">Monday import unavailable: add board IDs in project settings to enable imports.</div>
               ) : null}
               <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ New Ticket</button>
