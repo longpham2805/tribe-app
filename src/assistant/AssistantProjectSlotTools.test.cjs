@@ -7,26 +7,34 @@ function readSource(fileName) {
   return readFileSync(path.join(__dirname, fileName), "utf8");
 }
 
-test("assistant exposes project and slot write tools with approval wording", () => {
-  const source = readSource("AssistantAgentService.ts");
+function readShared(fileName) {
+  return readFileSync(path.join(__dirname, "../tools", fileName), "utf8");
+}
+
+test("assistant exposes project and slot write tools from the shared registry", () => {
+  const agentSource = readSource("AssistantAgentService.ts");
+  const commandSource = readShared("commands.ts");
 
   for (const toolName of ["create_project", "update_project", "create_slot", "update_slot"]) {
-    assert.match(source, new RegExp(`name: "${toolName}"`));
+    assert.match(commandSource, new RegExp(`name: "${toolName}"`));
   }
 
-  assert.match(source, /explain(?:ing)? the intended write/i);
-  assert.match(source, /Risky updates to running projects are proposed for explicit approval/i);
-  assert.match(source, /Occupied slot routing updates require explicit approval/i);
-  assert.match(source, /Disabled blocks new ticket work without stopping current work/i);
-  assert.match(source, /status: slot\.disabled \? "disabled"/);
+  assert.match(agentSource, /getAssistantToolDefinitions/);
+  assert.match(agentSource, /executeToolCommand/);
+  assert.match(commandSource, /confirmationRequired: true/);
+  assert.match(commandSource, /pendingConfirmationToText/);
+  assert.match(commandSource, /disabled.*blocks new ticket assignment/i);
+  assert.match(commandSource, /status: slot\.disabled \? "disabled"/);
 });
 
-test("assistant approval executor only accepts project slot OTHER payloads", () => {
+test("assistant chat confirmations do not create approval actions for tool writes", () => {
   const source = readSource("AssistantAgentService.ts");
 
-  assert.match(source, /payload\.kind !== "project_slot_write"/);
-  assert.match(source, /action\.type === "OTHER" && this\.isProjectSlotActionPayload\(payload\)/);
-  assert.match(source, /this\.projectSlotWriteService\.execute\(payload\.intent\)/);
+  assert.match(source, /pendingToolConfirmation/);
+  assert.match(source, /handlePendingConfirmationReply/);
+  assert.match(source, /confirmed: true/);
+  assert.doesNotMatch(source, /actionRepo\.create/);
+  assert.doesNotMatch(source, /approvalRequired/);
 });
 
 test("project slot policy gates occupied slots and running project risky fields", () => {
@@ -41,7 +49,7 @@ test("project slot policy gates occupied slots and running project risky fields"
 });
 
 test("write service validates absolute root paths and active project defaults", () => {
-  const source = readSource("AssistantProjectSlotWriteService.ts");
+  const source = readShared("ProjectSlotWriteService.ts");
 
   assert.match(source, /isAbsolute\(rootPath\)/);
   assert.match(source, /rootPath must be an absolute path/);

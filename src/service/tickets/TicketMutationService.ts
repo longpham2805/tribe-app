@@ -41,6 +41,34 @@ export class TicketMutationService {
     private readonly phaseHandler = new PhaseHandler(),
   ) {}
 
+  private async resolveCliType(input: {
+    requestedCliType?: CliType;
+    status: TicketStatus;
+    fallbackCliType?: CliType;
+  }): Promise<CliType> {
+    const appState = await this.appStateRepo.get();
+
+    if (input.requestedCliType !== undefined) {
+      if (input.status === TicketStatus.READY && !appState.availableCliTypes.includes(input.requestedCliType)) {
+        throw new TicketMutationError(`${input.requestedCliType} is currently unavailable`, 409);
+      }
+      return input.requestedCliType;
+    }
+
+    if (appState.availableCliTypes.length === 0) {
+      if (input.status === TicketStatus.READY) {
+        throw new TicketMutationError("No CLI is currently available", 409);
+      }
+      return input.fallbackCliType ?? CliType.CLAUDE;
+    }
+
+    if (input.fallbackCliType && appState.availableCliTypes.includes(input.fallbackCliType)) {
+      return input.fallbackCliType;
+    }
+
+    return pickCliForNewTicket(this.ticketRepo, appState.availableCliTypes);
+  }
+
   async create(input: {
     title: string;
     description?: string;
@@ -51,18 +79,10 @@ export class TicketMutationService {
     deferActivation?: boolean;
   }): Promise<Ticket | null> {
     const status = input.status ?? TicketStatus.READY;
-    let cliType = input.cliType ?? CliType.CLAUDE;
-
-    if (status === TicketStatus.READY) {
-      const appState = await this.appStateRepo.get();
-      if (appState.availableCliTypes.length === 0) {
-        throw new TicketMutationError("No CLI is currently available", 409);
-      }
-      if (input.cliType !== undefined && !appState.availableCliTypes.includes(input.cliType)) {
-        throw new TicketMutationError(`${input.cliType} is currently unavailable`, 409);
-      }
-      cliType = input.cliType ?? await pickCliForNewTicket(this.ticketRepo, appState.availableCliTypes);
-    }
+    const cliType = await this.resolveCliType({
+      requestedCliType: input.cliType,
+      status,
+    });
 
     const ticket = await this.ticketRepo.create({
       title: input.title,
@@ -96,6 +116,7 @@ export class TicketMutationService {
     const hasTitlePatch = input.title !== undefined;
     const hasDescriptionPatch = input.description !== undefined;
     const hasContentPatch = hasTitlePatch || hasDescriptionPatch;
+    let nextCliType: CliType | undefined;
 
     if (existing.status === TicketStatus.DRAFT && input.currentPhase && input.currentPhase !== existing.currentPhase) {
       throw new TicketMutationError(`Ticket ${input.id} is draft and cannot be processed`, 409);
@@ -111,7 +132,12 @@ export class TicketMutationService {
         throw new TicketMutationError("No CLI is currently available", 409);
       }
       if (!appState.availableCliTypes.includes(existing.cliType)) {
-        throw new TicketMutationError(`${existing.cliType} is currently unavailable`, 409);
+        if (appState.availableCliTypes.length === 1 && !hasProcessingStarted(existing)) {
+          nextCliType = appState.availableCliTypes[0];
+          existing.cliType = nextCliType;
+        } else {
+          throw new TicketMutationError(`${existing.cliType} is currently unavailable`, 409);
+        }
       }
     }
 
@@ -134,6 +160,7 @@ export class TicketMutationService {
       title: input.title,
       description: input.description,
       currentPhase: input.currentPhase,
+      cliType: nextCliType,
       status: nextStatus === existing.status || (existing.status === TicketStatus.DRAFT && nextStatus === TicketStatus.READY)
         ? undefined
         : nextStatus,

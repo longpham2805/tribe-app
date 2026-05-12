@@ -233,7 +233,7 @@ npm run start
   - Slots: `/api/slots`
   - Uploads/Files: `/api/uploads`, `/api/tickets/:ticketId/files`
 - **MCP endpoint:** `/mcp`
-- **Assistant project/slot writes:** additive project and slot creates execute directly; risky updates to running projects or occupied slots are proposed through the assistant approval queue before mutation.
+- **Assistant project/slot writes:** additive project and slot creates execute directly; risky updates to running projects or occupied slots use normal chat confirmation before mutation.
 - **Disabled slots:** slot update APIs accept `disabled: true | false`; disabled slots stay visible but are skipped for new assignment and queue promotion. If a disabled slot is already occupied, the current ticket keeps running until normal release.
 - **WebSocket endpoint:** `/ws`
 

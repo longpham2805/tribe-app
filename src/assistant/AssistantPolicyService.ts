@@ -3,7 +3,7 @@ import { AssistantActionRepository } from "./AssistantRepository";
 import type { Phase } from "../entity/Phase";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { SlotRepository } from "../repository/SlotRepository";
-import type { ProjectSlotPolicyDecision, ProjectSlotWriteIntent } from "./AssistantProjectSlotContracts";
+import type { ProjectSlotPolicyDecision, ProjectSlotWriteIntent } from "../tools/projectSlotContracts";
 
 const TRANSIENT_ERROR_PATTERNS = [
   /network/i,

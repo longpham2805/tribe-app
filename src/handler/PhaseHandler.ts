@@ -165,7 +165,7 @@ export class PhaseHandler {
       await runPhaseEnteredHooks(updatedTicket, phaseName);
     }
 
-    // Run phase handler in the background — Claude spawns can take many minutes
+    // Run phase handler in the background — CLI spawns can take many minutes
     // and must not block the HTTP response. WS pushes updates to the client.
     persistPhaseSystemEvent(phaseLogContext, "dispatch", `Dispatching ${phaseName}`);
     this.dispatch(phaseName, updatedTicket).catch(async (err) => {
@@ -241,7 +241,7 @@ export class PhaseHandler {
       throw new Error(`Phase ${activePhase.phaseName} has no CLI session ID to resume`);
     }
 
-    await this.ensureCliAvailable(ticket);
+    await this.ensureCliAvailable(ticket, activePhase);
 
     // Acquire slot if it was released while the phase was paused
     if (ticket.slotId == null) {
@@ -259,7 +259,7 @@ export class PhaseHandler {
     const { slotRoot, tmpDir } = await resolvePhaseWorkspace(ticket);
     await this.updatePhase(activePhase.id, { status: PhaseStatus.RUNNING, lastMessage: null });
 
-    // Run the Claude resume in the background; WS pushes updates to the client.
+    // Run the CLI resume in the background; WS pushes updates to the client.
     this.runRespond(activePhase, ticket, message, slotRoot, tmpDir).catch(async (err) => {
       log(`respond error for ticket #${ticket.id}: ${err?.message ?? err}`);
       await this.updatePhase(activePhase.id, {
@@ -649,7 +649,7 @@ export class PhaseHandler {
       throw new Error(`No active ${phaseName} phase for ticket #${ticket.id}`);
     }
 
-    await this.ensureCliAvailable(ticket);
+    await this.ensureCliAvailable(ticket, activePhase);
 
     log(`spawning ${ticket.cliType} for ${phaseName.toLowerCase()} (resume=${activePhase.cliSessionId ?? "none"})`);
     const outputPath = join(tmpDir, outputFile);
@@ -773,9 +773,12 @@ export class PhaseHandler {
       return;
     }
 
-    if (!appState.availableCliTypes.includes(ticket.cliType)) {
-      log(`auto trigger skipped — ${ticket.cliType} unavailable for ticket #${ticket.id}`);
-      persistPhaseSystemEvent(logContext, "cli_unavailable", `${ticket.cliType} unavailable before ${nextPhase}`, {
+    try {
+      await this.ensureCliAvailable(ticket);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`auto trigger skipped — ${message} for ticket #${ticket.id}`);
+      persistPhaseSystemEvent(logContext, "cli_unavailable", `${message} before ${nextPhase}`, {
         cliType: ticket.cliType,
         nextPhase,
       });
@@ -789,14 +792,45 @@ export class PhaseHandler {
     await this.trigger(ticket.id, nextPhase);
   }
 
-  private async ensureCliAvailable(ticket: Ticket): Promise<void> {
+  private canSwitchUnavailableCli(ticket: Ticket, activePhase?: Phase | null): boolean {
+    if (ticket.isDone) return false;
+    if (activePhase?.cliSessionId) return false;
+    if (ticket.phases?.some((phase) => phase.cliSessionId)) return false;
+
+    const phaseName = activePhase?.phaseName ?? ticket.currentPhase;
+    return phaseName === TicketPhase.CREATED || phaseName === TicketPhase.PLANNING;
+  }
+
+  private async ensureCliAvailable(ticket: Ticket, activePhase?: Phase | null): Promise<void> {
     const appState = await this.appStateRepo.get();
     if (appState.availableCliTypes.length === 0) {
       throw new Error("No CLI is currently available");
     }
-    if (!appState.availableCliTypes.includes(ticket.cliType)) {
-      throw new Error(`${ticket.cliType} is currently unavailable`);
+    if (appState.availableCliTypes.includes(ticket.cliType)) {
+      return;
     }
+
+    const nextCliType = appState.availableCliTypes.length === 1 ? appState.availableCliTypes[0] : null;
+    if (nextCliType && this.canSwitchUnavailableCli(ticket, activePhase)) {
+      const previousCliType = ticket.cliType;
+      await this.ticketRepo.update(ticket.id, { cliType: nextCliType });
+      ticket.cliType = nextCliType;
+      log(`ticket #${ticket.id} CLI reassigned ${previousCliType} → ${nextCliType}`);
+      persistPhaseSystemEvent(
+        {
+          ticketId: ticket.id,
+          uid: ticket.uid ?? null,
+          phaseName: activePhase?.phaseName ?? ticket.currentPhase,
+        },
+        "cli_reassigned",
+        `CLI reassigned from ${previousCliType} to ${nextCliType}`,
+        { previousCliType, cliType: nextCliType },
+      );
+      await this.emitTicket(ticket.id);
+      return;
+    }
+
+    throw new Error(`${ticket.cliType} is currently unavailable`);
   }
 
   private async applyResultToPhase(activePhase: Phase, result: SpawnResult): Promise<void> {

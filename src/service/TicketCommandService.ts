@@ -25,6 +25,29 @@ export class TicketCommandService {
     private readonly activationService = new TicketActivationService(),
   ) {}
 
+  private async resolveCliType(input: {
+    requestedCliType?: CliType;
+    status: TicketStatus;
+  }): Promise<CliType> {
+    const appState = await this.appStateRepo.get();
+
+    if (input.requestedCliType !== undefined) {
+      if (input.status === TicketStatus.READY && !appState.availableCliTypes.includes(input.requestedCliType)) {
+        throw new Error(`${input.requestedCliType} is currently unavailable`);
+      }
+      return input.requestedCliType;
+    }
+
+    if (appState.availableCliTypes.length === 0) {
+      if (input.status === TicketStatus.READY) {
+        throw new Error("No CLI is currently available");
+      }
+      return CliType.CLAUDE;
+    }
+
+    return pickCliForNewTicket(this.ticketRepo, appState.availableCliTypes);
+  }
+
   async list(input: { phase?: TicketPhase; projectId?: number }): Promise<Ticket[]> {
     const opts = input.projectId != null ? { projectId: input.projectId } : undefined;
     return input.phase
@@ -34,18 +57,10 @@ export class TicketCommandService {
 
   async create(input: CreateTicketInput): Promise<Ticket | null> {
     const status = input.status ?? TicketStatus.READY;
-    let cliType = input.cliType ?? CliType.CLAUDE;
-
-    if (status === TicketStatus.READY) {
-      const appState = await this.appStateRepo.get();
-      if (appState.availableCliTypes.length === 0) {
-        throw new Error("No CLI is currently available");
-      }
-      if (input.cliType && !appState.availableCliTypes.includes(input.cliType)) {
-        throw new Error(`${input.cliType} is currently unavailable`);
-      }
-      cliType = input.cliType ?? await pickCliForNewTicket(this.ticketRepo, appState.availableCliTypes);
-    }
+    const cliType = await this.resolveCliType({
+      requestedCliType: input.cliType,
+      status,
+    });
 
     const ticket = await this.ticketRepo.create({
       title: input.title,

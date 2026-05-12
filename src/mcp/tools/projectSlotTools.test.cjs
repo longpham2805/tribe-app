@@ -9,33 +9,39 @@ function readTool(fileName) {
 
 test("MCP project tools expose create/update parity", () => {
   const source = readTool("projectTools.ts");
+  const commandSource = readFileSync(path.join(__dirname, "../../tools/commands.ts"), "utf8");
 
   assert.match(source, /"create_project"/);
   assert.match(source, /"update_project"/);
-  assert.match(source, /AssistantProjectSlotWriteService/);
-  assert.match(source, /operation: "create_project"/);
-  assert.match(source, /operation: "update_project"/);
+  assert.match(source, /registerSharedMcpTools/);
+  assert.match(commandSource, /name: "create_project"/);
+  assert.match(commandSource, /name: "update_project"/);
+  assert.match(commandSource, /operation: "create_project"/);
+  assert.match(commandSource, /operation: "update_project"/);
+  assert.doesNotMatch(source, /ProjectRepository/);
 });
 
 test("MCP slot tools expose create/update parity", () => {
   const source = readTool("slotTools.ts");
+  const commandSource = readFileSync(path.join(__dirname, "../../tools/commands.ts"), "utf8");
 
   assert.match(source, /"create_slot"/);
   assert.match(source, /"update_slot"/);
-  assert.match(source, /absolute rootPath/);
-  assert.match(source, /operation: "create_slot"/);
-  assert.match(source, /operation: "update_slot"/);
-  assert.match(source, /disabled: z\.boolean\(\)\.optional\(\)/);
-  assert.match(source, /status: slot\.disabled \? "disabled"/);
+  assert.match(source, /registerSharedMcpTools/);
+  assert.match(commandSource, /Absolute workspace root path/);
+  assert.match(commandSource, /operation: "create_slot"/);
+  assert.match(commandSource, /operation: "update_slot"/);
+  assert.match(commandSource, /disabled: bool/);
+  assert.match(commandSource, /status: slot\.disabled \? "disabled"/);
 });
 
 test("REST and client slot update support projectId and disabled PATCH", () => {
   const routeSource = readFileSync(path.join(__dirname, "../../routes/slots.ts"), "utf8");
   const clientSource = readFileSync(path.join(__dirname, "../../../client/src/api/slots.ts"), "utf8");
 
-  assert.match(routeSource, /PATCH \/api\/slots\/:id  \{ name\?, rootPath\?, projectId\?, disabled\? \}/);
-  assert.match(routeSource, /projectId: typeof projectId === "number" \|\| projectId === null \? projectId : undefined/);
-  assert.match(routeSource, /disabled must be a boolean/);
+  assert.match(routeSource, /PATCH \/api\/slots\/:id/);
+  assert.match(routeSource, /runRestTool\("update_slot"/);
+  assert.match(routeSource, /slotId: id/);
   assert.match(clientSource, /projectId\?: number \| null/);
   assert.match(clientSource, /disabled\?: boolean/);
 });
@@ -45,5 +51,5 @@ test("slot assignment excludes disabled slots", () => {
   const serviceSource = readFileSync(path.join(__dirname, "../../service/SlotService.ts"), "utf8");
 
   assert.match(repositorySource, /disabled: false/);
-  assert.match(serviceSource, /Slot \$\{slot\.id\} disabled — released without promotion/);
+  assert.match(serviceSource, /Slot \$\{slot\.id\} disabled .*skipping promotion/);
 });

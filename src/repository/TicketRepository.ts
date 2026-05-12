@@ -132,6 +132,7 @@ export class TicketRepository {
       pullRequests?: Array<{ repo: string; prUrl: string; commitSha: string }> | null;
       isDone?: boolean;
       status?: TicketStatus;
+      cliType?: CliType;
     }
   ): Promise<Ticket | null> {
     const ticket = await this.findById(id);
@@ -148,6 +149,7 @@ export class TicketRepository {
     if (data.pullRequests !== undefined) ticket.pullRequests = data.pullRequests;
     if (data.isDone !== undefined) ticket.isDone = data.isDone;
     if (data.status !== undefined) ticket.status = data.status;
+    if (data.cliType !== undefined) ticket.cliType = data.cliType;
 
     return this.repo.save(ticket);
   }

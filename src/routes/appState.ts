@@ -3,6 +3,7 @@ import { AppStateRepository } from "../repository/AppStateRepository";
 import { SlotService } from "../service/SlotService";
 import { CliType } from "../enum/CliType";
 import { emit } from "../lib/events";
+import { runRestTool, sendRestToolResult } from "../tools/restAdapter";
 
 const router = Router();
 const CLI_TYPE_VALUES = Object.values(CliType) as string[];
@@ -50,12 +51,7 @@ function parseAvailableCliTypes(value: unknown): { cliTypes?: CliType[]; error?:
 }
 
 router.get("/", async (_req: Request, res: Response) => {
-  try {
-    const state = await new AppStateRepository().get();
-    res.json(toAppStateResponse(state));
-  } catch (error: unknown) {
-    res.status(500).json({ error: getErrorMessage(error) });
-  }
+  sendRestToolResult(res, await runRestTool("get_app_state", {}));
 });
 
 router.patch("/", async (req: Request, res: Response) => {

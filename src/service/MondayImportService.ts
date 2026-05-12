@@ -1,13 +1,16 @@
 import { CliType } from "../enum/CliType";
 import { TicketStatus } from "../enum/TicketStatus";
+import { pickCliForNewTicket } from "../cli";
 import { runTicketImportedHooks } from "../hooks/registry";
 import { formatItemMarkdown } from "../monday/formatItemMarkdown";
 import { MondayHelper } from "../monday/MondayHelper";
 import { type MondayItemDetail } from "../monday/types";
+import { AppStateRepository } from "../repository/AppStateRepository";
 import { ProjectRepository } from "../repository/ProjectRepository";
 import { TicketRepository } from "../repository/TicketRepository";
 import { Ticket } from "../entity/Ticket";
 import { TicketActivationService, type TicketActivationContext } from "./TicketActivationService";
+import { hasProcessingStarted } from "./tickets/TicketMutationService";
 
 export type MondayImportInput = {
   mondayItemId: string;
@@ -35,8 +38,39 @@ export class MondayImportService {
   constructor(
     private readonly ticketRepo = new TicketRepository(),
     private readonly projectRepo = new ProjectRepository(),
+    private readonly appStateRepo = new AppStateRepository(),
     private readonly activationService = new TicketActivationService(),
   ) {}
+
+  private async resolveCliType(input: {
+    requestedCliType?: CliType;
+    status: TicketStatus;
+    existing?: Ticket | null;
+  }): Promise<CliType> {
+    const appState = await this.appStateRepo.get();
+
+    if (input.requestedCliType !== undefined) {
+      if (input.status === TicketStatus.READY && !appState.availableCliTypes.includes(input.requestedCliType)) {
+        throw new Error(`${input.requestedCliType} is currently unavailable`);
+      }
+      return input.requestedCliType;
+    }
+
+    if (input.existing) {
+      if (input.status !== TicketStatus.READY || appState.availableCliTypes.includes(input.existing.cliType) || hasProcessingStarted(input.existing)) {
+        return input.existing.cliType;
+      }
+    }
+
+    if (appState.availableCliTypes.length === 0) {
+      if (input.status === TicketStatus.READY) {
+        throw new Error("No CLI is currently available");
+      }
+      return input.existing?.cliType ?? CliType.CLAUDE;
+    }
+
+    return pickCliForNewTicket(this.ticketRepo, appState.availableCliTypes);
+  }
 
   async importTicket(input: MondayImportInput): Promise<MondayImportResult> {
     const status = input.status ?? TicketStatus.READY;
@@ -75,6 +109,11 @@ export class MondayImportService {
     const description = input.clues && input.clues.trim() ? input.clues.trim() : undefined;
     const title = input.titleOverride && input.titleOverride.trim() ? input.titleOverride.trim() : item.name;
     const existing = await this.ticketRepo.findByMondayItemId(item.id);
+    const cliType = await this.resolveCliType({
+      requestedCliType: input.cliType,
+      status,
+      existing,
+    });
 
     let ticket: Ticket | null;
     let action: "created" | "updated";
@@ -86,6 +125,7 @@ export class MondayImportService {
         mondayBoardId,
         mondayMarkdown,
         status,
+        ...(!hasProcessingStarted(existing) && existing.cliType !== cliType ? { cliType } : {}),
         ...(description !== undefined ? { description } : {}),
       });
       action = "updated";
@@ -98,7 +138,7 @@ export class MondayImportService {
         description,
         projectId: input.projectId ?? null,
         status,
-        ...(input.cliType ? { cliType: input.cliType } : {}),
+        cliType,
       });
       ticket = await this.ticketRepo.findById(created.id);
       action = "created";
